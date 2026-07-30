@@ -2,10 +2,10 @@
 /**
  * Carga data/seed.json (extraído de los dos archivos originales) a la base.
  *
- * El estado de fuerza se reconstruye respetando la regla del negocio:
- *   1. cada servicio entra con una APERTURA
- *   2. las cancelaciones y reducciones se aplican en orden cronológico
- * Así la base arranca con la misma historia que traían las hojas.
+ * El estado de fuerza arranca del corte vigente (meta.periodo_vigente) y cada
+ * servicio entra con una APERTURA, respetando la regla del negocio.
+ * Las aperturas y cancelaciones históricas se cargan como expediente: el corte
+ * vigente ya refleja su resultado neto, así que no se reaplican.
  *
  *   node scripts/seed.mjs           # crea la base si no existe
  *   node scripts/seed.mjs --reset   # borra y reconstruye
@@ -82,12 +82,32 @@ const norm = (s) =>
  */
 const canonico = (v) => (v ? norm(v) : '');
 
-/** Último snapshot en el que aparece cada servicio -> su ficha más reciente. */
 const periodos = Object.keys(seed.snapshots).sort();
-const fichas = new Map();
-for (const periodo of periodos) {
-  for (const r of seed.snapshots[periodo]) {
-    fichas.set(norm(r.servicio), { ...r, periodo });
+
+/**
+ * El estado de fuerza vigente es el corte del periodo actual, no la unión de
+ * todos los cortes: un servicio que dejó de aparecer en la hoja ya no opera,
+ * y arrastrarlo desde un corte viejo inflaría la plantilla.
+ */
+const vigente = seed.meta?.periodo_vigente || periodos[periodos.length - 1];
+if (!seed.snapshots[vigente]) {
+  console.error(`· no existe el corte ${vigente} en data/seed.json`);
+  process.exit(1);
+}
+/**
+ * Cada renglón del corte es un servicio, aunque dos compartan nombre: la hoja
+ * repite el sitio cuando tiene bloques de turnos distintos o razones sociales
+ * diferentes. Agrupar por nombre perdería esos renglones.
+ */
+const fichas = seed.snapshots[vigente].map((r) => ({ ...r, periodo: vigente, clave: norm(r.servicio) }));
+console.log(`· estado de fuerza vigente: corte ${vigente} (${fichas.length} renglones)`);
+
+/** Primer corte en el que aparece cada servicio: da una fecha de alta real. */
+const primerCorte = new Map();
+for (const p of periodos) {
+  for (const r of seed.snapshots[p]) {
+    const k = norm(r.servicio);
+    if (!primerCorte.has(k)) primerCorte.set(k, p);
   }
 }
 
@@ -150,10 +170,11 @@ const cargar = db.transaction(() => {
 
   // 2) una apertura por servicio conocido -> crea la fila del estado de fuerza
   const idPorServicio = new Map();
-  for (const [clave, ficha] of fichas) {
+  for (const ficha of fichas) {
+    const clave = ficha.clave;
     const turnos = ficha.turnos && Object.keys(ficha.turnos).length ? ficha.turnos : {};
     const guardias = ficha.total_guardias ?? 0;
-    const fechaAlta = ficha.fecha_contrato || `${ficha.periodo}-01`;
+    const fechaAlta = ficha.fecha_contrato || `${primerCorte.get(clave) || ficha.periodo}-01`;
 
     const ap = insApertura.run(
       folio('AP', anioDe(fechaAlta)), 'APERTURA', ficha.servicio,
@@ -184,7 +205,7 @@ const cargar = db.transaction(() => {
 
     const servicioId = sv.lastInsertRowid;
     db.prepare('UPDATE aperturas SET servicio_id = ? WHERE id = ?').run(servicioId, ap.lastInsertRowid);
-    idPorServicio.set(clave, servicioId);
+    if (!idPorServicio.has(clave)) idPorServicio.set(clave, servicioId);
     insBitacora.run(admin.id, admin.nombre, admin.rol, 'apertura', 'servicio', servicioId,
       `Carga inicial — ${ficha.servicio} (${guardias} guardias)`, `${fechaAlta} 00:00:00`);
   }
@@ -208,12 +229,15 @@ const cargar = db.transaction(() => {
     nAper++;
   }
 
-  // 4) cancelaciones y reducciones históricas, aplicadas al estado de fuerza
+  // 4) cancelaciones y reducciones históricas: quedan como expediente, no mutan
+  //    el estado de fuerza. El corte vigente ya refleja su resultado neto —un
+  //    servicio cancelado en 2025 que sigue en la hoja de julio fue reabierto—,
+  //    así que reaplicarlas daría de baja servicios que hoy operan.
   const ordenadas = [...seed.cancelaciones].sort((x, y) =>
     String(x.fecha || x.periodo || '').localeCompare(String(y.fecha || y.periodo || ''))
   );
   let nCanc = 0;
-  let bajas = 0;
+  const bajas = 0;
   for (const c of ordenadas) {
     const clave = norm(c.servicio);
     const servicioId = idPorServicio.get(clave) ?? null;
@@ -228,26 +252,13 @@ const cargar = db.transaction(() => {
     nCanc++;
 
     if (!servicioId) continue;
-    const s = db.prepare('SELECT * FROM servicios WHERE id = ?').get(servicioId);
-    if (s.estatus === 'BAJA') continue;
-
-    if (c.tipo === 'REDUCCION' && (c.guardias || 0) < s.total_guardias) {
-      db.prepare("UPDATE servicios SET total_guardias = total_guardias - ?, actualizado_en = datetime('now') WHERE id = ?")
-        .run(c.guardias || 0, servicioId);
-    } else {
-      db.prepare(
-        `UPDATE servicios SET estatus = 'BAJA', total_guardias = 0, turnos_json = '{}',
-                cancelacion_id = ?, fecha_baja = ?, actualizado_en = datetime('now') WHERE id = ?`
-      ).run(info.lastInsertRowid, c.fecha || null, servicioId);
-      bajas++;
-    }
     insBitacora.run(admin.id, admin.nombre, admin.rol,
       c.tipo === 'REDUCCION' ? 'reduccion' : 'cancelacion', 'servicio', servicioId,
       `Histórico — ${c.servicio} (-${c.guardias || 0} guardias) · ${c.motivo || 'sin motivo'}`,
       `${c.fecha || '2025-01-01'} 00:00:00`);
   }
 
-  return { nSnap, nServicios: fichas.size, nAper, nCanc, bajas };
+  return { nSnap, nServicios: fichas.length, nAper, nCanc, bajas };
 });
 
 const r = cargar();

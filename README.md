@@ -105,19 +105,37 @@ npm run build && npm run start
 
 ## 📊 Datos
 
-`data/seed.json` se extrajo de los dos archivos reales:
+El **estado de fuerza vigente** sale íntegro de la hoja `ESTADO DE FUERZA JULIO 2026`,
+exportada como CSV completo (no como texto, que Drive trunca):
 
-- **31 cortes mensuales** del Estado de Fuerza (oct-2023 a jul-2026), 1,467 renglones
-- **154 servicios** distintos → altas por apertura
-- **318 aperturas / incrementos** y **340 cancelaciones / reducciones** históricas
-- Estado de fuerza reconstruido aplicando las cancelaciones en orden cronológico:
-  **134 servicios activos, 2,684 guardias**
+- **217 servicios activos · 857 guardias · $18,179,402 de facturación**
+- 144 con contrato firmado, 53 con contrato ya vencido
+- Zonas reales del corte: NORTE (105), SUR (89), ALPURA (23); el segmento va en `TIPO`
+  (SERVICIOS, INDUSTRIA, CONDOMINIOS, ALPURA)
 
-### ⚠️ Carga completa desde los .xlsx
+Además se cargan como expediente histórico:
 
-La extracción se hizo vía Google Drive, cuya exportación a texto **trunca cada hoja**
-(~30 renglones por pestaña en los cortes de 2026). Para cargar el 100% de los renglones,
-usa los `.xlsx` locales:
+- **31 cortes mensuales** (oct-2023 a jul-2026), para las gráficas por periodo
+- **318 aperturas / incrementos** y **340 cancelaciones / reducciones**
+
+### Cómo se arma el estado de fuerza
+
+`meta.periodo_vigente` manda: cada renglón de ese corte entra con una apertura de carga
+inicial. Dos decisiones que importan:
+
+- **No se agrupa por nombre.** La hoja repite un sitio cuando tiene bloques de turnos
+  distintos o razones sociales diferentes (ALPURA MACRO CEDIS con 60 y 8; CESCO / KEMBIO).
+  Agrupar perdería 13 servicios reales.
+- **Los movimientos históricos no se reaplican.** El corte vigente ya refleja su resultado
+  neto: un servicio cancelado en 2025 que sigue en la hoja de julio fue reabierto, así que
+  reaplicar la baja lo sacaría de una plantilla en la que sí opera.
+
+### ⚠️ Los cortes históricos sí vienen truncados
+
+Solo la hoja vigente se pudo traer completa. Los cortes de meses anteriores vienen de la
+exportación a texto de Drive, que corta cada hoja alrededor del renglón 30. Afecta únicamente
+a las gráficas por periodo, no al estado de fuerza. Para cargar el 100% de todo, usa los
+`.xlsx` locales:
 
 ```bash
 npm run import:xlsx -- \
@@ -127,9 +145,9 @@ npm run import:xlsx -- \
 npm run seed:reset
 ```
 
-El importador lee las pestañas por nombre (`ENERO 2026`, `JULIO 2026`…), localiza la fila
-de encabezados en cada hoja y mapea las columnas por nombre, así que tolera que las
-pestañas tengan distinto número de columnas —como ya ocurre entre 2023 y 2026.
+El importador lee las pestañas por nombre (`ENERO 2026`, `JULIO 2026`…), localiza la fila de
+encabezados en cada hoja y mapea las columnas por nombre, así que tolera que las pestañas
+tengan distinto número de columnas —como ya ocurre entre 2023 y 2026.
 
 ### Normalización
 
