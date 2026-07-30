@@ -105,49 +105,66 @@ npm run build && npm run start
 
 ## 📊 Datos
 
-El **estado de fuerza vigente** sale íntegro de la hoja `ESTADO DE FUERZA JULIO 2026`,
-exportada como CSV completo (no como texto, que Drive trunca):
+Todo sale del `.xlsx` de Estado de Fuerza Ultra 2026, leído entero (39 pestañas).
 
-- **217 servicios activos · 857 guardias · $18,179,402 de facturación**
-- 144 con contrato firmado, 53 con contrato ya vencido
-- Zonas reales del corte: NORTE (105), SUR (89), ALPURA (23); el segmento va en `TIPO`
-  (SERVICIOS, INDUSTRIA, CONDOMINIOS, ALPURA)
+**Corte vigente — julio 2026:**
 
-Además se cargan como expediente histórico:
+- **217 servicios activos · 880 guardias · $19,001,684 de facturación**
+- 144 con contrato firmado · 52 con contrato ya vencido
+- Zonas: NORTE 351, SUR 324, ALPURA 205 · Tipos: SERVICIOS 273, INDUSTRIA 230,
+  ALPURA 200, CONDOMINIOS 177
 
-- **31 cortes mensuales** (oct-2023 a jul-2026), para las gráficas por periodo
-- **318 aperturas / incrementos** y **340 cancelaciones / reducciones**
+Los 880 guardias cuadran exactos contra la tabla de comprobación de la propia hoja,
+en sus tres cortes (total, por zona y por tipo).
 
-### Cómo se arma el estado de fuerza
+Además se cargan **33 cortes mensuales** (oct-2023 a jul-2026), **220 aperturas /
+incrementos** y **208 cancelaciones / reducciones**.
 
-`meta.periodo_vigente` manda: cada renglón de ese corte entra con una apertura de carga
-inicial. Dos decisiones que importan:
+### Cómo está armada cada pestaña
 
+Cada hoja mensual trae tres bloques, y de ellos salen cosas distintas:
+
+| Bloque | Qué es | A dónde va |
+|---|---|---|
+| Principal | la plantilla que venía arrastrando | estado de fuerza del mes |
+| `APERTURAS <MES>` | servicios abiertos ese mes | **también** estado de fuerza + una apertura |
+| `CANCELADOS REDUCCIONES <MES>` | bajas y reducciones del mes | solo movimientos |
+
+En julio son 869 + 11 = **880**, que es lo que declara la hoja. Contar solo el bloque
+principal deja 869, y ese fue el error de la primera carga.
+
+Tres detalles del parseo que importan:
+
+- **La columna del servicio no siempre se llama igual** (`SERVICIO COMO NOMINA`, sin
+  título, o `MIANBAO`). Lo estable es que va justo antes de `RAZON SOCIAL`.
+- **Los títulos de sección se confunden con las observaciones.** Un renglón que dice
+  "Reducción 1/7/26" en observaciones parece el encabezado del bloque de cancelados;
+  por eso solo se toma como título un renglón sin nombre y sin cifra de guardias.
 - **No se agrupa por nombre.** La hoja repite un sitio cuando tiene bloques de turnos
-  distintos o razones sociales diferentes (ALPURA MACRO CEDIS con 60 y 8; CESCO / KEMBIO).
+  distintos o razones sociales diferentes (ALPURA MACRO CEDIS, CESCO / KEMBIO).
   Agrupar perdería 13 servicios reales.
-- **Los movimientos históricos no se reaplican.** El corte vigente ya refleja su resultado
-  neto: un servicio cancelado en 2025 que sigue en la hoja de julio fue reabierto, así que
-  reaplicar la baja lo sacaría de una plantilla en la que sí opera.
+- **Los movimientos históricos no se reaplican.** El corte vigente ya refleja su
+  resultado neto: un servicio cancelado en 2025 que sigue en la hoja de julio fue
+  reabierto, así que reaplicar la baja lo sacaría de una plantilla en la que sí opera.
 
-### ⚠️ Los cortes históricos sí vienen truncados
+### ⚠️ Las sumas de facturación de la hoja se quedan cortas
 
-Solo la hoja vigente se pudo traer completa. Los cortes de meses anteriores vienen de la
-exportación a texto de Drive, que corta cada hoja alrededor del renglón 30. Afecta únicamente
-a las gráficas por periodo, no al estado de fuerza. Para cargar el 100% de todo, usa los
-`.xlsx` locales:
+`W218` suma `W4:W204` cuando hay datos hasta `W216`: al agregar renglones al final
+nadie extendió el rango. Por eso la hoja muestra $17,905,149 y aquí sale $19,001,684.
+Los guardias sí cuadran porque `Q218` y los `SUMIF` de zona/tipo sí abarcan todo.
+Lo mismo pasa en 18 de los 33 cortes históricos; el importador lo reporta al terminar.
+
+### Recargar los datos
 
 ```bash
-npm run import:xlsx -- \
-  --edo "C:/Users/skoci/Downloads/Estado de Fuerza Ultra 2026.xlsx" \
-  --mov "C:/Users/skoci/Downloads/_Aperturas, Cancelaciones, Reducciones, Escoltas y Serv. Esp. 2025- 2026.xlsx"
-
+npm run import:xlsx -- --edo "C:/ruta/Estado de Fuerza Ultra 2026.xlsx"
 npm run seed:reset
 ```
 
-El importador lee las pestañas por nombre (`ENERO 2026`, `JULIO 2026`…), localiza la fila de
-encabezados en cada hoja y mapea las columnas por nombre, así que tolera que las pestañas
-tengan distinto número de columnas —como ya ocurre entre 2023 y 2026.
+`--mov "<Aperturas y Cancelaciones.xlsx>"` es opcional y solo agrega detalle (motivo de
+cancelación, autorizaciones, precios) sobre movimientos que ya se detectaron. Sin ese
+archivo, 130 de las 208 cancelaciones se quedan sin motivo; el tablero lo dice en vez de
+inventarlo.
 
 ### Normalización
 
@@ -157,10 +174,27 @@ mayúsculas sin acentos para que los rankings no partan a una persona en tres.
 
 ---
 
+## 🎨 Identidad
+
+El emblema y la paleta vienen del *Currículum Corporativo Ultra 2026*: rojo `#E7342B`,
+negro `#100C08`, gris `#CDCCCC`. El logo se extrajo como vector del PDF y vive en
+`public/logo-ultra.svg` (también es el favicon).
+
+**Modo día por defecto**, con conmutador día/noche en la barra superior que se recuerda
+en `localStorage`. No hay clases duplicadas con la variante `dark:`: la paleta de Tailwind
+apunta a variables CSS que `app/globals.css` redefine por tema, así que una sola clase
+—`bg-slate-800`, `text-white`— sirve en los dos. El tema se aplica en un script del
+`<head>` antes de pintar, para que no haya parpadeo al cargar.
+
+---
+
 ## 🗂️ Estructura
 
 ```
+public/logo-ultra.svg          # emblema Ultra (vector, sacado del currículum)
 app/
+├── globals.css                # variables de tema (día / noche)
+├── icon.svg                   # favicon
 ├── login/                     # acceso
 ├── (app)/                     # shell autenticado
 │   ├── page.js                # tablero: KPIs, aperturas vs cancelaciones, contratos
@@ -170,6 +204,10 @@ app/
 │   ├── bitacora/              # historial de cambios
 │   └── usuarios/              # altas, roles, contraseñas, matriz de permisos
 └── api/                       # auth, aperturas, cancelaciones, servicios, usuarios
+components/
+├── Logo.js                    # emblema + nombre
+├── TemaToggle.js              # conmutador día / noche
+└── MovimientosChart.js        # gráfica (recharts, con colores por tema)
 lib/
 ├── schema.sql                 # DDL
 ├── servicios.js               # ÚNICO punto de escritura del estado de fuerza

@@ -100,7 +100,7 @@ export default function GestionUsuarios({ usuarios, miId }) {
           <button
             type="submit"
             disabled={ocupado}
-            className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm rounded-lg px-4 py-2"
+            className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-ultra-blanco text-sm rounded-lg px-4 py-2"
           >
             Crear usuario
           </button>

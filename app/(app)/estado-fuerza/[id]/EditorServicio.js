@@ -145,7 +145,7 @@ export default function EditorServicio({ servicio, grupos, rol }) {
         <button
           type="submit"
           disabled={guardando}
-          className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-sm rounded-lg px-4 py-2"
+          className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-ultra-blanco text-sm rounded-lg px-4 py-2"
         >
           {guardando ? 'Guardando…' : `Guardar ${grupo.etiqueta.toLowerCase()}`}
         </button>

@@ -15,7 +15,7 @@ export default function AppLayout({ children }) {
         etiquetaRol={ROLES[usuario.rol]?.etiqueta || usuario.rol}
       />
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-6">{children}</main>
-      <footer className="border-t border-slate-800 py-4 text-center text-xs text-slate-600">
+      <footer className="border-t border-slate-700/60 py-4 text-center text-xs text-slate-500">
         Ultra Seguridad Privada — el estado de fuerza solo cambia por aperturas y cancelaciones.
       </footer>
     </div>

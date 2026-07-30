@@ -32,7 +32,7 @@ export default function Aperturas() {
         {puede(usuario.rol, 'apertura') && (
           <Link
             href="/aperturas/nueva"
-            className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg px-3 py-2"
+            className="bg-emerald-600 hover:bg-emerald-500 text-ultra-blanco text-sm rounded-lg px-3 py-2"
           >
             ➕ Nueva apertura
           </Link>

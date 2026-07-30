@@ -174,7 +174,18 @@ const cargar = db.transaction(() => {
     const clave = ficha.clave;
     const turnos = ficha.turnos && Object.keys(ficha.turnos).length ? ficha.turnos : {};
     const guardias = ficha.total_guardias ?? 0;
-    const fechaAlta = ficha.fecha_contrato || `${primerCorte.get(clave) || ficha.periodo}-01`;
+    /**
+     * Alta = el primer corte mensual en el que aparece el servicio. La firma
+     * del contrato solo sirve para adelantarla: si es anterior, el servicio ya
+     * existía antes del corte más viejo que tenemos; si es posterior, es que el
+     * contrato se formalizó con el servicio ya operando —hay renglones con
+     * firma en 2026-12— y tomarla como alta pondría la apertura en el futuro.
+     */
+    const primerAparicion = `${primerCorte.get(clave) || ficha.periodo}-01`;
+    const fechaAlta =
+      ficha.fecha_contrato && ficha.fecha_contrato < primerAparicion
+        ? ficha.fecha_contrato
+        : primerAparicion;
 
     const ap = insApertura.run(
       folio('AP', anioDe(fechaAlta)), 'APERTURA', ficha.servicio,

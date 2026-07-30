@@ -164,7 +164,7 @@ export default function DetalleServicio({ params }) {
           {puede(usuario.rol, 'cancelacion') && s.estatus === 'ACTIVO' && (
             <Link
               href={`/cancelaciones/nueva?servicio_id=${s.id}`}
-              className="inline-block mt-4 text-sm bg-red-600/80 hover:bg-red-500 text-white rounded-lg px-3 py-1.5"
+              className="inline-block mt-4 text-sm bg-red-600/80 hover:bg-red-500 text-ultra-blanco rounded-lg px-3 py-1.5"
             >
               ➖ Cancelar o reducir este servicio
             </Link>

@@ -3,6 +3,14 @@ import { NextResponse } from 'next/server';
 const PUBLICAS = ['/login', '/api/auth/login'];
 
 /**
+ * Archivos estáticos servidos desde public/. Sin esta excepción el logo de la
+ * pantalla de acceso se pide sin sesión, el portero lo manda a /login y la
+ * imagen llega como HTML: se ve rota justo en la única página donde nadie ha
+ * iniciado sesión todavía.
+ */
+const ESTATICOS = /\.(svg|png|jpe?g|gif|webp|ico|woff2?|ttf|css|js|map|txt|webmanifest)$/i;
+
+/**
  * Portero de primer nivel: sin cookie de sesión no se entra.
  * La validación real del token y del rol ocurre en cada página y ruta de API,
  * que sí tienen acceso a la base de datos.
@@ -10,7 +18,7 @@ const PUBLICAS = ['/login', '/api/auth/login'];
 export function middleware(request) {
   const { pathname } = request.nextUrl;
 
-  if (PUBLICAS.some((p) => pathname === p) || pathname.startsWith('/_next')) {
+  if (PUBLICAS.some((p) => pathname === p) || pathname.startsWith('/_next') || ESTATICOS.test(pathname)) {
     return NextResponse.next();
   }
 

@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { LogoConNombre } from './Logo';
+import TemaToggle from './TemaToggle';
 
 const COLOR_ROL = {
   Administrador: 'bg-violet-500/20 text-violet-300 border-violet-500/40',
@@ -26,13 +28,12 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
   const activo = (href) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
 
   return (
-    <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur-sm sticky top-0 z-20">
+    <header className="border-b border-slate-700/70 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-20">
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-14">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🛡️</span>
-            <span className="font-semibold text-white hidden sm:inline">Ultra</span>
-          </div>
+        <div className="flex items-center justify-between h-14 gap-3">
+          <Link href="/" className="shrink-0">
+            <LogoConNombre size={30} />
+          </Link>
 
           <nav className="hidden md:flex items-center gap-1">
             {items.map((i) => (
@@ -41,8 +42,8 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
                 href={i.href}
                 className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                   activo(i.href)
-                    ? 'bg-slate-700/70 text-white'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-ultra-rojo text-ultra-blanco font-medium'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700/40'
                 }`}
               >
                 <span className="mr-1.5">{i.icono}</span>
@@ -51,7 +52,8 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
             ))}
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <TemaToggle />
             <div className="text-right hidden sm:block">
               <p className="text-sm text-white leading-tight">{usuario.nombre}</p>
               <span

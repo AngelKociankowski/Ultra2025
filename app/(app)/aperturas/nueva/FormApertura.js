@@ -110,7 +110,7 @@ export default function FormApertura({ catalogos, serviciosActivos }) {
               type="button"
               onClick={() => setTipo(t)}
               className={`text-sm px-3 py-1.5 rounded-lg ${
-                tipo === t ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+                tipo === t ? 'bg-emerald-600 text-ultra-blanco' : 'bg-slate-800 text-slate-400 hover:text-white'
               }`}
             >
               {t}
@@ -333,7 +333,7 @@ export default function FormApertura({ catalogos, serviciosActivos }) {
       <button
         type="submit"
         disabled={enviando}
-        className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg px-5 py-2.5 font-medium"
+        className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-ultra-blanco rounded-lg px-5 py-2.5 font-medium"
       >
         {enviando ? 'Registrando…' : `Registrar ${tipo.toLowerCase()} (${total} guardias)`}
       </button>

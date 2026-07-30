@@ -62,7 +62,7 @@ export default function Tablero() {
           {puede(usuario.rol, 'apertura') && (
             <Link
               href="/aperturas/nueva"
-              className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg px-3 py-2"
+              className="bg-emerald-600 hover:bg-emerald-500 text-ultra-blanco text-sm rounded-lg px-3 py-2"
             >
               ➕ Nueva apertura
             </Link>
@@ -70,7 +70,7 @@ export default function Tablero() {
           {puede(usuario.rol, 'cancelacion') && (
             <Link
               href="/cancelaciones/nueva"
-              className="bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg px-3 py-2"
+              className="bg-red-600 hover:bg-red-500 text-ultra-blanco text-sm rounded-lg px-3 py-2"
             >
               ➖ Nueva cancelación
             </Link>
@@ -106,8 +106,8 @@ export default function Tablero() {
           <h2 className="text-lg font-semibold text-white mb-1">Motivos de cancelación</h2>
           <p className="text-slate-400 text-sm mb-4">Guardias retirados por motivo</p>
           <div className="space-y-2">
-            {motivos.map((m) => {
-              const max = motivos[0]?.guardias || 1;
+            {motivos.motivos.map((m) => {
+              const max = motivos.motivos[0]?.guardias || 1;
               return (
                 <div key={m.motivo}>
                   <div className="flex justify-between text-xs mb-1">
@@ -120,8 +120,16 @@ export default function Tablero() {
                 </div>
               );
             })}
-            {motivos.length === 0 && <p className="text-slate-500 text-sm">Sin cancelaciones registradas.</p>}
+            {motivos.motivos.length === 0 && (
+              <p className="text-slate-500 text-sm">Sin cancelaciones con motivo registrado.</p>
+            )}
           </div>
+          {motivos.sin_motivo > 0 && (
+            <p className="text-slate-500 text-xs mt-4 pt-3 border-t border-slate-700/60">
+              {motivos.sin_motivo} de {motivos.total} cancelaciones no traen motivo: ese dato vive en el
+              archivo de Aperturas y Cancelaciones, no en la hoja del estado de fuerza.
+            </p>
+          )}
         </div>
       </div>
 

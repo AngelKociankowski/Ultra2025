@@ -79,7 +79,7 @@ export default function LoginForm() {
       <button
         type="submit"
         disabled={cargando}
-        className="w-full bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium rounded-lg px-4 py-2 transition-colors"
+        className="w-full bg-ultra-rojo hover:bg-ultra-rojoOscuro disabled:opacity-50 text-ultra-blanco font-medium rounded-lg px-4 py-2 transition-colors"
       >
         {cargando ? 'Entrando…' : 'Entrar'}
       </button>

@@ -31,7 +31,7 @@ export default function Cancelaciones() {
         {puede(usuario.rol, 'cancelacion') && (
           <Link
             href="/cancelaciones/nueva"
-            className="bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg px-3 py-2"
+            className="bg-red-600 hover:bg-red-500 text-ultra-blanco text-sm rounded-lg px-3 py-2"
           >
             ➖ Nueva cancelación
           </Link>
