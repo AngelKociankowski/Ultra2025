@@ -19,15 +19,26 @@
  */
 
 const BASE = process.env.BASE || 'http://localhost:3000';
-const PASSWORD = process.env.SIM_PASSWORD || 'UltraGuardias2026';
 
-const CUENTAS = {
-  admin: 'admin@corporativoultra.com',
-  juridico: 'juridico@corporativoultra.com',
-  finanzas: 'finanzas@corporativoultra.com',
-  operaciones: 'operaciones@corporativoultra.com',
-  ventas: 'ventas@corporativoultra.com',
-};
+/** La que trae la instalación recién sembrada: nace prestada. */
+const PASSWORD_INICIAL = process.env.SIM_PASSWORD || 'UltraGuardias2026';
+/** La que las cuentas se ponen a sí mismas durante la simulación. */
+const PASSWORD = 'SimulacionUltra2026';
+
+const ADMIN = process.env.SIM_ADMIN || 'angelk@corporativoultra.com';
+
+/**
+ * Solo el administrador existe al arrancar. Los demás los da de alta él, que es
+ * el primer paso de cualquier puesta en marcha real.
+ */
+const EQUIPO = [
+  ['juridico', 'juridico@corporativoultra.com', 'Jurídico Ultra'],
+  ['finanzas', 'finanzas@corporativoultra.com', 'Finanzas Ultra'],
+  ['operaciones', 'operaciones@corporativoultra.com', 'Operaciones Ultra'],
+  ['ventas', 'ventas@corporativoultra.com', 'Ventas Ultra'],
+];
+
+const CUENTAS = { admin: ADMIN, ...Object.fromEntries(EQUIPO.map(([rol, email]) => [rol, email])) };
 
 // ------------------------------------------------------------------ salida
 
@@ -65,11 +76,11 @@ const dinero = (n) =>
 
 // ------------------------------------------------------------------ cliente
 
-async function entrar(rol) {
+async function entrar(rol, password = PASSWORD) {
   const r = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: CUENTAS[rol], password: PASSWORD }),
+    body: JSON.stringify({ email: CUENTAS[rol], password }),
   });
   if (!r.ok) throw new Error(`No se pudo entrar como ${rol}: ${r.status}`);
   const cookie = (r.headers.getSetCookie?.() || []).map((s) => s.split(';')[0]).join('; ');
@@ -138,15 +149,65 @@ const APERTURAS_VENTAS = [
 ];
 
 async function main() {
-  console.log(c.fuerte('\n  SIMULACIÓN DE UN MES DE OPERACIÓN — ULTRA SEGURIDAD PRIVADA'));
+  console.log(c.fuerte('\n  SIMULACIÓN: PUESTA EN MARCHA Y UN MES DE OPERACIÓN — ULTRA SEGURIDAD PRIVADA'));
   console.log(c.dim(`  ${BASE}\n`));
 
-  // --------------------------------------------------------------- acceso
-  titulo('1 · Los cinco roles entran a la plataforma');
+  // ------------------------------------------------------- puesta en marcha
+  titulo('1 · El administrador entra y da de alta al equipo');
   const s = {};
-  for (const rol of Object.keys(CUENTAS)) {
-    s[rol] = await entrar(rol);
-    paso(rol, 'inició sesión');
+
+  /**
+   * Se puede correr varias veces seguidas: si la instalación está recién
+   * sembrada la contraseña todavía es la prestada; si ya se corrió antes, es la
+   * de la simulación. Se prueban las dos.
+   */
+  const recienSembrada = await entrar('admin', PASSWORD_INICIAL).then(() => true).catch(() => false);
+
+  let admin;
+  if (recienSembrada) {
+    admin = await entrar('admin', PASSWORD_INICIAL);
+    const bloqueado = await admin.pedir('/estado-fuerza');
+    comprobar(
+      [302, 307].includes(bloqueado.status),
+      'con la contraseña prestada solo se puede llegar a Mi cuenta',
+      `HTTP ${bloqueado.status} → ${bloqueado.headers.get('location') || ''}`
+    );
+
+    const puso = await admin.pedir('/api/auth/password', {
+      method: 'POST',
+      body: JSON.stringify({ actual: PASSWORD_INICIAL, nueva: PASSWORD }),
+    });
+    comprobar(puso.status === 200, 'el administrador pone su propia contraseña');
+  } else {
+    console.log(c.dim('  (la instalación ya se había puesto en marcha; se reutilizan las cuentas)'));
+  }
+
+  admin = await entrar('admin', PASSWORD);
+  s.admin = admin;
+
+  const abierto = await admin.pedir('/estado-fuerza');
+  comprobar(abierto.status === 200, 'con su propia contraseña, la plataforma se abre');
+
+  for (const [rol, email, nombre] of EQUIPO) {
+    const alta = await admin.pedir('/api/usuarios', {
+      method: 'POST',
+      body: JSON.stringify({ email, nombre, rol, password: PASSWORD_INICIAL }),
+    });
+    const yaExistia = alta.status === 400 && /ya existe/i.test(alta.json?.error || '');
+    comprobar(alta.status === 201 || yaExistia, `alta de ${nombre}`, yaExistia ? 'ya existía' : `rol ${rol}`);
+
+    // Cada quien entra y pone la suya, igual que hará el equipo real.
+    try {
+      s[rol] = await entrar(rol, PASSWORD);
+    } catch {
+      const c2 = await entrar(rol, PASSWORD_INICIAL);
+      await c2.pedir('/api/auth/password', {
+        method: 'POST',
+        body: JSON.stringify({ actual: PASSWORD_INICIAL, nueva: PASSWORD }),
+      });
+      s[rol] = await entrar(rol, PASSWORD);
+    }
+    paso(rol, 'entró y puso su contraseña');
   }
 
   const inicial = await estado(s.admin);
@@ -355,7 +416,10 @@ async function main() {
   // ------------------------------------------------------------- bitácora
   titulo('9 · Todo quedó registrado');
   const bit = await s.admin.pedir('/bitacora');
-  for (const quien of ['Ventas Ultra', 'Operaciones Ultra', 'Jurídico Ultra', 'Finanzas Ultra', 'Administrador Ultra']) {
+  const lista = await s.admin.pedir('/api/usuarios');
+  // El nombre del administrador depende de quién puso en marcha la instalación.
+  const nombreAdmin = lista.json.usuarios.find((u) => u.email === CUENTAS.admin)?.nombre || '';
+  for (const quien of EQUIPO.map(([, , n]) => n).concat(nombreAdmin)) {
     comprobar(bit.texto.includes(quien), `la bitácora registra a ${quien}`);
   }
   comprobar(bit.texto.includes('PLAZA SATELITE TORRE B'), 'la bitácora nombra el servicio abierto');

@@ -13,7 +13,31 @@ import os from 'node:os';
 import path from 'node:path';
 
 const RAIZ = path.resolve(import.meta.dirname, '..');
-export const PASSWORD = 'UltraGuardias2026';
+
+/** La que pone quien da de alta: nace prestada y hay que cambiarla al entrar. */
+export const PASSWORD_TEMPORAL = 'UltraGuardias2026';
+/** La que cada cuenta se pone a sí misma, y con la que trabajan las pruebas. */
+export const PASSWORD = 'PruebaUltra2026';
+
+/**
+ * El alta inicial crea solo al primer administrador. Los demás roles los crea
+ * él, que es justo como funciona en producción: si esa alta se rompiera, estas
+ * pruebas no podrían ni empezar.
+ */
+export const ROLES = {
+  admin: 'angelk@corporativoultra.com',
+  juridico: 'juridico@corporativoultra.com',
+  finanzas: 'finanzas@corporativoultra.com',
+  operaciones: 'operaciones@corporativoultra.com',
+  ventas: 'ventas@corporativoultra.com',
+};
+
+const EQUIPO = [
+  ['juridico', 'Jurídico de prueba'],
+  ['finanzas', 'Finanzas de prueba'],
+  ['operaciones', 'Operaciones de prueba'],
+  ['ventas', 'Ventas de prueba'],
+];
 
 function ejecutar(cmd, args, env) {
   return new Promise((resolve, reject) => {
@@ -88,12 +112,12 @@ export async function arrancar() {
     },
   });
 
-  async function entrar(email) {
+  async function entrar(email, password = PASSWORD) {
     const c = cliente();
     const r = await fetch(`${base}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: PASSWORD }),
+      body: JSON.stringify({ email, password }),
     });
     const set = r.headers.getSetCookie?.() || [];
     c.cookie = set.map((s) => s.split(';')[0]).join('; ');
@@ -101,9 +125,45 @@ export async function arrancar() {
     return c;
   }
 
+  /**
+   * Deja la cuenta lista para trabajar. Si la contraseña ya es la definitiva
+   * entra directo; si todavía es la prestada, la cambia primero. Así las
+   * pruebas no tienen que llevar la cuenta de en qué estado está cada cuenta.
+   */
+  async function entrarYAsentar(email) {
+    try {
+      return await entrar(email, PASSWORD);
+    } catch {
+      const c = await entrar(email, PASSWORD_TEMPORAL);
+      await c.pedir('/api/auth/password', {
+        method: 'POST',
+        body: JSON.stringify({ actual: PASSWORD_TEMPORAL, nueva: PASSWORD }),
+      });
+      return entrar(email, PASSWORD);
+    }
+  }
+
+  // El administrador inicial nace con la contraseña prestada.
+  const admin = await entrar(ROLES.admin, PASSWORD_TEMPORAL);
+  await admin.pedir('/api/auth/password', {
+    method: 'POST',
+    body: JSON.stringify({ actual: PASSWORD_TEMPORAL, nueva: PASSWORD }),
+  });
+
+  // …y desde ahí da de alta al resto del equipo.
+  const adminListo = await entrar(ROLES.admin, PASSWORD);
+  for (const [rol, nombre] of EQUIPO) {
+    const r = await adminListo.pedir('/api/usuarios', {
+      method: 'POST',
+      body: JSON.stringify({ email: ROLES[rol], nombre, rol, password: PASSWORD_TEMPORAL }),
+    });
+    if (r.status !== 201) throw new Error(`No se pudo crear al usuario ${rol}: ${r.status} ${r.texto}`);
+  }
+
   return {
     base,
     entrar,
+    entrarYAsentar,
     anonimo: () => cliente(),
     async cerrar() {
       proc.kill('SIGKILL');
@@ -112,11 +172,3 @@ export async function arrancar() {
     },
   };
 }
-
-export const ROLES = {
-  admin: 'admin@corporativoultra.com',
-  juridico: 'juridico@corporativoultra.com',
-  finanzas: 'finanzas@corporativoultra.com',
-  operaciones: 'operaciones@corporativoultra.com',
-  ventas: 'ventas@corporativoultra.com',
-};

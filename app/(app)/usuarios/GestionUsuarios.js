@@ -127,6 +127,7 @@ export default function GestionUsuarios({ usuarios, miId }) {
                 <th className="text-left px-3 py-3">Correo</th>
                 <th className="text-left px-3 py-3">Rol</th>
                 <th className="text-center px-3 py-3">Estado</th>
+                <th className="text-center px-3 py-3">Contraseña</th>
                 <th className="text-right px-3 py-3">Acciones</th>
               </tr>
             </thead>
@@ -156,6 +157,18 @@ export default function GestionUsuarios({ usuarios, miId }) {
                     <span className={`text-xs px-2 py-0.5 rounded ${u.activo ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-600/40 text-slate-400'}`}>
                       {u.activo ? 'Activo' : 'Inactivo'}
                     </span>
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {u.debe_cambiar_password ? (
+                      <span
+                        title="Todavía usa la contraseña que le pusiste; no puede entrar a otra pantalla hasta cambiarla."
+                        className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300"
+                      >
+                        Prestada
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-500">Propia</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right space-x-2 whitespace-nowrap">
                     <button

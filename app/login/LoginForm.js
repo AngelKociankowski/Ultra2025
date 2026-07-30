@@ -19,15 +19,16 @@ export default function LoginForm() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, destino: params.get('destino') || '/' }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || 'No fue posible iniciar sesión.');
         return;
       }
-      router.replace(params.get('destino') || '/');
-      router.refresh();
+      // Recarga completa a propósito: el shell de la aplicación se arma en el
+      // servidor según el rol y el estado de la contraseña.
+      window.location.assign(data.destino || '/');
     } catch {
       setError('Error de red. Intenta de nuevo.');
     } finally {

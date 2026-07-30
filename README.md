@@ -86,29 +86,49 @@ npm run dev         # http://localhost:3000
 Necesita **Node 20 o superior** (`.nvmrc`). Variables de entorno opcionales en
 `.env.example`.
 
-Usuarios que crea el seed (contraseña `UltraGuardias2026`, cámbiala al entrar):
+### Acceso
 
-| Correo | Rol |
+El alta inicial crea **una sola cuenta**: el primer administrador.
+
+| | |
 |---|---|
-| `admin@corporativoultra.com` | Administrador |
-| `juridico@corporativoultra.com` | Jurídico |
-| `finanzas@corporativoultra.com` | Finanzas |
-| `operaciones@corporativoultra.com` | Operaciones |
-| `ventas@corporativoultra.com` | Ventas |
+| Correo | `angelk@corporativoultra.com` |
+| Nombre | Ángel Kociankowski |
+| Contraseña | `UltraGuardias2026` — hay que cambiarla al entrar |
 
-Para otra contraseña inicial: `SEED_PASSWORD='...' npm run seed:reset`.
-Cada usuario cambia la suya desde **Mi cuenta** (su nombre, arriba a la derecha);
-al hacerlo se cierran sus demás sesiones.
+No se siembran cuentas de demostración: una cuenta que nadie dio de alta a
+propósito es una cuenta que nadie se acuerda de quitar. **Los demás usuarios los
+crea el administrador** desde *Usuarios*, con el rol de cada quien.
+
+Para cambiar el administrador inicial o su contraseña:
+
+```bash
+SEED_ADMIN_EMAIL='otro@corporativoultra.com' \
+SEED_ADMIN_NOMBRE='Nombre Apellido' \
+SEED_PASSWORD='...' npm run seed:reset
+```
+
+### Contraseñas prestadas
+
+La contraseña de una cuenta nueva la escribe quien la da de alta, así que nace
+**prestada**. Mientras lo siga siendo, la única pantalla disponible es *Mi
+cuenta*: la persona tiene que poner una suya antes de poder trabajar. Lo mismo
+ocurre cuando un administrador restablece una contraseña.
+
+En *Usuarios* se ve de un vistazo quién sigue con la prestada. Al cambiarla se
+cierran las demás sesiones de esa cuenta.
 
 Pruebas:
 
 ```bash
-npm run verify      # build + 36 pruebas contra la app real
+npm run verify      # build + 46 pruebas contra la app real
 ```
 
-Levantan la aplicación contra una base desechable y comprueban la regla del
-negocio, los permisos campo por campo y el ciclo de vida completo de un
-servicio. Corren también en GitHub Actions.
+Levantan la aplicación contra una base desechable y comprueban el acceso y el
+alta de usuarios, la regla del negocio, los permisos campo por campo y el ciclo
+de vida completo de un servicio. Empiezan como empieza una instalación real:
+con un solo administrador que da de alta al resto. Corren también en GitHub
+Actions.
 
 Producción:
 

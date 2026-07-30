@@ -15,7 +15,7 @@ const s = {};
 
 before(async () => {
   srv = await arrancar();
-  for (const [rol, email] of Object.entries(ROLES)) s[rol] = await srv.entrar(email);
+  for (const [rol, email] of Object.entries(ROLES)) s[rol] = await srv.entrarYAsentar(email);
 });
 after(async () => srv?.cerrar());
 
@@ -158,9 +158,14 @@ describe('cada cambio queda en la bitácora', () => {
 
     // La bitácora no tiene API propia; se renderiza en el servidor, así que se
     // comprueba sobre el HTML de la página.
+    // El nombre se toma de la propia cuenta: quién es el administrador
+    // depende de quién dio de alta la instalación, no de un literal.
+    const lista = await s.admin.pedir('/api/usuarios');
+    const yo = lista.json.usuarios.find((u) => u.email === ROLES.admin);
+
     const pagina = await s.admin.pedir('/bitacora');
     assert.equal(pagina.status, 200);
-    assert.match(pagina.texto, /Administrador Ultra/, 'registra quién hizo el cambio');
+    assert.ok(pagina.texto.includes(yo.nombre), 'registra quién hizo el cambio');
     assert.match(pagina.texto, /260,?000/, 'registra el valor nuevo');
   });
 

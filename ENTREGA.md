@@ -13,15 +13,16 @@ npm run seed         # crea data/ultra.db con los datos reales ya cargados
 npm run dev          # http://localhost:3000
 ```
 
-Entra con `admin@corporativoultra.com` / `UltraGuardias2026`. Hay una cuenta por
-rol; están todas listadas en el README.
+Entra con `angelk@corporativoultra.com` / `UltraGuardias2026`. Es la **única**
+cuenta que crea el alta inicial; te va a pedir cambiar la contraseña antes de
+dejarte pasar, y desde *Usuarios* se da de alta al resto del equipo.
 
 Requiere **Node 20 o superior** (ver `.nvmrc`).
 
 ## Comprobar que todo está bien
 
 ```bash
-npm run verify       # build + 36 pruebas
+npm run verify       # build + 46 pruebas
 ```
 
 Las pruebas levantan la aplicación real contra una base desechable y verifican
@@ -91,10 +92,12 @@ desde el `.xlsx`.
 
 ## Antes de ponerlo en producción
 
-1. **Cambiar las contraseñas.** El seed reparte la misma a las cinco cuentas y
-   está escrita en el README. Cada quien la cambia desde *Mi cuenta* (clic en su
-   nombre, arriba a la derecha). Para sembrar con otra:
-   `SEED_PASSWORD='...' npm run seed:reset`.
+1. **El administrador inicial.** El alta crea solo esa cuenta, con una
+   contraseña que hay que cambiar al primer acceso. Para sembrar con otro correo
+   o contraseña:
+   `SEED_ADMIN_EMAIL='...' SEED_PASSWORD='...' npm run seed:reset`.
+   El resto del equipo se da de alta desde *Usuarios*, y cada quien pone su
+   contraseña la primera vez que entra.
 2. **Disco persistente.** La base es un archivo SQLite (`DATABASE_PATH`). En una
    plataforma con disco efímero —Vercel, por ejemplo— se pierde en cada
    despliegue. Usa un servidor con volumen, o migra a Postgres: el esquema es

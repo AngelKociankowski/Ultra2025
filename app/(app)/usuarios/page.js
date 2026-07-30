@@ -21,7 +21,10 @@ export default function Usuarios() {
   }
 
   const lista = getDb()
-    .prepare('SELECT id, email, nombre, rol, activo, creado_en FROM usuarios ORDER BY rol, nombre')
+    .prepare(
+      `SELECT id, email, nombre, rol, activo, debe_cambiar_password, creado_en
+         FROM usuarios ORDER BY rol, nombre`
+    )
     .all();
 
   return (

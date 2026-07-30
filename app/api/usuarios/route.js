@@ -9,7 +9,10 @@ export const dynamic = 'force-dynamic';
 
 export const GET = conPermiso('usuarios', async () => {
   const rows = getDb()
-    .prepare('SELECT id, email, nombre, rol, activo, creado_en FROM usuarios ORDER BY rol, nombre')
+    .prepare(
+      `SELECT id, email, nombre, rol, activo, debe_cambiar_password, creado_en
+         FROM usuarios ORDER BY rol, nombre`
+    )
     .all();
   return NextResponse.json({ usuarios: rows });
 });
@@ -28,8 +31,13 @@ export const POST = conPermiso('usuarios', async (request, { usuario }) => {
     throw new ValidacionError('Ya existe un usuario con ese correo.');
   }
 
+  // La contraseña la escribe el administrador, así que es prestada: el usuario
+  // tendrá que poner una suya antes de poder usar la plataforma.
   const info = db
-    .prepare('INSERT INTO usuarios (email, nombre, rol, password_hash) VALUES (?,?,?,?)')
+    .prepare(
+      `INSERT INTO usuarios (email, nombre, rol, password_hash, debe_cambiar_password)
+       VALUES (?,?,?,?,1)`
+    )
     .run(correo, nombre, rol, hashPassword(password));
 
   auditar(db, {
@@ -65,7 +73,10 @@ export const PATCH = conPermiso('usuarios', async (request, { usuario }) => {
   }
   if (password) {
     if (String(password).length < 8) throw new ValidacionError('La contraseña debe tener al menos 8 caracteres.');
-    sets.push('password_hash = ?'); args.push(hashPassword(password)); detalle.push('contraseña restablecida');
+    // Restablecer también deja la contraseña prestada: la pone el admin, no su dueño.
+    sets.push('password_hash = ?'); args.push(hashPassword(password));
+    sets.push('debe_cambiar_password = 1');
+    detalle.push('contraseña restablecida');
   }
   if (!sets.length) throw new ValidacionError('Nada que actualizar.');
 

@@ -48,22 +48,27 @@ function hashPassword(password) {
   return `scrypt$${salt}$${crypto.scryptSync(password, salt, 64).toString('hex')}`;
 }
 
-const USUARIOS_INICIALES = [
-  ['admin@corporativoultra.com', 'Administrador Ultra', 'admin'],
-  ['juridico@corporativoultra.com', 'Jurídico Ultra', 'juridico'],
-  ['finanzas@corporativoultra.com', 'Finanzas Ultra', 'finanzas'],
-  ['operaciones@corporativoultra.com', 'Operaciones Ultra', 'operaciones'],
-  ['ventas@corporativoultra.com', 'Ventas Ultra', 'ventas'],
-];
+/**
+ * El alta inicial crea UN solo usuario: el primer administrador. Los demás los
+ * da de alta él desde Usuarios, con el rol que le corresponda a cada quien.
+ *
+ * No se siembran cuentas de demostración: una cuenta que nadie dio de alta a
+ * propósito es una cuenta que nadie se acuerda de quitar.
+ */
+const ADMIN_INICIAL = {
+  email: (process.env.SEED_ADMIN_EMAIL || 'angelk@corporativoultra.com').trim().toLowerCase(),
+  nombre: process.env.SEED_ADMIN_NOMBRE || 'Ángel Kociankowski',
+};
 
 const PASSWORD_INICIAL = process.env.SEED_PASSWORD || 'UltraGuardias2026';
 
-const insUsuario = db.prepare('INSERT OR IGNORE INTO usuarios (email, nombre, rol, password_hash) VALUES (?,?,?,?)');
-for (const [email, nombre, rol] of USUARIOS_INICIALES) {
-  insUsuario.run(email, nombre, rol, hashPassword(PASSWORD_INICIAL));
-}
-const admin = db.prepare("SELECT id, nombre, rol FROM usuarios WHERE rol = 'admin'").get();
-console.log(`· ${USUARIOS_INICIALES.length} usuarios (contraseña inicial: ${PASSWORD_INICIAL})`);
+db.prepare(
+  `INSERT OR IGNORE INTO usuarios (email, nombre, rol, password_hash, debe_cambiar_password)
+   VALUES (?, ?, 'admin', ?, 1)`
+).run(ADMIN_INICIAL.email, ADMIN_INICIAL.nombre, hashPassword(PASSWORD_INICIAL));
+
+const admin = db.prepare("SELECT id, nombre, rol FROM usuarios WHERE rol = 'admin' ORDER BY id LIMIT 1").get();
+console.log(`· administrador inicial: ${ADMIN_INICIAL.email} (contraseña: ${PASSWORD_INICIAL}, se pide cambiarla al entrar)`);
 
 // ------------------------------------------------------- utilidades de carga
 

@@ -22,6 +22,16 @@ export function middleware(request) {
     return NextResponse.next();
   }
 
+  /**
+   * Los layouts no reciben la ruta, y el de la aplicación la necesita para
+   * mandar a "Mi cuenta" a quien todavía trae la contraseña que le puso el
+   * administrador —sin volver a mandarlo cuando ya está ahí, que sería un
+   * ciclo—. Se la pasamos en una cabecera de la petición.
+   */
+  const cabeceras = new Headers(request.headers);
+  cabeceras.set('x-ruta', pathname);
+  const seguir = () => NextResponse.next({ request: { headers: cabeceras } });
+
   const token = request.cookies.get('ultra_session')?.value;
   if (!token) {
     if (pathname.startsWith('/api/')) {
@@ -33,7 +43,7 @@ export function middleware(request) {
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  return seguir();
 }
 
 export const config = {

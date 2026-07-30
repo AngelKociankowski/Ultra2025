@@ -46,7 +46,9 @@ export async function POST(request) {
 
     const token = cookies().get(COOKIE_SESION)?.value || '';
     db.transaction(() => {
-      db.prepare('UPDATE usuarios SET password_hash = ? WHERE id = ?').run(hashPassword(nueva), usuario.id);
+      db.prepare(
+        'UPDATE usuarios SET password_hash = ?, debe_cambiar_password = 0 WHERE id = ?'
+      ).run(hashPassword(nueva), usuario.id);
       db.prepare('DELETE FROM sesiones WHERE usuario_id = ? AND token <> ?').run(usuario.id, token);
     })();
 

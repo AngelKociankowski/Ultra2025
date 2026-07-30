@@ -13,6 +13,12 @@ CREATE TABLE IF NOT EXISTS usuarios (
   rol           TEXT NOT NULL CHECK (rol IN ('admin','juridico','finanzas','operaciones','ventas')),
   password_hash TEXT NOT NULL,
   activo        INTEGER NOT NULL DEFAULT 1,
+
+  -- La contraseña la pone quien da de alta al usuario, así que nace prestada.
+  -- Con esta bandera en 1 la aplicación lleva a "Mi cuenta" y no deja pasar a
+  -- otra pantalla hasta que la persona ponga una suya.
+  debe_cambiar_password INTEGER NOT NULL DEFAULT 0,
+
   creado_en     TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
