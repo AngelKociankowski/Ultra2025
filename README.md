@@ -10,6 +10,9 @@ Sustituye el trabajo manual sobre los dos archivos:
 
 Los datos de esos archivos ya vienen cargados (ver [Datos](#-datos)).
 
+> ¿Recibiendo el proyecto? Empieza por **[ENTREGA.md](ENTREGA.md)**: cómo
+> levantarlo, qué revisar antes de producción y qué quedó fuera.
+
 ---
 
 ## 🔒 La regla que sostiene todo
@@ -80,6 +83,9 @@ npm run seed        # carga data/seed.json a data/ultra.db
 npm run dev         # http://localhost:3000
 ```
 
+Necesita **Node 20 o superior** (`.nvmrc`). Variables de entorno opcionales en
+`.env.example`.
+
 Usuarios que crea el seed (contraseña `UltraGuardias2026`, cámbiala al entrar):
 
 | Correo | Rol |
@@ -91,6 +97,18 @@ Usuarios que crea el seed (contraseña `UltraGuardias2026`, cámbiala al entrar)
 | `ventas@corporativoultra.com` | Ventas |
 
 Para otra contraseña inicial: `SEED_PASSWORD='...' npm run seed:reset`.
+Cada usuario cambia la suya desde **Mi cuenta** (su nombre, arriba a la derecha);
+al hacerlo se cierran sus demás sesiones.
+
+Pruebas:
+
+```bash
+npm run verify      # build + 36 pruebas contra la app real
+```
+
+Levantan la aplicación contra una base desechable y comprueban la regla del
+negocio, los permisos campo por campo y el ciclo de vida completo de un
+servicio. Corren también en GitHub Actions.
 
 Producción:
 
@@ -222,6 +240,13 @@ npm run seed:reset
 ```
 
 `--mov` es opcional; sin él se conserva el detalle que ya tuviera el seed anterior.
+
+### Descargar un mes
+
+Cualquier rol puede bajar el mes que esté viendo con **⬇ Descargar CSV**, o
+directo desde `GET /api/cortes/2026-01` (y `/api/cortes/actual` para el mes en
+curso). Sale con punto y coma y BOM, para que Excel en español lo abra con las
+columnas separadas y los acentos bien.
 
 ### Normalización
 

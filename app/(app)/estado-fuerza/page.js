@@ -86,18 +86,27 @@ export default function EstadoFuerza({ searchParams }) {
           </p>
         </div>
 
-        {esCorte ? (
-          <p className="text-xs text-slate-500 max-w-md text-right">
-            Un corte cerrado es el respaldo de lo que se facturó ese mes: no se edita, ni con permisos de
-            administrador. Para cambiar la plantilla, vuelve al mes en curso.
-          </p>
-        ) : grupos.length > 0 ? (
-          <p className="text-xs text-slate-500 max-w-md text-right">
-            Tu rol puede editar: {grupos.map((g) => g.etiqueta).join(' · ')}. Abre un servicio para modificarlo.
-          </p>
-        ) : (
-          <p className="text-xs text-slate-500">Tu rol tiene acceso de consulta sobre esta base.</p>
-        )}
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          {esCorte ? (
+            <p className="text-xs text-slate-500 max-w-md text-right">
+              Un corte cerrado es el respaldo de lo que se facturó ese mes: no se edita, ni con permisos de
+              administrador. Para cambiar la plantilla, vuelve al mes en curso.
+            </p>
+          ) : grupos.length > 0 ? (
+            <p className="text-xs text-slate-500 max-w-md text-right">
+              Tu rol puede editar: {grupos.map((g) => g.etiqueta).join(' · ')}. Abre un servicio para modificarlo.
+            </p>
+          ) : (
+            <p className="text-xs text-slate-500">Tu rol tiene acceso de consulta sobre esta base.</p>
+          )}
+          <a
+            href={`/api/cortes/${esCorte ? pedido : 'actual'}`}
+            download
+            className="shrink-0 text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-1.5"
+          >
+            ⬇ Descargar CSV
+          </a>
+        </div>
       </div>
 
       {comparativo && (

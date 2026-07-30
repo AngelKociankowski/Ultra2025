@@ -54,7 +54,12 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <TemaToggle />
-            <div className="text-right hidden sm:block">
+            {/* El nombre lleva a la cuenta propia: ahí se cambia la contraseña. */}
+            <Link
+              href="/cuenta"
+              title="Mi cuenta"
+              className="text-right hidden sm:block rounded-lg px-2 py-1 hover:bg-slate-700/40 transition-colors"
+            >
               <p className="text-sm text-white leading-tight">{usuario.nombre}</p>
               <span
                 className={`inline-block text-[10px] px-1.5 py-0.5 rounded border ${
@@ -63,7 +68,7 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
               >
                 {etiquetaRol}
               </span>
-            </div>
+            </Link>
             <button
               onClick={salir}
               className="text-sm text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-slate-800"
