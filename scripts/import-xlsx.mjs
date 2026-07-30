@@ -142,6 +142,9 @@ function matriz(hoja) {
 /** Turnos tal como los titula la hoja; el nombre normalizado es la llave. */
 const TURNOS = ['10X14', '11X13', '12 HRS', '13X47', '8X16 L-S', '8X16 L-D', '24 HRS', '12X24', '12X36', '24X24', '24X48', '8 HRS'];
 
+/** Los turnos del archivo de movimientos se titulan distinto que los del corte. */
+const TURNOS_MOV = ['8X16 L-D', '8X16 L-S', '8X16 L-V', '12X12 L-D', '12X12 L-S', '12X12 L-V', '12X24', '12X36', '24X24', '24X48', '12X12', 'OTROS'];
+
 /**
  * Mapa columna -> índice. Se queda con la primera aparición porque varias hojas
  * repiten el título "FACTURA" en tres columnas distintas.
@@ -261,28 +264,29 @@ function leerHoja(hoja, nombreHoja) {
     supervisor: pick(ix, 'SUPERVISOR', 'GERENTE'),
     asesor: pick(ix, 'ASESOR'),
     guardiasFactura: pick(ix, 'GUARDIAS EN FACTURA'),
-    importeFactura: pick(ix, 'IMPORTE DE FACTURA'),
+    // Las hojas de 2023-2024 titulan la facturación del mes de otra forma.
+    importeFactura: pick(ix, 'IMPORTE DE FACTURA', 'CANTIDAD MENSUAL FACTURADA', 'MONTO TOTAL'),
     importeSinIva: pick(ix, 'IMPORTE SIN IVA'),
     nominaTotal: pick(ix, 'NOMINA TOTAL SERVICIO'),
     nominaPrest: pick(ix, 'NOMINA + PRESTACIONES'),
-    resultado: pick(ix, 'RESULTADO DEL SERVICIO'),
+    resultado: pick(ix, 'RESULTADO DEL SERVICIO', 'DIFERENCIA'),
     pctUtilidad: pick(ix, '% UTILIDAD'),
     utilidadBruta: pick(ix, 'UTILIDAD BRUTA'),
     contrato: pick(ix, '¿CUENTA CON CONTRATO?', 'CUENTA CON CONTRATO'),
     fContrato: pick(ix, 'FECHA DE APERTURA (FIRMA DE CONTRATO)', 'FECHA DE APERTURA'),
     fVence: pick(ix, 'FECHA DE VENCIMIENTO DEL CONTRATO'),
-    condiciones: pick(ix, 'CONDICIONES COMERCIALES POR CONTRATO'),
+    condiciones: pick(ix, 'CONDICIONES COMERCIALES POR CONTRATO', 'CONDICIONES COMERCIALES EN CONTRATO', 'CONDICIONES COMERCIALES'),
     comentarios: pick(ix, 'COMENTARIOS NEGATIVA DEL CONTRATO'),
     creditoMax: pick(ix, 'IMPORTE DE CREDITO MAXIMO'),
     diasCredito: pick(ix, 'DIAS DE CREDITO'),
     pendiente: pick(ix, 'IMPORTE PENDIENTE DE PAGO'),
     saldoVencido: pick(ix, 'SALDO VENCIDO $ VS CREDITO'),
     cobranza: pick(ix, 'STATUS DE COBRANZA'),
-    fPago: pick(ix, 'FECHA DE PAGO'),
+    fPago: pick(ix, 'FECHA DE PAGO', 'DIA DE PAGO'),
     observaciones: pick(ix, 'OBSERVACIONES APERTURAS / CANCELACIONES / SERV. ESPECIALES', 'OBSERVACIONES'),
     mesIncremento: pick(ix, 'MES DE INCREMENTO'),
     anioIncremento: pick(ix, 'ULTIMO ANO DE INCREMENTO'),
-    facturaMensual: pick(ix, 'FACTURA MENSUAL'),
+    facturaMensual: pick(ix, 'FACTURA MENSUAL', 'NUMERO DE FACTURA MENSUAL'),
   };
   const colsTurno = TURNOS.map((t) => [t, pick(ix, t)]).filter(([, i]) => i >= 0);
 
@@ -410,12 +414,20 @@ function leerEstadoFuerza(ruta) {
     const r = leerHoja(wb.Sheets[nombre], nombre);
     if (r && r.snapshot.length) hojas.push(r);
   }
-  // Varias pestañas describen el mismo mes (EneroG/Enero2025). Gana la que más
-  // renglones trae, que es la versión final del corte.
+  /**
+   * Varias pestañas describen el mismo mes (EneroG y Enero2025, FebreroG y
+   * Febrero2025). Gana la que traiga la facturación capturada: `Enero2025`
+   * tiene más renglones pero solo 2 con importe, mientras que `EneroG` trae 158
+   * —y este archivo lo usa contabilidad. A igualdad, gana la que más renglones
+   * tenga.
+   */
+  const conImporte = (h) => h.snapshot.filter((r) => r.importe_factura).length;
   const porPeriodo = new Map();
   for (const h of hojas) {
     const prev = porPeriodo.get(h.periodo);
-    if (!prev || h.snapshot.length > prev.snapshot.length) porPeriodo.set(h.periodo, h);
+    if (!prev) { porPeriodo.set(h.periodo, h); continue; }
+    const [a, b] = [conImporte(h), conImporte(prev)];
+    if (a > b || (a === b && h.snapshot.length > prev.snapshot.length)) porPeriodo.set(h.periodo, h);
   }
   return [...porPeriodo.values()].sort((a, b) => a.periodo.localeCompare(b.periodo));
 }
@@ -468,10 +480,17 @@ function movimientosDeHojas(hojas) {
 }
 
 /**
- * Detalle guardado en un seed anterior. Sirve cuando se reimporta solo el
- * Estado de Fuerza: el motivo de cancelación y las autorizaciones vienen del
- * archivo de movimientos y no hay por qué perderlos al regenerar los cortes.
+ * Detalle guardado en un seed anterior, con la misma forma que devuelve
+ * leerDetalleMovimientos. Sirve cuando se reimporta solo el Estado de Fuerza:
+ * el motivo de cancelación y las autorizaciones vienen del archivo de
+ * movimientos y no hay por qué perderlos al regenerar los cortes.
  */
+const CAMPOS_DETALLE = [
+  'motivo', 'reporta', 'auditoria', 'cxc', 'subtipo', 'aut', 'direccion', 'cluster', 'estado_geo',
+  'precio_guardia', 'precio_total', 'sueldo_base', 'bono', 'uniforme', 'credito_autorizado',
+  'credito_plazo', 'cobro', 'forma_pago', 'tipo_repse', 'gerente',
+];
+
 function detalleDesdeSeed(ruta) {
   if (!fs.existsSync(ruta)) return null;
   let previo;
@@ -480,25 +499,45 @@ function detalleDesdeSeed(ruta) {
   } catch {
     return null;
   }
-  const detalle = { APERTURA: new Map(), CANCELACION: new Map() };
-  const cargar = (lista, clase, campos) => {
+  const porClave = new Map();
+  const porNombre = new Map();
+  let filasLeidas = 0;
+
+  const cargar = (lista, clase) => {
     for (const m of lista || []) {
-      if (m.origen === 'estado_fuerza') continue; // ya es de esta misma fuente
-      const k = norm(m.servicio);
-      if (!k || detalle[clase].has(k)) continue;
-      const extra = {};
-      for (const c of campos) if (m[c] !== undefined && m[c] !== null && m[c] !== '') extra[c] = m[c];
-      if (Object.keys(extra).length) detalle[clase].set(k, extra);
+      const n = norm(m.servicio);
+      if (!n) continue;
+      const extra = { clase, fecha_registro: m.fecha || null };
+      for (const c of CAMPOS_DETALLE) {
+        if (m[c] !== undefined && m[c] !== null && m[c] !== '') extra[c] = m[c];
+      }
+      if (Object.keys(extra).length <= 2) continue;
+      filasLeidas++;
+      if (m.periodo) porClave.set(`${clase}|${n}|${m.periodo}`, extra);
+      if (!porNombre.has(`${clase}|${n}`)) porNombre.set(`${clase}|${n}`, []);
+      porNombre.get(`${clase}|${n}`).push(extra);
     }
   };
-  cargar(previo.aperturas, 'APERTURA', ['direccion', 'precio_guardia', 'sueldo_base', 'bono', 'uniforme', 'forma_pago', 'tipo_repse', 'aut']);
-  cargar(previo.cancelaciones, 'CANCELACION', ['motivo', 'reporta', 'cxc', 'aut']);
-  return detalle.APERTURA.size || detalle.CANCELACION.size ? detalle : null;
+  cargar(previo.aperturas, 'APERTURA');
+  cargar(previo.cancelaciones, 'CANCELACION');
+  return filasLeidas ? { porClave, porNombre, filasLeidas } : null;
 }
 
+/**
+ * Lee el archivo de Aperturas y Cancelaciones, que es el registro operativo:
+ * una hoja por mes y por clase, con folio de quien reporta, motivo de la baja,
+ * precios pactados y la cadena de autorizaciones.
+ *
+ * El periodo NO se saca del nombre de la pestaña —la mitad se llaman "Hoja 49"—
+ * sino de la fecha del propio renglón. Cada movimiento se indexa por
+ * servicio + periodo, y también por servicio a secas para poder emparejar
+ * cuando el corte del Estado de Fuerza fecha el movimiento en un mes vecino.
+ */
 function leerDetalleMovimientos(ruta) {
   const wb = leerLibro(ruta);
-  const detalle = { APERTURA: new Map(), CANCELACION: new Map() };
+  const porClave = new Map();   // servicio|periodo -> detalle
+  const porNombre = new Map();  // servicio -> [detalle...]
+  let filasLeidas = 0;
 
   for (const nombreHoja of wb.SheetNames) {
     const filas = matriz(wb.Sheets[nombreHoja]);
@@ -509,60 +548,233 @@ function leerDetalleMovimientos(ruta) {
     if (hi < 0) continue;
 
     const ix = indice(filas[hi]);
-    const esCancelacion = ix[norm('GUARDIAS CANCELADOS')] !== undefined;
+    const esCancelacion = pick(ix, 'GUARDIAS CANCELADOS') >= 0;
     const clase = esCancelacion ? 'CANCELACION' : 'APERTURA';
     const cNombre = pick(ix, 'NOMBRE DE SERVICIO');
+    const cFecha = esCancelacion
+      ? pick(ix, 'FECHA DE CANCELACION (RETIRO DE SERVICIO)', 'FECHA DE CANCELACION')
+      : pick(ix, 'FECHA DE APERTURA/FORMAL', 'FECHA DE APERTURA');
+    // Las hojas de 2023 titulan la cifra "GUARDIAS VENDIDOS"; las de 2024 en
+    // adelante, "TOTAL".
+    const cGuardias = esCancelacion
+      ? pick(ix, 'GUARDIAS CANCELADOS')
+      : pick(ix, 'TOTAL', 'GUARDIAS VENDIDOS');
+    const cZona = pick(ix, 'ZONA');
+    const cAsesor = pick(ix, 'ASESOR A CARGO', 'ASESOR');
+    const colsTurnoMov = TURNOS_MOV.map((t) => [t, pick(ix, t)]).filter(([, i]) => i >= 0);
 
     for (const fila of filas.slice(hi + 1)) {
       const nombre = texto(fila, cNombre);
       if (!nombre || norm(nombre) === 'NOMBRE DE SERVICIO') continue;
+
+      const f = fecha(celda(fila, cFecha));
+      const turnosMov = {};
+      for (const [t, ci] of colsTurnoMov) {
+        const v = num(celda(fila, ci));
+        if (v) turnosMov[norm(t)] = Math.round(v);
+      }
+      const comunes = {
+        guardias: intOr(num(celda(fila, cGuardias))) ?? 0,
+        zona: texto(fila, cZona),
+        asesor: texto(fila, cAsesor),
+        turnos: turnosMov,
+      };
       const extra = esCancelacion
         ? {
+            clase,
+            fecha_registro: f,
+            ...comunes,
             motivo: texto(fila, pick(ix, 'MOTIVO')),
             reporta: texto(fila, pick(ix, 'REPORTA')),
+            auditoria: texto(fila, pick(ix, 'AUDITORIA')),
             cxc: num(celda(fila, pick(ix, 'CXC A LA CANCELACION'))),
+            subtipo: texto(fila, pick(ix, 'REDUCCION/CANCELACION')),
             aut: {
               ventas: boolv(celda(fila, pick(ix, 'AUTORIZACION: VENTAS DIRECCION'))),
               cxc: boolv(celda(fila, pick(ix, 'AUTORIZACION: CXC'))),
               operacion: boolv(celda(fila, pick(ix, 'AUTORIZACION: OPERACION (DIRECCION)'))),
+              sistemas: boolv(celda(fila, pick(ix, 'AUTORIZACION: SISTEMAS /TELEFONOS DEVUELTOS, COMENTARIOS'))),
               juridico: boolv(celda(fila, pick(ix, 'AUTORIZACION JURIDICO'))),
               contraloria: boolv(celda(fila, pick(ix, 'AUTORIZACION: CONTRALORIA'))),
             },
           }
         : {
+            clase,
+            fecha_registro: f,
+            ...comunes,
             direccion: texto(fila, pick(ix, 'DIRECCION/UBICACION DE SERV.')),
+            subtipo: texto(fila, pick(ix, 'APERTURA/INCREMENTO/TEMPORAL')),
+            reporta: texto(fila, pick(ix, 'REPORTA')),
+            cluster: texto(fila, pick(ix, 'CLUSTER')),
+            estado_geo: texto(fila, pick(ix, 'ESTADO (GEOGRAFICO)')),
             precio_guardia: num(celda(fila, pick(ix, 'PRECIO POR GUARDIA BASICO', 'PRECIO POR GUARDIA'))),
+            precio_total: num(celda(fila, pick(ix, 'PRECIOS SIN IVA/ANEXAR COTIZACION SUBIR', 'PRECIOS SIN IVA/ANEXAR COTIZACION'))),
             sueldo_base: num(celda(fila, pick(ix, 'SUELDO ELEMENTO BASE'))),
             bono: num(celda(fila, pick(ix, 'BONO'))),
             uniforme: texto(fila, pick(ix, 'TIPO DE UNIFORME')),
+            credito_autorizado: boolv(celda(fila, pick(ix, '¿SE AUTORIZO CREDITO?'))),
+            credito_plazo: texto(fila, pick(ix, '¿CUANTO TIEMPO?')),
+            cobro: texto(fila, pick(ix, 'COBRO (TRANSFERENCIA, EFECTIVO, ETC)', 'COBRO')),
             forma_pago: texto(fila, pick(ix, 'FORMA DE PAGO')),
-            tipo_repse: texto(fila, pick(ix, 'TIPO DE REPSE')),
+            tipo_repse: texto(fila, pick(ix, 'TIPO DE REPSE', 'ENVIO DE INFORMACION REPSE')),
+            gerente: texto(fila, pick(ix, 'GERENTE A CARGO')),
+            comentarios: texto(fila, pick(ix, 'COMENTARIOS')),
             aut: {
               ventas: boolv(celda(fila, pick(ix, 'VENTAS (DIRECCION)'))),
               cxc: boolv(celda(fila, pick(ix, 'CXC'))),
               operacion: boolv(celda(fila, pick(ix, 'OPERACION (DIRECCION)'))),
               capacitacion: boolv(celda(fila, pick(ix, 'CAPACITACION'))),
+              sistemas: boolv(celda(fila, pick(ix, 'SISTEMAS'))),
               juridico: boolv(celda(fila, pick(ix, 'JURIDICO'))),
               contraloria: boolv(celda(fila, pick(ix, 'CONTRALORIA'))),
             },
           };
-      const k = norm(nombre);
-      if (!detalle[clase].has(k)) detalle[clase].set(k, extra);
+
+      // se limpian los vacíos para que no pisen datos buenos al fusionar
+      for (const [k, v] of Object.entries(extra)) {
+        if (v === '' || v === null || v === undefined) delete extra[k];
+      }
+
+      filasLeidas++;
+      const n = norm(nombre);
+      if (f) porClave.set(`${clase}|${n}|${f.slice(0, 7)}`, extra);
+      if (!porNombre.has(`${clase}|${n}`)) porNombre.set(`${clase}|${n}`, []);
+      porNombre.get(`${clase}|${n}`).push(extra);
     }
   }
-  return detalle;
+  return { porClave, porNombre, filasLeidas };
 }
 
+/**
+ * Llave difusa: los dos archivos escriben el mismo sitio distinto
+ * ("MACRO CEDIS ALPURA" contra "ALPURA (MACRO CEDIS) TEPOZOTLAN",
+ * "JETVAN MEXICO TACUBA" contra "JETVAN TACUBA"). Se comparan conjuntos de
+ * palabras: coinciden si todas las palabras significativas del nombre más
+ * corto están en el más largo.
+ */
+const VACIAS = new Set(['DE', 'DEL', 'LA', 'EL', 'LOS', 'LAS', 'Y', 'SA', 'CV', 'SAPI', 'II', 'I']);
+
+function palabras(nombre) {
+  return new Set(
+    norm(nombre)
+      .replace(/[^A-Z0-9 ]+/g, ' ')
+      .split(' ')
+      .filter((p) => p.length > 1 && !VACIAS.has(p))
+  );
+}
+
+function parecidos(a, b) {
+  const [corto, largo] = a.size <= b.size ? [a, b] : [b, a];
+  if (!corto.size) return false;
+  let comunes = 0;
+  for (const p of corto) if (largo.has(p)) comunes++;
+  return comunes === corto.size && comunes >= 1;
+}
+
+/** Meses de distancia entre dos periodos YYYY-MM. */
+function distanciaMeses(a, b) {
+  if (!a || !b) return 99;
+  const [ay, am] = a.split('-').map(Number);
+  const [by, bm] = b.split('-').map(Number);
+  return Math.abs((ay - by) * 12 + (am - bm));
+}
+
+/**
+ * Pega el detalle del registro operativo sobre la serie que salió del Estado
+ * de Fuerza. Primero por servicio + periodo exacto; si no, el registro del
+ * mismo servicio más cercano en el tiempo, aceptando hasta un mes de
+ * diferencia —el corte fecha el movimiento cuando lo refleja la plantilla, no
+ * siempre el día que se firmó.
+ */
 function enriquecer(movs, detalle, clase) {
-  if (!detalle) return 0;
-  let n = 0;
-  for (const m of movs) {
-    const extra = detalle[clase].get(norm(m.servicio));
-    if (!extra) continue;
-    Object.assign(m, extra, { motivo: m.motivo || extra.motivo || '' });
-    n++;
+  if (!detalle) return { exactos: 0, cercanos: 0, difusos: 0, sobrantes: [] };
+  let exactos = 0;
+  let cercanos = 0;
+  let difusos = 0;
+  const usados = new Set();
+
+  const cercano = (candidatos, periodo, tolerancia) =>
+    candidatos
+      .filter((c) => !usados.has(c) && distanciaMeses(c.fecha_registro?.slice(0, 7), periodo) <= tolerancia)
+      .sort(
+        (a, b) =>
+          distanciaMeses(a.fecha_registro?.slice(0, 7), periodo) -
+          distanciaMeses(b.fecha_registro?.slice(0, 7), periodo)
+      )[0];
+
+  // Índice difuso: solo los de esta clase, con sus palabras precalculadas.
+  const difuso = [];
+  for (const [k, lista] of detalle.porNombre) {
+    if (!k.startsWith(clase + '|')) continue;
+    difuso.push({ pal: palabras(k.slice(clase.length + 1)), lista });
   }
-  return n;
+
+  for (const m of movs) {
+    const n = norm(m.servicio);
+    let extra = detalle.porClave.get(`${clase}|${n}|${m.periodo}`);
+    if (extra && !usados.has(extra)) {
+      exactos++;
+    } else {
+      extra = cercano(detalle.porNombre.get(`${clase}|${n}`) || [], m.periodo, 1);
+      if (extra) {
+        cercanos++;
+      } else {
+        const pm = palabras(m.servicio);
+        for (const d of difuso) {
+          if (!parecidos(pm, d.pal)) continue;
+          extra = cercano(d.lista, m.periodo, 1);
+          if (extra) { difusos++; break; }
+        }
+      }
+    }
+    if (!extra) continue;
+    usados.add(extra);
+    // El corte manda en guardias, zona, asesor y turnos: es lo que cuadra con
+    // la plantilla. Del registro operativo solo entra lo que el corte no tiene.
+    const { clase: _c, fecha_registro, guardias, zona, asesor, turnos, ...campos } = extra;
+    Object.assign(m, campos, { origen: 'estado_fuerza+movimientos' });
+  }
+
+  // Lo que el registro operativo tiene y el corte no reflejó.
+  const sobrantes = [];
+  for (const [k, lista] of detalle.porNombre) {
+    if (!k.startsWith(clase + '|')) continue;
+    const servicio = k.slice(clase.length + 1);
+    for (const d of lista) if (!usados.has(d)) sobrantes.push({ servicio, ...d });
+  }
+  return { exactos, cercanos, difusos, sobrantes };
+}
+
+/**
+ * Los renglones del registro operativo que no encontraron pareja se agregan
+ * SOLO en los meses donde el Estado de Fuerza no aporta ningún movimiento
+ * —enero a septiembre de 2023, y agosto de 2026, que son posteriores o
+ * anteriores a los cortes disponibles—. En un mes que el corte sí cubre no se
+ * agregan: no hay forma de saber si son el mismo evento escrito distinto, y
+ * duplicarlos inflaría la serie.
+ */
+function rellenarHuecos(serie, sobrantes, clase) {
+  const cubiertos = new Set(serie.map((m) => m.periodo));
+  const nuevos = [];
+  for (const s of sobrantes) {
+    const periodo = s.fecha_registro?.slice(0, 7);
+    if (!periodo || cubiertos.has(periodo)) continue;
+    const { clase: _c, fecha_registro, servicio, subtipo, ...campos } = s;
+    nuevos.push({
+      servicio,
+      fecha: fecha_registro,
+      periodo,
+      tipo: clase === 'APERTURA' ? tipoApertura(subtipo) : tipoCancelacion(subtipo),
+      guardias: 0,
+      zona: '',
+      asesor: '',
+      turnos: {},
+      ...campos,
+      origen: 'movimientos',
+    });
+  }
+  serie.push(...nuevos);
+  return nuevos.length;
 }
 
 // ---------------------------------------------------------------------- main
@@ -587,7 +799,15 @@ if (rutaMov) {
 if (detalle) {
   const a = enriquecer(aperturas, detalle, 'APERTURA');
   const c = enriquecer(cancelaciones, detalle, 'CANCELACION');
-  console.log(`  enriquecidos ${a} aperturas y ${c} cancelaciones`);
+  const relA = rellenarHuecos(aperturas, a.sobrantes, 'APERTURA');
+  const relC = rellenarHuecos(cancelaciones, c.sobrantes, 'CANCELACION');
+  const fmt = (r, total) => `${r.exactos + r.cercanos + r.difusos}/${total} (${r.exactos} exactas, ${r.cercanos} mes vecino, ${r.difusos} por nombre parecido)`;
+  console.log(
+    `  ${detalle.filasLeidas} renglones de detalle leídos\n` +
+      `  aperturas emparejadas    ${fmt(a, aperturas.length - relA)}\n` +
+      `  cancelaciones emparejadas ${fmt(c, cancelaciones.length - relC)}\n` +
+      `  + ${relA} aperturas y ${relC} cancelaciones agregadas en meses sin corte`
+  );
 }
 
 const snapshots = {};

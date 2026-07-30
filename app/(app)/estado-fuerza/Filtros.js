@@ -6,7 +6,13 @@ import { useState } from 'react';
 const clase =
   'bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
 
-export default function Filtros({ valores, catalogos }) {
+const MESES = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const etiquetaPeriodo = (p) => {
+  const [a, m] = String(p).split('-');
+  return `${MESES[Number(m)]} ${a}`;
+};
+
+export default function Filtros({ valores, catalogos, periodos = [], vigente }) {
   const router = useRouter();
   const [f, setF] = useState(valores);
 
@@ -18,9 +24,17 @@ export default function Filtros({ valores, catalogos }) {
 
   function cambiar(k, v) {
     const siguiente = { ...f, [k]: v };
+    // Al saltar de mes se sueltan los filtros que ese corte quizá no tiene:
+    // una zona o un asesor de hoy pueden no existir en un corte de 2023.
+    if (k === 'periodo') {
+      siguiente.zona = '';
+      siguiente.asesor = '';
+    }
     setF(siguiente);
     if (k !== 'q') aplicar(siguiente);
   }
+
+  const enCorte = Boolean(f.periodo);
 
   return (
     <form
@@ -30,6 +44,24 @@ export default function Filtros({ valores, catalogos }) {
       }}
       className="flex flex-wrap gap-2 items-center bg-slate-800/30 border border-slate-700/50 rounded-2xl p-3"
     >
+      {periodos.length > 0 && (
+        <select
+          value={f.periodo}
+          onChange={(e) => cambiar('periodo', e.target.value)}
+          className={`${clase} font-medium`}
+          aria-label="Mes"
+        >
+          <option value="">{etiquetaPeriodo(vigente)} · en curso</option>
+          {periodos
+            .filter((p) => p.periodo !== vigente)
+            .map((p) => (
+              <option key={p.periodo} value={p.periodo}>
+                {etiquetaPeriodo(p.periodo)} · {p.guardias} guardias
+              </option>
+            ))}
+        </select>
+      )}
+
       <input
         value={f.q}
         onChange={(e) => cambiar('q', e.target.value)}
@@ -37,11 +69,14 @@ export default function Filtros({ valores, catalogos }) {
         className={`${clase} flex-1 min-w-[220px]`}
       />
 
-      <select value={f.estatus} onChange={(e) => cambiar('estatus', e.target.value)} className={clase}>
-        <option value="ACTIVO">Activos</option>
-        <option value="BAJA">Bajas</option>
-        <option value="">Todos</option>
-      </select>
+      {/* Un corte cerrado solo guarda lo que operaba ese mes: no hay bajas que filtrar. */}
+      {!enCorte && (
+        <select value={f.estatus} onChange={(e) => cambiar('estatus', e.target.value)} className={clase}>
+          <option value="ACTIVO">Activos</option>
+          <option value="BAJA">Bajas</option>
+          <option value="">Todos</option>
+        </select>
+      )}
 
       <select value={f.zona} onChange={(e) => cambiar('zona', e.target.value)} className={clase}>
         <option value="">Todas las zonas</option>

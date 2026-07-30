@@ -175,17 +175,52 @@ CREATE TABLE IF NOT EXISTS sesiones (
   creado_en  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- ---------------------------------------------- snapshots historicos (BI)
--- Cortes mensuales importados del archivo Estado de Fuerza. Solo lectura.
+-- ------------------------------------------------- cortes mensuales (cierres)
+-- Foto del Estado de Fuerza tal como quedó cada mes, importada del archivo.
+-- Es el respaldo de facturación: un corte cerrado no se toca, ni siquiera el
+-- admin, porque contra él se cobró. El mes vigente NO vive aquí: ese es la
+-- tabla `servicios`, que sí cambia con aperturas y cancelaciones.
+--
+-- Sin UNIQUE(periodo, servicio) a propósito: la hoja repite un sitio cuando
+-- tiene bloques de turnos o razones sociales distintas, y con la restricción
+-- se perdían esos renglones en silencio.
 CREATE TABLE IF NOT EXISTS snapshots (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  periodo       TEXT NOT NULL,
-  servicio      TEXT NOT NULL,
-  zona          TEXT,
-  asesor        TEXT,
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  periodo        TEXT NOT NULL,
+  servicio       TEXT NOT NULL,
+  razon_social   TEXT,
+  zona           TEXT,
+  tipo           TEXT,
+  supervisor     TEXT,
+  asesor         TEXT,
   total_guardias INTEGER,
-  importe_factura REAL,
-  UNIQUE (periodo, servicio)
+  turnos_json    TEXT NOT NULL DEFAULT '{}',
+
+  -- facturación y cobranza del mes
+  guardias_en_factura INTEGER,
+  importe_factura     REAL,
+  importe_sin_iva     REAL,
+  factura_mensual     TEXT,
+  nomina_total        REAL,
+  nomina_prestaciones REAL,
+  resultado_servicio  REAL,
+  pct_utilidad        REAL,
+  utilidad_bruta      REAL,
+  status_cobranza     TEXT,
+  fecha_pago          TEXT,
+  importe_pendiente   REAL,
+  saldo_vencido       REAL,
+  credito_maximo      REAL,
+  dias_credito        INTEGER,
+
+  -- contrato vigente en ese corte
+  tiene_contrato             INTEGER,
+  fecha_contrato             TEXT,
+  fecha_vencimiento_contrato TEXT,
+  condiciones_comerciales    TEXT,
+
+  observaciones  TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_periodo ON snapshots(periodo);
+CREATE INDEX IF NOT EXISTS idx_snapshots_servicio ON snapshots(servicio);

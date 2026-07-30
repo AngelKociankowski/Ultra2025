@@ -105,7 +105,8 @@ npm run build && npm run start
 
 ## 📊 Datos
 
-Todo sale del `.xlsx` de Estado de Fuerza Ultra 2026, leído entero (39 pestañas).
+Todo sale de los dos `.xlsx` originales, leídos enteros: Estado de Fuerza Ultra 2026
+(39 pestañas) y Aperturas, Cancelaciones y Reducciones 2025-2026 (79 pestañas).
 
 **Corte vigente — julio 2026:**
 
@@ -117,8 +118,31 @@ Todo sale del `.xlsx` de Estado de Fuerza Ultra 2026, leído entero (39 pestaña
 Los 880 guardias cuadran exactos contra la tabla de comprobación de la propia hoja,
 en sus tres cortes (total, por zona y por tipo).
 
-Además se cargan **33 cortes mensuales** (oct-2023 a jul-2026), **220 aperturas /
-incrementos** y **208 cancelaciones / reducciones**.
+Además se cargan **33 cortes mensuales** (oct-2023 a jul-2026), **299 aperturas /
+incrementos** y **330 cancelaciones / reducciones**.
+
+### El mes en curso y los cortes cerrados
+
+La pantalla de Estado de fuerza abre en el **mes en curso**: sale de la tabla
+`servicios`, es la plantilla viva y cambia solo con aperturas y cancelaciones.
+El selector de arriba a la izquierda permite abrir cualquiera de los 33 **cortes
+cerrados**.
+
+| | Mes en curso | Corte cerrado |
+|---|---|---|
+| De dónde sale | tabla `servicios` | tabla `snapshots` |
+| Se edita | sí, según el rol | **no, ni el admin** |
+| Para qué sirve | operar | respaldo de lo que se facturó |
+
+Un corte cerrado no tiene ninguna ruta de escritura: no hay `INSERT`, `UPDATE`
+ni `DELETE` sobre `snapshots` fuera del importador, y la tabla no se expone en
+ninguna API. Cada corte trae la facturación, la cobranza y el contrato tal como
+estaban ese mes, y arriba se muestra el movimiento contra el mes anterior
+(servicios, guardias y facturación).
+
+`snapshots` no lleva `UNIQUE (periodo, servicio)` a propósito: la hoja repite un
+sitio cuando tiene bloques de turnos o razones sociales distintas, y con la
+restricción esos renglones se perdían en silencio.
 
 ### Cómo está armada cada pestaña
 
@@ -147,6 +171,20 @@ Tres detalles del parseo que importan:
   resultado neto: un servicio cancelado en 2025 que sigue en la hoja de julio fue
   reabierto, así que reaplicar la baja lo sacaría de una plantilla en la que sí opera.
 
+### ⚠️ Facturación por servicio: hasta dónde llega
+
+De noviembre 2024 en adelante casi todos los renglones traen `IMPORTE DE FACTURA`. Antes
+no: en 2023 y buena parte de 2024 la hoja llevaba la facturación por quincenas en otras
+columnas, no por servicio. En esos cortes la pantalla avisa cuántos servicios traen
+importe en vez de mostrar un total en ceros como si fuera real.
+
+Diciembre 2024 es un caso aparte: su pestaña solo tiene 2 renglones con importe y no hay
+variante alterna de esa hoja.
+
+Enero y febrero 2025 tienen dos pestañas cada uno (`Enero2025` y `EneroG`). El importador
+se queda con la que trae la facturación capturada —`EneroG` tiene 158 renglones con
+importe contra 2 de `Enero2025`—, no simplemente con la que tiene más renglones.
+
 ### ⚠️ Las sumas de facturación de la hoja se quedan cortas
 
 `W218` suma `W4:W204` cuando hay datos hasta `W216`: al agregar renglones al final
@@ -154,17 +192,36 @@ nadie extendió el rango. Por eso la hoja muestra $17,905,149 y aquí sale $19,0
 Los guardias sí cuadran porque `Q218` y los `SUMIF` de zona/tipo sí abarcan todo.
 Lo mismo pasa en 18 de los 33 cortes históricos; el importador lo reporta al terminar.
 
+### De dónde salen los movimientos
+
+Los dos archivos se complementan y ninguno basta solo:
+
+- **Estado de Fuerza** — sus bloques `APERTURAS` y `CANCELADOS` son la serie que
+  cuadra con la plantilla. Es la espina dorsal.
+- **Aperturas y Cancelaciones** — el registro operativo: motivo de la baja, cadena de
+  autorizaciones, precios pactados, dirección, REPSE. Cubre enero–septiembre 2023 y
+  agosto 2026, meses de los que no hay corte.
+
+El emparejamiento va por servicio + mes; si falla, por el mismo servicio en un mes
+vecino; y si falla, por nombre parecido, porque los dos archivos escriben distinto el
+mismo sitio (`MACRO CEDIS ALPURA` contra `ALPURA (MACRO CEDIS) TEPOZOTLAN`).
+
+Los renglones del registro operativo que quedan sin pareja **solo se agregan en meses
+donde el corte no aporta ningún movimiento**. En un mes que el corte sí cubre no se
+agregan: no hay forma de saber si son el mismo evento escrito distinto, y duplicarlos
+inflaría la serie. El importador reporta cuántos emparejó y de qué forma.
+
 ### Recargar los datos
 
 ```bash
-npm run import:xlsx -- --edo "C:/ruta/Estado de Fuerza Ultra 2026.xlsx"
+npm run import:xlsx -- \
+  --edo "C:/ruta/Estado de Fuerza Ultra 2026.xlsx" \
+  --mov "C:/ruta/Aperturas, Cancelaciones, Reducciones, Escoltas y Serv. Esp. 2025-2026.xlsx"
+
 npm run seed:reset
 ```
 
-`--mov "<Aperturas y Cancelaciones.xlsx>"` es opcional y solo agrega detalle (motivo de
-cancelación, autorizaciones, precios) sobre movimientos que ya se detectaron. Sin ese
-archivo, 130 de las 208 cancelaciones se quedan sin motivo; el tablero lo dice en vez de
-inventarlo.
+`--mov` es opcional; sin él se conserva el detalle que ya tuviera el seed anterior.
 
 ### Normalización
 
@@ -198,7 +255,7 @@ app/
 ├── login/                     # acceso
 ├── (app)/                     # shell autenticado
 │   ├── page.js                # tablero: KPIs, aperturas vs cancelaciones, contratos
-│   ├── estado-fuerza/         # tabla filtrable + detalle con edición por bloques
+│   ├── estado-fuerza/         # mes en curso + cortes cerrados; detalle con edición por bloques
 │   ├── aperturas/nueva/       # captura con desglose de turnos y autorizaciones
 │   ├── cancelaciones/nueva/   # cancelación total o reducción por turno
 │   ├── bitacora/              # historial de cambios

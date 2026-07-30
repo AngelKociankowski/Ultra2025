@@ -154,16 +154,40 @@ const insBitacora = db.prepare(
    VALUES (?,?,?,?,?,?,?,?)`
 );
 
+const CAMPOS_SNAPSHOT = [
+  'servicio', 'razon_social', 'zona', 'tipo', 'supervisor', 'asesor', 'total_guardias', 'turnos_json',
+  'guardias_en_factura', 'importe_factura', 'importe_sin_iva', 'factura_mensual', 'nomina_total',
+  'nomina_prestaciones', 'resultado_servicio', 'pct_utilidad', 'utilidad_bruta', 'status_cobranza',
+  'fecha_pago', 'importe_pendiente', 'saldo_vencido', 'credito_maximo', 'dias_credito',
+  'tiene_contrato', 'fecha_contrato', 'fecha_vencimiento_contrato', 'condiciones_comerciales',
+  'observaciones',
+];
+
 const insSnapshot = db.prepare(
-  'INSERT OR IGNORE INTO snapshots (periodo, servicio, zona, asesor, total_guardias, importe_factura) VALUES (?,?,?,?,?,?)'
+  `INSERT INTO snapshots (periodo, ${CAMPOS_SNAPSHOT.join(', ')})
+   VALUES (?, ${CAMPOS_SNAPSHOT.map(() => '?').join(', ')})`
 );
+
+/** Un renglón del corte, con los mismos nombres de campo que usa `servicios`. */
+function filaSnapshot(periodo, r) {
+  return [
+    periodo,
+    ...CAMPOS_SNAPSHOT.map((c) => {
+      if (c === 'turnos_json') return JSON.stringify(r.turnos || {});
+      if (c === 'zona' || c === 'asesor' || c === 'tipo' || c === 'supervisor') return canonico(r[c]) || null;
+      if (c === 'tiene_contrato') return r.tiene_contrato === 1 ? 1 : 0;
+      const v = r[c];
+      return v === undefined || v === '' ? null : v;
+    }),
+  ];
+}
 
 const cargar = db.transaction(() => {
   // 1) cortes históricos, para el análisis por periodo
   let nSnap = 0;
   for (const periodo of periodos) {
     for (const r of seed.snapshots[periodo]) {
-      insSnapshot.run(periodo, r.servicio, r.zona || null, r.asesor || null, r.total_guardias ?? null, r.importe_factura ?? null);
+      insSnapshot.run(...filaSnapshot(periodo, r));
       nSnap++;
     }
   }
