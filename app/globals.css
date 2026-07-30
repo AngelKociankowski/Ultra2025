@@ -137,13 +137,17 @@ body {
   min-height: 100vh;
 }
 
-/* El cambio de tema no debe verse como un parpadeo. */
+/*
+ * El cambio de tema no debe verse como un parpadeo. Solo se animan fondos y
+ * bordes: animar `color` en body lo hereda toda la página y el texto pasa
+ * varias décimas por tonos intermedios ilegibles.
+ */
 body,
 header,
 input,
 select,
 textarea {
-  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
 }
 
 ::-webkit-scrollbar {
