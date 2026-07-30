@@ -1,19 +1,24 @@
 {
-  "name": "ultra-seguridad-dashboard",
-  "version": "1.0.0",
+  "name": "ultra-plataforma-guardias",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed": "node scripts/seed.mjs",
+    "seed:reset": "node scripts/seed.mjs --reset",
+    "import:xlsx": "node scripts/import-xlsx.mjs"
   },
   "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "lucide-react": "^0.294.0",
     "next": "14.0.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "recharts": "^2.10.3",
-    "lucide-react": "^0.294.0"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.16",
