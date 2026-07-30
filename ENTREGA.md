@@ -29,6 +29,24 @@ la regla del negocio, los permisos por campo y el ciclo de vida de un servicio.
 Si alguna falla, algo se rompió de verdad. Corren también en GitHub Actions
 (`.github/workflows/ci.yml`).
 
+### Simular un mes de operación
+
+```bash
+npm run start                            # en una terminal
+BASE=http://localhost:3000 npm run simular   # en otra
+```
+
+Los cinco roles entran, hacen su trabajo, intentan lo que no les toca, y al
+final se comprueba la resta:
+
+```
+guardias al inicio + altas − bajas = guardias al final
+```
+
+Sirve para validar un despliegue nuevo y para enseñar la plataforma sin tener
+que inventar el guion. La salida de la última corrida está en
+`evidencia/simulacion.txt`.
+
 ---
 
 ## Lo primero que conviene entender

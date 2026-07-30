@@ -11,7 +11,8 @@
     "seed:reset": "node scripts/seed.mjs --reset",
     "import:xlsx": "node scripts/import-xlsx.mjs",
     "test": "node --test tests/*.test.mjs",
-    "verify": "npm run build && npm run test"
+    "verify": "npm run build && npm run test",
+    "simular": "node scripts/simulacion.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^11.5.0",
