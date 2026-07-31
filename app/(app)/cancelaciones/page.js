@@ -28,12 +28,12 @@ export default function Cancelaciones() {
             de salida del estado de fuerza.
           </p>
         </div>
-        {puede(usuario.rol, 'cancelacion') && (
+        {(puede(usuario.rol, 'cancelacion') || puede(usuario.rol, 'apertura')) && (
           <Link
             href="/cancelaciones/nueva"
             className="bg-red-600 hover:bg-red-500 text-ultra-blanco text-sm rounded-lg px-3 py-2"
           >
-            ➖ Nueva cancelación
+            ⇅ Movimiento de guardias
           </Link>
         )}
       </div>

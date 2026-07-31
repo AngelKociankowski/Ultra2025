@@ -95,10 +95,36 @@ describe('ciclo de vida completo de un servicio', () => {
   test('una reducción que se lleva todo se rechaza pidiendo cancelación', async () => {
     const r = await admin.pedir('/api/cancelaciones', {
       method: 'POST',
-      body: JSON.stringify({ tipo: 'REDUCCION', servicio_id: id, guardias: 9, motivo: 'AJUSTE OPERATIVO' }),
+      body: JSON.stringify({
+        tipo: 'REDUCCION',
+        servicio_id: id,
+        turnos: { '24X24': 5, '12X12 L-D': 4 },
+        motivo: 'AJUSTE OPERATIVO',
+      }),
     });
     assert.equal(r.status, 400);
     assert.match(r.json.error, /cancelaci/i);
+  });
+
+  test('un movimiento parcial sin desglose se rechaza si el servicio lo tiene', async () => {
+    // Si pasara, el total bajaría y el desglose se quedaría igual: los dos
+    // dirían cosas distintas y la siguiente disminución trabajaría con basura.
+    const reducir = await admin.pedir('/api/cancelaciones', {
+      method: 'POST',
+      body: JSON.stringify({ tipo: 'REDUCCION', servicio_id: id, guardias: 2, motivo: 'AJUSTE OPERATIVO' }),
+    });
+    assert.equal(reducir.status, 400);
+    assert.match(reducir.json.error, /desglose/i);
+
+    const ampliar = await admin.pedir('/api/aperturas', {
+      method: 'POST',
+      body: JSON.stringify({ tipo: 'INCREMENTO', servicio_id: id, guardias: 2 }),
+    });
+    assert.equal(ampliar.status, 400);
+    assert.match(ampliar.json.error, /desglose/i);
+
+    const s = await admin.pedir(`/api/servicios/${id}`);
+    assert.equal(s.json.servicio.total_guardias, 9, 'nada se movió');
   });
 
   test('la cancelación saca el servicio del estado de fuerza', async () => {

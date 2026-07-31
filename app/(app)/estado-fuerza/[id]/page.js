@@ -8,6 +8,7 @@ import { formatCurrency, formatNumber } from '@/lib/utils';
 import { listarComentarios } from '@/lib/comentarios';
 import EditorServicio from './EditorServicio';
 import Comentarios from './Comentarios';
+import CorreccionServicio from './CorreccionServicio';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,8 +63,9 @@ export default function DetalleServicio({ params }) {
 
       {s.estatus === 'BAJA' && (
         <p className="text-sm text-slate-300 bg-slate-700/30 border border-slate-600/50 rounded-xl px-4 py-3">
-          Servicio dado de baja el <strong>{s.fecha_baja || '—'}</strong> por una cancelación. Para reactivarlo debe
-          registrarse una nueva apertura.
+          Servicio dado de baja el <strong>{s.fecha_baja || '—'}</strong> por una cancelación. Si el servicio vuelve,
+          se registra una apertura nueva; si la cancelación fue un error de captura, un administrador lo reactiva desde
+          «Corregir captura».
         </p>
       )}
 
@@ -131,6 +133,10 @@ export default function DetalleServicio({ params }) {
       {grupos.length > 0 && s.estatus === 'ACTIVO' && (
         <EditorServicio servicio={s} grupos={grupos} rol={usuario.rol} />
       )}
+      {puede(usuario.rol, 'corregir') && (
+        <CorreccionServicio servicio={s} correcciones={s.correcciones} />
+      )}
+
       {grupos.length === 0 && (
         <p className="text-sm text-slate-500 bg-slate-800/30 border border-slate-700/50 rounded-2xl px-4 py-3">
           Tu rol ({usuario.rol}) tiene acceso de consulta sobre este servicio. Los cambios al estado de fuerza se hacen
@@ -165,13 +171,33 @@ export default function DetalleServicio({ params }) {
               <li className="text-slate-500">Sin movimientos registrados en la plataforma.</li>
             )}
           </ul>
-          {puede(usuario.rol, 'cancelacion') && s.estatus === 'ACTIVO' && (
-            <Link
-              href={`/cancelaciones/nueva?servicio_id=${s.id}`}
-              className="inline-block mt-4 text-sm bg-red-600/80 hover:bg-red-500 text-ultra-blanco rounded-lg px-3 py-1.5"
-            >
-              ➖ Cancelar o reducir este servicio
-            </Link>
+          {s.estatus === 'ACTIVO' && (puede(usuario.rol, 'apertura') || puede(usuario.rol, 'cancelacion')) && (
+            <div className="flex flex-wrap gap-2 mt-4">
+              {puede(usuario.rol, 'apertura') && (
+                <Link
+                  href={`/cancelaciones/nueva?servicio_id=${s.id}&modo=AMPLIACION`}
+                  className="text-sm bg-emerald-600/80 hover:bg-emerald-500 text-ultra-blanco rounded-lg px-3 py-1.5"
+                >
+                  ＋ Ampliar
+                </Link>
+              )}
+              {puede(usuario.rol, 'cancelacion') && (
+                <>
+                  <Link
+                    href={`/cancelaciones/nueva?servicio_id=${s.id}&modo=REDUCCION`}
+                    className="text-sm bg-amber-600/80 hover:bg-amber-500 text-ultra-blanco rounded-lg px-3 py-1.5"
+                  >
+                    − Disminuir
+                  </Link>
+                  <Link
+                    href={`/cancelaciones/nueva?servicio_id=${s.id}&modo=CANCELACION`}
+                    className="text-sm bg-red-600/80 hover:bg-red-500 text-ultra-blanco rounded-lg px-3 py-1.5"
+                  >
+                    ✕ Cancelar
+                  </Link>
+                </>
+              )}
+            </div>
           )}
         </section>
 

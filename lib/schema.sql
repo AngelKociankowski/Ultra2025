@@ -234,6 +234,34 @@ CREATE TABLE IF NOT EXISTS snapshots (
 CREATE INDEX IF NOT EXISTS idx_snapshots_periodo ON snapshots(periodo, servicio);
 CREATE INDEX IF NOT EXISTS idx_snapshots_servicio ON snapshots(servicio);
 
+-- ------------------------------------------------------------- correcciones
+-- La única vía por la que el estado de fuerza cambia sin un movimiento real.
+--
+-- Un alta o una baja de guardias se registra como apertura o cancelación: eso
+-- describe algo que pasó en la calle. Una corrección es otra cosa: el dato
+-- estaba mal capturado desde el principio —el nombre trae una falta, alguien
+-- tecleó 12 en vez de 21, se canceló el servicio equivocado—. Meterlo como
+-- movimiento inventaría altas y bajas que nunca ocurrieron y ensuciaría las
+-- gráficas del mes y los cortes de facturación.
+--
+-- Por eso existe esta tabla y por eso solo el admin la alimenta: cada
+-- corrección exige un motivo escrito y guarda el antes y el después campo por
+-- campo, para que quede claro que fue un arreglo de captura y no un movimiento.
+CREATE TABLE IF NOT EXISTS correcciones (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  servicio_id      INTEGER NOT NULL REFERENCES servicios(id) ON DELETE CASCADE,
+  servicio         TEXT NOT NULL,
+  motivo           TEXT NOT NULL,
+  cambios          TEXT NOT NULL,
+  guardias_antes   INTEGER,
+  guardias_despues INTEGER,
+  usuario_id       INTEGER REFERENCES usuarios(id),
+  usuario          TEXT NOT NULL,
+  creado_en        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_correcciones_servicio ON correcciones(servicio_id, id DESC);
+
 -- ------------------------------------------------------- comentarios por servicio
 -- Notas que el equipo se deja sobre un servicio: lo que no cabe en un campo.
 -- Cualquier rol puede escribir —una nota no cambia el estado de fuerza— y

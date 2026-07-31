@@ -29,20 +29,52 @@ No es una convención: está impuesta por el código.
 
 Ningún rol —**ni el admin**— tiene un permiso de "crear servicio" o "borrar servicio".
 `lib/servicios.js` es el único punto de escritura de la tabla y solo expone
-`registrarApertura()`, `registrarCancelacion()` y `actualizarServicio()`.
+`registrarApertura()`, `registrarCancelacion()`, `actualizarServicio()` y
+`registrarCorreccion()`.
 
 ### Movimientos
 
-| Movimiento | Efecto en el estado de fuerza |
-|---|---|
-| **Apertura** | Crea el servicio con estatus `ACTIVO` |
-| **Temporal** | Igual que apertura, marcada como temporal |
-| **Incremento** | Suma guardias a un servicio ya `ACTIVO` |
-| **Reducción** | Resta guardias; el servicio sigue `ACTIVO` |
-| **Cancelación** | Estatus `BAJA`, guardias a 0 |
+Los tres que mueven el número de guardias viven en una sola pantalla
+(`/cancelaciones/nueva`), porque en la oficina son la misma decisión: a un sitio
+le suben, le bajan o se acaba.
+
+| Movimiento | En pantalla | Efecto en el estado de fuerza |
+|---|---|---|
+| **Apertura** | Aperturas | Crea el servicio con estatus `ACTIVO` |
+| **Temporal** | Aperturas | Igual que apertura, marcada como temporal |
+| **Incremento** | **Ampliación** | Suma guardias a un servicio ya `ACTIVO` |
+| **Reducción** | **Disminución** | Resta guardias; el servicio sigue `ACTIVO` |
+| **Cancelación** | **Cancelación total** | Estatus `BAJA`, guardias a 0 |
 
 Validaciones activas: no se incrementa un servicio dado de baja, no se cancela dos veces,
 y una reducción que se llevaría todos los guardias se rechaza pidiendo una cancelación.
+
+Un movimiento parcial sobre un servicio **con desglose por turno tiene que venir
+desglosado**. Si no, el total se movería y el desglose se quedaría igual: quedarían
+diciendo cosas distintas y la siguiente disminución —que se captura por turno—
+trabajaría sobre cifras que ya no existen. Los servicios sin desglose se mueven con la
+cantidad a secas.
+
+### Correcciones de captura (solo admin)
+
+`POST /api/servicios/:id/correccion`
+
+Es la única operación que cambia el estado de fuerza **sin ser un movimiento**, y existe
+porque un dato puede nacer mal. Si tecleamos 12 donde iban 21, en la calle no llegaron
+nueve guardias: registrarlo como ampliación inventaría un alta que nunca ocurrió y
+ensuciaría las gráficas del mes.
+
+Corrige lo que `PATCH` tiene bloqueado —nombre, total de guardias, desglose de turnos,
+fecha de alta— con estas reglas:
+
+- **Exige motivo escrito.** Sin explicación es indistinguible de un cambio arbitrario.
+- **No da de baja.** Para sacar un servicio está la cancelación, que deja folio y motivo.
+  Sí puede **reactivar** un servicio cancelado por error, porque eso no tiene otra vía.
+- **Un servicio activo no queda en cero guardias.**
+- **El desglose manda:** si viene, el total se recalcula con él y un total que lo
+  contradiga se rechaza.
+- Queda en la tabla `correcciones` con el antes y el después campo por campo, y en la
+  bitácora.
 
 ---
 
@@ -55,6 +87,9 @@ y una reducción que se llevaría todos los guardias se rechaza pidiendo una can
 | **Finanzas** | ✅ | — | — | — | ✅ | — | — |
 | **Operaciones** | ✅ | ✅ | ✅ | — | — | — | — |
 | **Ventas** | ✅ | ✅ | ✅ | — | — | — | — |
+
+Las **correcciones de captura** son exclusivas del administrador; los demás roles reciben
+403 aunque llamen la API directo.
 
 Los permisos son **por campo**, no por pantalla. Si jurídico manda contrato + factura en
 la misma petición, se aplica el contrato y la factura se devuelve en `rechazados`.
@@ -313,7 +348,7 @@ app/
 │   ├── page.js                # tablero: KPIs, aperturas vs cancelaciones, contratos
 │   ├── estado-fuerza/         # mes en curso + cortes cerrados; detalle con edición por bloques
 │   ├── aperturas/nueva/       # captura con desglose de turnos y autorizaciones
-│   ├── cancelaciones/nueva/   # cancelación total o reducción por turno
+│   ├── cancelaciones/nueva/   # ampliación, disminución o cancelación total
 │   ├── bitacora/              # historial de cambios
 │   └── usuarios/              # altas, roles, contraseñas, matriz de permisos
 └── api/                       # auth, aperturas, cancelaciones, servicios, usuarios
