@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { usuarioActual } from '@/lib/auth';
 import { puede, PERMISOS } from '@/lib/rbac';
 import { serviciosActivosParaSelect } from '@/lib/queries';
+import { opciones } from '@/lib/catalogos';
 import FormMovimiento from './FormMovimiento';
 
 export const dynamic = 'force-dynamic';
@@ -38,6 +39,7 @@ export default function NuevoMovimiento({ searchParams }) {
       </div>
       <FormMovimiento
         serviciosActivos={serviciosActivosParaSelect()}
+        opciones={opciones()}
         preseleccion={searchParams?.servicio_id || ''}
         permisos={PERMISOS[usuario.rol] || []}
         modoInicial={searchParams?.modo || ''}

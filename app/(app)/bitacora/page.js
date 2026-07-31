@@ -14,6 +14,11 @@ const COLOR_ACCION = {
   login: 'bg-slate-600/40 text-slate-300',
   crear_usuario: 'bg-violet-500/20 text-violet-300',
   editar_usuario: 'bg-violet-500/20 text-violet-300',
+  catalogo_alta: 'bg-violet-500/20 text-violet-300',
+  catalogo_renombrar: 'bg-violet-500/20 text-violet-300',
+  catalogo_activar: 'bg-violet-500/20 text-violet-300',
+  catalogo_desactivar: 'bg-violet-500/20 text-violet-300',
+  catalogo_baja: 'bg-violet-500/20 text-violet-300',
 };
 
 export default function Bitacora() {

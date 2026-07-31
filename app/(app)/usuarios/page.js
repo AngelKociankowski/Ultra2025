@@ -50,6 +50,7 @@ export default function Usuarios() {
                 <th className="text-center pb-2 px-2">Facturas / pagos</th>
                 <th className="text-center pb-2 px-2">Datos operativos</th>
                 <th className="text-center pb-2 px-2">Usuarios</th>
+                <th className="text-center pb-2 px-2">Catálogos</th>
               </tr>
             </thead>
             <tbody>
@@ -69,6 +70,7 @@ export default function Usuarios() {
                     <td className="text-center">{si('editar_finanzas')}</td>
                     <td className="text-center">{si('editar_operativo')}</td>
                     <td className="text-center">{si('usuarios')}</td>
+                    <td className="text-center">{si('catalogos')}</td>
                   </tr>
                 );
               })}

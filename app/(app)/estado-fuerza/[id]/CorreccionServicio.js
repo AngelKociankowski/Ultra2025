@@ -23,7 +23,7 @@ const ETIQUETAS = {
  * suban o le bajen guardias— se registra como movimiento, y el aviso de arriba
  * lo dice para que nadie use esto por comodidad.
  */
-export default function CorreccionServicio({ servicio, correcciones }) {
+export default function CorreccionServicio({ servicio, correcciones, opciones }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState(servicio.servicio);
@@ -31,12 +31,12 @@ export default function CorreccionServicio({ servicio, correcciones }) {
   const [fechaAlta, setFechaAlta] = useState(servicio.fecha_alta || '');
   const [reactivar, setReactivar] = useState(false);
   const [turnos, setTurnos] = useState(() => ({ ...(servicio.turnos || {}) }));
-  const [nuevoTurno, setNuevoTurno] = useState('');
   const [motivo, setMotivo] = useState('');
   const [estado, setEstado] = useState(null);
   const [guardando, setGuardando] = useState(false);
 
   const conDesglose = Object.keys(servicio.turnos || {}).length > 0;
+  const porAgregar = (opciones?.turnos || []).filter((t) => !(t in turnos));
   const sumaTurnos = useMemo(
     () => Object.values(turnos).reduce((a, b) => a + (Number(b) || 0), 0),
     [turnos]
@@ -160,23 +160,24 @@ export default function CorreccionServicio({ servicio, correcciones }) {
                 ))}
               </div>
               <div className="mt-2 flex flex-wrap items-end gap-2">
-                <input
-                  value={nuevoTurno}
-                  onChange={(e) => setNuevoTurno(e.target.value.toUpperCase())}
-                  placeholder="12X12 L-D"
-                  className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-cyan-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const t = nuevoTurno.trim();
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const t = e.target.value;
                     if (t && !(t in turnos)) fijarTurno(t, 1);
-                    setNuevoTurno('');
                   }}
-                  className="text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-1.5"
+                  disabled={porAgregar.length === 0}
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-cyan-500 disabled:opacity-50"
                 >
-                  Añadir turno
-                </button>
+                  <option value="">
+                    {porAgregar.length ? 'Añadir turno…' : 'Ya están todos los del catálogo'}
+                  </option>
+                  {porAgregar.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           )}

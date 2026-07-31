@@ -80,13 +80,13 @@ fecha de alta— con estas reglas:
 
 ## 👥 Roles
 
-| Rol | Consultar | Aperturas | Cancelaciones | Contratos | Facturas / pagos | Datos operativos | Usuarios |
-|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| **Administrador** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Jurídico** | ✅ | — | — | ✅ | — | — | — |
-| **Finanzas** | ✅ | — | — | — | ✅ | — | — |
-| **Operaciones** | ✅ | ✅ | ✅ | — | — | — | — |
-| **Ventas** | ✅ | ✅ | ✅ | — | — | — | — |
+| Rol | Consultar | Aperturas | Cancelaciones | Contratos | Facturas / pagos | Datos operativos | Usuarios | Catálogos |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| **Administrador** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Jurídico** | ✅ | — | — | ✅ | — | — | — | — |
+| **Finanzas** | ✅ | — | — | — | ✅ | — | — | — |
+| **Operaciones** | ✅ | ✅ | ✅ | — | — | — | — | — |
+| **Ventas** | ✅ | ✅ | ✅ | — | — | — | — | — |
 
 Las **correcciones de captura** son exclusivas del administrador; los demás roles reciben
 403 aunque llamen la API directo.
@@ -118,6 +118,44 @@ rol y la fecha.
 Una nota **no se edita**: corregida después deja de ser registro de lo que se dijo. Se
 borra —solo su autor o un administrador— y se escribe otra; la baja queda en la bitácora.
 En la tabla del estado de fuerza, la columna 💬 dice qué servicios traen notas.
+
+---
+
+## 🗂️ Catálogos de captura
+
+**Zona, asesor y turno se eligen de una lista**, no se escriben. La lista vive en la tabla
+`catalogos` y **solo el administrador la alimenta**, desde *Catálogos* en el menú.
+
+El motivo es el de siempre: el autocompletado sugiere, pero no impide escribir. Así fue
+como el mismo asesor acabó capturado de tres maneras y como una zona nació con una falta
+que nadie corrigió; cuando eso pasa, el tablero los cuenta como cosas distintas y el
+reparto por zona deja de cuadrar.
+
+La regla se aplica **en el servidor**, no en la pantalla: una apertura que llegue por API
+con una zona, un asesor o un turno que no estén en el catálogo se rechaza con 400. Si solo
+lo arreglara el formulario, el catálogo sería una sugerencia.
+
+Tres acciones, y cada una hace algo distinto:
+
+| Acción | Qué le pasa a lo ya capturado |
+|---|---|
+| **Renombrar** | Se corrige hacia atrás: cambia en los servicios que lo traen y en sus movimientos. Es para arreglar una falta de captura, no para reasignar un servicio a otra zona. |
+| **Desactivar** | Nada. Deja de ofrecerse en capturas nuevas y los servicios conservan su valor. Es lo que corresponde cuando un asesor se va. |
+| **Borrar** | Solo si ningún servicio la trae. Si alguno la usa, la plataforma no deja: el dato seguiría en pantalla sin nada que lo explique. |
+
+Ninguna de las tres toca los **cortes cerrados**: ese es el respaldo de lo que se facturó.
+
+Al instalar sobre una base que ya tenía servicios, el catálogo se siembra solo con lo que
+el estado de fuerza vigente trae —3 zonas, 13 asesores, los turnos en uso más los 15
+estándar—. **Los cortes viejos no se miran**: las hojas de 2023 y 2024 traen en la columna
+de zona números de otra columna (`21`, `35`) y asesores que son pedazos de nombre (`GUI`,
+`CSS`), y eso no tiene por qué volverse una opción que alguien pueda elegir hoy. Lo que ya
+esté capturado y no sea opción se muestra aparte, como *«capturadas fuera del catálogo»*,
+para adoptarlo o corregirlo.
+
+Desactivar un turno lo quita de las capturas nuevas pero **no congela a quien ya lo trae**:
+una disminución sobre ese servicio sigue pudiendo nombrarlo, porque si no, el desglose se
+volvería intocable.
 
 ---
 
@@ -320,6 +358,10 @@ Las hojas traen al mismo asesor escrito de varias formas (`ISAI ALVARADO`,
 `ISAÍ ALVARADO`, `Humberto Martínez`). El seed unifica asesor, zona, tipo y supervisor a
 mayúsculas sin acentos para que los rankings no partan a una persona en tres.
 
+Eso arregla lo que ya venía en los Excel. Para que no vuelva a pasar de aquí en adelante
+está el [catálogo de captura](#️-catálogos-de-captura): zona, asesor y turno se eligen de
+una lista en vez de escribirse.
+
 ---
 
 ## 🎨 Identidad
@@ -350,14 +392,17 @@ app/
 │   ├── aperturas/nueva/       # captura con desglose de turnos y autorizaciones
 │   ├── cancelaciones/nueva/   # ampliación, disminución o cancelación total
 │   ├── bitacora/              # historial de cambios
+│   ├── catalogos/             # zonas, asesores y turnos que se pueden capturar
 │   └── usuarios/              # altas, roles, contraseñas, matriz de permisos
-└── api/                       # auth, aperturas, cancelaciones, servicios, usuarios
+└── api/                       # auth, aperturas, cancelaciones, servicios, usuarios, catálogos
 components/
+├── CampoCatalogo.js           # lista desplegable que no pierde valores fuera de catálogo
 ├── Logo.js                    # emblema + nombre
 ├── TemaToggle.js              # conmutador día / noche
 └── MovimientosChart.js        # gráfica (recharts, con colores por tema)
 lib/
 ├── schema.sql                 # DDL
+├── catalogos.js               # zonas, asesores y turnos: la lista y sus reglas
 ├── comentarios.js             # notas por servicio
 ├── servicios.js               # ÚNICO punto de escritura del estado de fuerza
 ├── rbac.js                    # roles, permisos, campos por bloque

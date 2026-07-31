@@ -50,7 +50,7 @@ const MODOS = {
   },
 };
 
-export default function FormMovimiento({ serviciosActivos, preseleccion, permisos, modoInicial }) {
+export default function FormMovimiento({ serviciosActivos, opciones, preseleccion, permisos, modoInicial }) {
   const router = useRouter();
   const disponibles = Object.keys(MODOS).filter((m) => permisos.includes(MODOS[m].permiso));
 
@@ -64,7 +64,10 @@ export default function FormMovimiento({ serviciosActivos, preseleccion, permiso
   const [cxc, setCxc] = useState('');
   const [auditoria, setAuditoria] = useState('');
   const [turnos, setTurnos] = useState({});
-  const [nuevoTurno, setNuevoTurno] = useState('');
+  // Los turnos que se añaden a mano se recuerdan aparte de sus cantidades: si
+  // dependieran de `turnos`, borrar el número le quitaría el renglón de enfrente
+  // a quien apenas lo está capturando.
+  const [agregados, setAgregados] = useState([]);
   const [cantidadPlana, setCantidadPlana] = useState('');
   const [aut, setAut] = useState({});
   const [error, setError] = useState('');
@@ -77,6 +80,13 @@ export default function FormMovimiento({ serviciosActivos, preseleccion, permiso
   const conDesglose = turnosServicio.length > 0;
   const esCancelacion = modo === 'CANCELACION';
   const esAmpliacion = modo === 'AMPLIACION';
+
+  // Una ampliación puede traer un turno que el servicio todavía no tenía. Se
+  // pinta en la misma rejilla que los demás —y no solo como etiqueta— para que
+  // se le pueda poner la cantidad, igual que a los que ya existen.
+  const extras = agregados.filter((t) => !(t in (servicio?.turnos || {})));
+  const renglones = [...turnosServicio, ...extras.map((t) => [t, null])];
+  const porAgregar = (opciones?.turnos || []).filter((t) => !renglones.some(([r]) => r === t));
 
   const totalDesglose = useMemo(
     () => Object.values(turnos).reduce((a, b) => a + (Number(b) || 0), 0),
@@ -91,6 +101,7 @@ export default function FormMovimiento({ serviciosActivos, preseleccion, permiso
   function cambiarModo(m) {
     setModo(m);
     setTurnos({});
+    setAgregados([]);
     setCantidadPlana('');
     setError('');
     setOk('');
@@ -212,6 +223,7 @@ export default function FormMovimiento({ serviciosActivos, preseleccion, permiso
               onChange={(e) => {
                 setServicioId(e.target.value);
                 setTurnos({});
+                setAgregados([]);
                 setCantidadPlana('');
               }}
               className={input}
@@ -313,12 +325,16 @@ export default function FormMovimiento({ serviciosActivos, preseleccion, permiso
           {conDesglose ? (
             <>
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                {turnosServicio.map(([t, actuales]) => (
+                {renglones.map(([t, actuales]) => (
                   <div key={t}>
                     <label className="block text-[11px] text-slate-500 mb-0.5">
                       {t}{' '}
                       <span className="text-slate-600">
-                        {modo === 'REDUCCION' ? `(máx ${actuales})` : `(hoy ${actuales})`}
+                        {actuales === null
+                          ? '(nuevo)'
+                          : modo === 'REDUCCION'
+                          ? `(máx ${actuales})`
+                          : `(hoy ${actuales})`}
                       </span>
                     </label>
                     <input
@@ -336,32 +352,31 @@ export default function FormMovimiento({ serviciosActivos, preseleccion, permiso
               {esAmpliacion && (
                 <div className="mt-3 flex flex-wrap items-end gap-2">
                   <div>
-                    <label className="block text-[11px] text-slate-500 mb-0.5">Agregar un turno nuevo</label>
-                    <input
-                      value={nuevoTurno}
-                      onChange={(e) => setNuevoTurno(e.target.value.toUpperCase())}
-                      placeholder="12X12 L-D"
-                      className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-cyan-500"
-                    />
+                    <label className="block text-[11px] text-slate-500 mb-0.5" htmlFor="turno-nuevo">
+                      Agregar un turno que este servicio no tiene
+                    </label>
+                    <select
+                      id="turno-nuevo"
+                      value=""
+                      onChange={(e) => {
+                        const t = e.target.value;
+                        if (!t) return;
+                        setAgregados((prev) => (prev.includes(t) ? prev : [...prev, t]));
+                        fijarTurno(t, 1, null);
+                      }}
+                      disabled={porAgregar.length === 0}
+                      className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+                    >
+                      <option value="">
+                        {porAgregar.length ? 'Selecciona turno…' : 'Ya están todos los del catálogo'}
+                      </option>
+                      {porAgregar.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const t = nuevoTurno.trim();
-                      if (t && !(t in turnos)) fijarTurno(t, 1, null);
-                      setNuevoTurno('');
-                    }}
-                    className="text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-1.5"
-                  >
-                    Añadir turno
-                  </button>
-                  {Object.keys(turnos)
-                    .filter((t) => !(t in (servicio.turnos || {})))
-                    .map((t) => (
-                      <span key={t} className="text-xs bg-emerald-500/15 text-emerald-300 rounded px-2 py-1">
-                        {t}: {turnos[t]}
-                      </span>
-                    ))}
                 </div>
               )}
             </>

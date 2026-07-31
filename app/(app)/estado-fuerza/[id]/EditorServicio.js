@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import CampoCatalogo from '@/components/CampoCatalogo';
 
 const input =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
@@ -12,7 +13,7 @@ function valorInicial(servicio, campo) {
   return v ?? '';
 }
 
-export default function EditorServicio({ servicio, grupos, rol }) {
+export default function EditorServicio({ servicio, grupos, rol, opciones }) {
   const router = useRouter();
   const [grupoActivo, setGrupoActivo] = useState(grupos[0]?.clave);
   const [valores, setValores] = useState(() => {
@@ -106,6 +107,14 @@ export default function EditorServicio({ servicio, grupos, rol }) {
                   />
                   {valores[c.nombre] ? 'Sí' : 'No'}
                 </label>
+              ) : c.tipo === 'catalogo' ? (
+                <CampoCatalogo
+                  id={c.nombre}
+                  valor={valores[c.nombre]}
+                  opciones={opciones?.[c.catalogo] || []}
+                  onChange={(v) => setValores((prev) => ({ ...prev, [c.nombre]: v }))}
+                  className={input}
+                />
               ) : c.tipo === 'textarea' ? (
                 <textarea
                   id={c.nombre}

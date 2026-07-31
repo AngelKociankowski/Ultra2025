@@ -2,20 +2,28 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { AUTORIZACIONES_APERTURA } from '@/lib/campos';
-
-const TURNOS = [
-  '8X16 L-D', '8X16 L-S', '8X16 L-V',
-  '12X12 L-D', '12X12 L-S', '12X12 L-V',
-  '12X24', '12X36', '24X24', '24X48',
-  '10X14', '11X13', '12 HRS', '13X47', '24 HRS',
-];
+import CampoCatalogo from '@/components/CampoCatalogo';
 
 const input =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
 const label = 'block text-xs text-slate-400 mb-1';
 
-export default function FormApertura({ catalogos, serviciosActivos }) {
+/** Aviso para cuando el catálogo está vacío: el capturista no puede resolverlo. */
+function SinCatalogo({ que }) {
+  return (
+    <p className="text-[11px] text-amber-300/80 mt-1">
+      No hay {que} en el catálogo.{' '}
+      <Link href="/catalogos" className="underline">
+        Un administrador las da de alta
+      </Link>
+      .
+    </p>
+  );
+}
+
+export default function FormApertura({ catalogos, opciones, serviciosActivos }) {
   const router = useRouter();
   const [tipo, setTipo] = useState('APERTURA');
   const [f, setF] = useState({
@@ -159,18 +167,18 @@ export default function FormApertura({ catalogos, serviciosActivos }) {
           </div>
 
           <div>
-            <label className={label}>Zona</label>
-            <input
-              value={f.zona}
-              onChange={(e) => set('zona', e.target.value)}
-              list="zonas"
+            <label className={label} htmlFor="zona">
+              Zona
+            </label>
+            <CampoCatalogo
+              id="zona"
+              valor={f.zona}
+              opciones={opciones.zonas}
+              onChange={(v) => set('zona', v)}
+              vacio="— Selecciona zona —"
               className={input}
             />
-            <datalist id="zonas">
-              {catalogos.zonas.map((z) => (
-                <option key={z} value={z} />
-              ))}
-            </datalist>
+            {opciones.zonas.length === 0 && <SinCatalogo que="zonas" />}
           </div>
 
           <div className="lg:col-span-3">
@@ -179,13 +187,18 @@ export default function FormApertura({ catalogos, serviciosActivos }) {
           </div>
 
           <div>
-            <label className={label}>Asesor</label>
-            <input value={f.asesor} onChange={(e) => set('asesor', e.target.value)} list="asesores" className={input} />
-            <datalist id="asesores">
-              {catalogos.asesores.map((a) => (
-                <option key={a} value={a} />
-              ))}
-            </datalist>
+            <label className={label} htmlFor="asesor">
+              Asesor
+            </label>
+            <CampoCatalogo
+              id="asesor"
+              valor={f.asesor}
+              opciones={opciones.asesores}
+              onChange={(v) => set('asesor', v)}
+              vacio="— Selecciona asesor —"
+              className={input}
+            />
+            {opciones.asesores.length === 0 && <SinCatalogo que="asesores" />}
           </div>
 
           <div>
@@ -227,8 +240,9 @@ export default function FormApertura({ catalogos, serviciosActivos }) {
             Total: <strong className="text-emerald-400">{total}</strong> guardias
           </span>
         </div>
+        {opciones.turnos.length === 0 && <SinCatalogo que="turnos" />}
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-          {TURNOS.map((t) => (
+          {opciones.turnos.map((t) => (
             <div key={t}>
               <label className="block text-[11px] text-slate-500 mb-0.5">{t}</label>
               <input

@@ -262,6 +262,34 @@ CREATE TABLE IF NOT EXISTS correcciones (
 
 CREATE INDEX IF NOT EXISTS idx_correcciones_servicio ON correcciones(servicio_id, id DESC);
 
+-- ------------------------------------------------------------------ catálogos
+-- Las listas de las que se elige al capturar: zonas, asesores y turnos.
+--
+-- Antes eran texto libre con autocompletado, y el autocompletado solo sugiere:
+-- no impide escribir. Así fue como el mismo asesor acabó capturado de tres
+-- maneras y como una zona nació con una falta que ya nadie corrigió. Cuando eso
+-- pasa, el tablero los cuenta como cosas distintas y el reparto por zona deja
+-- de cuadrar.
+--
+-- Ahora la captura elige de esta tabla y solo el administrador la alimenta.
+--
+-- Las opciones que ya se usaron no se borran: se desactivan. Dejan de ofrecerse
+-- en capturas nuevas sin cambiarle el dato a los servicios que ya las traen ni
+-- a los cortes cerrados, que son el respaldo de facturación.
+CREATE TABLE IF NOT EXISTS catalogos (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  tipo      TEXT NOT NULL CHECK (tipo IN ('zona','asesor','turno')),
+  valor     TEXT NOT NULL,
+  -- Los turnos se ordenan como los lee la operación (8X16, 12X12, 24X48…), no
+  -- alfabéticamente. Zonas y asesores se quedan en 0 y salen por nombre.
+  orden     INTEGER NOT NULL DEFAULT 0,
+  activo    INTEGER NOT NULL DEFAULT 1,
+  creado_en TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (tipo, valor)
+);
+
+CREATE INDEX IF NOT EXISTS idx_catalogos_tipo ON catalogos(tipo, activo, orden, valor);
+
 -- ------------------------------------------------------- comentarios por servicio
 -- Notas que el equipo se deja sobre un servicio: lo que no cabe en un campo.
 -- Cualquier rol puede escribir —una nota no cambia el estado de fuerza— y

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { usuarioActual } from '@/lib/auth';
 import { puede } from '@/lib/rbac';
 import { catalogos } from '@/lib/servicios';
+import { opciones } from '@/lib/catalogos';
 import { serviciosActivosParaSelect } from '@/lib/queries';
 import FormApertura from './FormApertura';
 
@@ -35,7 +36,11 @@ export default function NuevaApertura() {
           Al guardar, el servicio entra al estado de fuerza. Un incremento suma guardias a un servicio ya activo.
         </p>
       </div>
-      <FormApertura catalogos={catalogos()} serviciosActivos={serviciosActivosParaSelect()} />
+      <FormApertura
+        catalogos={catalogos()}
+        opciones={opciones()}
+        serviciosActivos={serviciosActivosParaSelect()}
+      />
     </div>
   );
 }

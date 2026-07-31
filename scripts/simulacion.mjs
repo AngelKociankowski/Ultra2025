@@ -256,11 +256,16 @@ async function main() {
   comprobar(inc.status === 201, `incremento en ${objetivo.servicio}`, '+2 guardias');
   if (inc.status === 201) altas += 2;
 
+  // Los tres servicios de arriba nacieron con desglose por turno, así que la
+  // disminución tiene que decir de qué turno salen los guardias: mover el total
+  // sin tocar el desglose los dejaría diciendo cosas distintas.
+  const turnoRed = Object.keys(nuevos[1].turnos)[0];
   const red = await s.operaciones.pedir('/api/cancelaciones', {
     method: 'POST',
     body: JSON.stringify({
       tipo: 'REDUCCION',
       servicio_id: nuevos[1].id,
+      turnos: { [turnoRed]: 3 },
       guardias: 3,
       motivo: 'AJUSTE DE TURNOS SOLICITADO POR EL CLIENTE',
       fecha: '2026-08-18',
@@ -275,6 +280,7 @@ async function main() {
     body: JSON.stringify({
       tipo: 'REDUCCION',
       servicio_id: nuevos[2].id,
+      turnos: nuevos[2].turnos,
       guardias: nuevos[2].guardias,
       motivo: 'PRUEBA',
     }),

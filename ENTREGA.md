@@ -67,12 +67,18 @@ Si vas a tocar algo, empieza por ahí:
 | `lib/schema.sql` | todo el esquema, con comentarios de por qué está así |
 | `lib/queries.js` | agregados del tablero y consulta de cortes mensuales |
 | `lib/comentarios.js` | notas por servicio: quién escribe, quién borra |
+| `lib/catalogos.js` | zonas, asesores y turnos: la lista de la que se captura |
 | `scripts/import-xlsx.mjs` | lee los dos `.xlsx` originales y arma `data/seed.json` |
 | `scripts/seed.mjs` | carga `data/seed.json` a SQLite |
 
 Los permisos son **por campo, no por pantalla**. Si jurídico manda contrato y
 factura en la misma petición, se aplica el contrato y la factura vuelve en
 `rechazados`. Esconder un botón no es un permiso.
+
+Por el mismo motivo, **zona, asesor y turno se validan contra el catálogo en el
+servidor**, no solo en la lista desplegable: si la API siguiera aceptando texto
+libre, la lista sería una sugerencia. Quien alimenta el catálogo es el
+administrador, desde *Catálogos*.
 
 ---
 
