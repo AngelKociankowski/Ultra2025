@@ -10,6 +10,7 @@ import {
 } from '@/lib/queries';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { gruposEditables } from '@/lib/rbac';
+import { conteoComentarios } from '@/lib/comentarios';
 import Filtros from './Filtros';
 
 export const dynamic = 'force-dynamic';
@@ -50,6 +51,8 @@ export default function EstadoFuerza({ searchParams }) {
   const servicios = esCorte ? serviciosDeCorte(pedido, filtros) : listarServicios(filtros);
   const cat = esCorte ? catalogosDeCorte(pedido) : catalogos();
   const comparativo = esCorte ? comparativoCorte(pedido) : null;
+  // Un solo GROUP BY para toda la tabla, no una consulta por renglón.
+  const notas = esCorte ? new Map() : conteoComentarios();
   const grupos = gruposEditables(usuario.rol);
 
   const totalGuardias = servicios.reduce((a, s) => a + (s.total_guardias || 0), 0);
@@ -140,6 +143,7 @@ export default function EstadoFuerza({ searchParams }) {
             <thead className="bg-slate-900/60">
               <tr className="text-slate-400 text-xs">
                 <th className="text-left px-4 py-3">Servicio</th>
+                {!esCorte && <th className="text-center px-2 py-3" title="Comentarios">💬</th>}
                 <th className="text-left px-3 py-3">Razón social</th>
                 <th className="text-left px-3 py-3">Zona</th>
                 <th className="text-left px-3 py-3">Asesor</th>
@@ -163,6 +167,21 @@ export default function EstadoFuerza({ searchParams }) {
                       </Link>
                     )}
                   </td>
+                  {!esCorte && (
+                    <td className="px-2 py-2 text-center">
+                      {notas.get(s.id) ? (
+                        <Link
+                          href={`/estado-fuerza/${s.id}#comentarios`}
+                          title={`${notas.get(s.id)} comentario(s)`}
+                          className="text-xs bg-slate-700/60 text-slate-300 rounded-full px-1.5 py-0.5 hover:text-cyan-400"
+                        >
+                          {notas.get(s.id)}
+                        </Link>
+                      ) : (
+                        <span className="text-slate-600 text-xs">—</span>
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-slate-400 truncate max-w-[220px]">{s.razon_social || '—'}</td>
                   <td className="px-3 py-2 text-slate-400">{s.zona || '—'}</td>
                   <td className="px-3 py-2 text-slate-400 truncate max-w-[150px]">{s.asesor || '—'}</td>
@@ -192,7 +211,7 @@ export default function EstadoFuerza({ searchParams }) {
               ))}
               {servicios.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={esCorte ? 10 : 11} className="px-4 py-8 text-center text-slate-500">
                     Ningún servicio coincide con los filtros.
                   </td>
                 </tr>

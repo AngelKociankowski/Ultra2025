@@ -73,6 +73,17 @@ la misma petición, se aplica el contrato y la factura se devuelve en `rechazado
 Toda edición y todo movimiento quedan en la **bitácora** con usuario, rol, fecha y el
 antes/después de cada campo.
 
+### Comentarios
+
+Cada servicio tiene un hilo de notas: lo que no cabe en un campo —acuerdos con el
+cliente, pendientes, avisos para el turno que sigue—. **Cualquier rol puede escribir**,
+porque una nota no cambia ni un guardia ni una factura; queda firmada con el nombre, el
+rol y la fecha.
+
+Una nota **no se edita**: corregida después deja de ser registro de lo que se dijo. Se
+borra —solo su autor o un administrador— y se escribe otra; la baja queda en la bitácora.
+En la tabla del estado de fuerza, la columna 💬 dice qué servicios traen notas.
+
 ---
 
 ## 🚀 Arranque
@@ -121,12 +132,12 @@ cierran las demás sesiones de esa cuenta.
 Pruebas:
 
 ```bash
-npm run verify      # build + 46 pruebas contra la app real
+npm run verify      # build + 62 pruebas contra la app real
 ```
 
 Levantan la aplicación contra una base desechable y comprueban el acceso y el
-alta de usuarios, la regla del negocio, los permisos campo por campo y el ciclo
-de vida completo de un servicio. Empiezan como empieza una instalación real:
+alta de usuarios, la regla del negocio, los permisos campo por campo, los
+comentarios y el ciclo de vida completo de un servicio. Empiezan como empieza una instalación real:
 con un solo administrador que da de alta al resto. Corren también en GitHub
 Actions.
 
@@ -312,6 +323,7 @@ components/
 └── MovimientosChart.js        # gráfica (recharts, con colores por tema)
 lib/
 ├── schema.sql                 # DDL
+├── comentarios.js             # notas por servicio
 ├── servicios.js               # ÚNICO punto de escritura del estado de fuerza
 ├── rbac.js                    # roles, permisos, campos por bloque
 ├── auth.js                    # scrypt + sesiones en base

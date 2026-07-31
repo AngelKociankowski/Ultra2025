@@ -5,7 +5,9 @@ import { obtenerServicio } from '@/lib/servicios';
 import { gruposEditables, puede } from '@/lib/rbac';
 import { CAMPOS } from '@/lib/campos';
 import { formatCurrency, formatNumber } from '@/lib/utils';
+import { listarComentarios } from '@/lib/comentarios';
 import EditorServicio from './EditorServicio';
+import Comentarios from './Comentarios';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +24,8 @@ export default function DetalleServicio({ params }) {
   const usuario = usuarioActual();
   const s = obtenerServicio(Number(params.id));
   if (!s) notFound();
+
+  const comentarios = listarComentarios(s.id);
 
   const grupos = gruposEditables(usuario.rol).map((g) => ({
     ...g,
@@ -170,6 +174,13 @@ export default function DetalleServicio({ params }) {
             </Link>
           )}
         </section>
+
+        <Comentarios
+          servicioId={s.id}
+          iniciales={comentarios}
+          usuarioId={usuario.id}
+          esAdmin={usuario.rol === 'admin'}
+        />
 
         <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
           <h2 className="text-base font-semibold text-white mb-3">Historial de cambios</h2>

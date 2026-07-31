@@ -22,7 +22,7 @@ Requiere **Node 20 o superior** (ver `.nvmrc`).
 ## Comprobar que todo está bien
 
 ```bash
-npm run verify       # build + 46 pruebas
+npm run verify       # build + 62 pruebas
 ```
 
 Las pruebas levantan la aplicación real contra una base desechable y verifican
@@ -66,6 +66,7 @@ Si vas a tocar algo, empieza por ahí:
 | `lib/rbac.js` | roles, permisos y qué campo puede editar cada uno |
 | `lib/schema.sql` | todo el esquema, con comentarios de por qué está así |
 | `lib/queries.js` | agregados del tablero y consulta de cortes mensuales |
+| `lib/comentarios.js` | notas por servicio: quién escribe, quién borra |
 | `scripts/import-xlsx.mjs` | lee los dos `.xlsx` originales y arma `data/seed.json` |
 | `scripts/seed.mjs` | carga `data/seed.json` a SQLite |
 

@@ -358,8 +358,53 @@ async function main() {
     'el admin edita operativo + contrato + cobranza en una sola petición'
   );
 
+  // ---------------------------------------------------------- comentarios
+  titulo('7 · El equipo se deja notas sobre los servicios');
+  const notas = [
+    ['ventas', 'El cliente pidió que el guardia de la entrada hable inglés básico.'],
+    ['operaciones', 'Turno de noche cubierto con personal de Tepeji hasta el día 15.'],
+    ['finanzas', 'Facturar por separado el mes de agosto: lo pidió el corporativo.'],
+    ['juridico', 'Contrato firmado, falta que el cliente devuelva copia sellada.'],
+  ];
+  for (const [rol, texto] of notas) {
+    const r = await s[rol].pedir(`/api/servicios/${nuevos[0].id}/comentarios`, {
+      method: 'POST',
+      body: JSON.stringify({ texto }),
+    });
+    comprobar(r.status === 201, `${rol} deja una nota`, texto.slice(0, 46) + '…');
+  }
+
+  const hilo = await s.admin.pedir(`/api/servicios/${nuevos[0].id}/comentarios`);
+  comprobar(hilo.json.comentarios.length === notas.length, 'las cuatro notas quedan en el hilo del servicio');
+  comprobar(
+    hilo.json.comentarios[0].usuario && hilo.json.comentarios[0].creado_en,
+    'cada nota queda firmada con quién y cuándo',
+    `${hilo.json.comentarios[0].usuario} · ${hilo.json.comentarios[0].creado_en}`
+  );
+
+  const ajena = hilo.json.comentarios.find((x) => x.rol === 'ventas');
+  const intentoAjeno = await s.operaciones.pedir(`/api/comentarios/${ajena.id}`, { method: 'DELETE' });
+  comprobar(intentoAjeno.status === 403, 'nadie borra la nota de otro');
+
+  const edicion = await s.admin.pedir(`/api/comentarios/${ajena.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ texto: 'otra cosa' }),
+  });
+  comprobar(edicion.status === 405, 'una nota no se edita: se borra y se escribe otra');
+
+  const antesDeComentar = await estado(s.admin);
+  await s.ventas.pedir(`/api/servicios/${nuevos[0].id}/comentarios`, {
+    method: 'POST',
+    body: JSON.stringify({ texto: 'Nota de comprobación.' }),
+  });
+  const despuesDeComentar = await estado(s.admin);
+  comprobar(
+    antesDeComentar.guardias === despuesDeComentar.guardias,
+    'comentar no mueve un solo guardia'
+  );
+
   // ------------------------------------------------------------ invariante
-  titulo('7 · Nadie puede saltarse la regla');
+  titulo('8 · Nadie puede saltarse la regla');
   for (const rol of Object.keys(CUENTAS)) {
     const alta = await s[rol].pedir('/api/servicios', {
       method: 'POST',
@@ -394,7 +439,7 @@ async function main() {
   }
 
   // --------------------------------------------------------------- cuentas
-  titulo('8 · Las cuentas del mes');
+  titulo('9 · Las cuentas del mes');
   const final = await estado(s.admin);
   const esperado = inicial.guardias + altas - bajas;
 
@@ -414,7 +459,7 @@ async function main() {
   );
 
   // ------------------------------------------------------------- bitácora
-  titulo('9 · Todo quedó registrado');
+  titulo('10 · Todo quedó registrado');
   const bit = await s.admin.pedir('/bitacora');
   const lista = await s.admin.pedir('/api/usuarios');
   // El nombre del administrador depende de quién puso en marcha la instalación.
@@ -428,7 +473,7 @@ async function main() {
   comprobar(/Sin permiso/.test(bitVentas.texto), 'ventas no alcanza la bitácora');
 
   // ----------------------------------------------------- cortes cerrados
-  titulo('10 · Los cortes cerrados no se movieron');
+  titulo('11 · Los cortes cerrados no se movieron');
   const corteDespues = await s.admin.pedir('/api/cortes/2026-01');
   comprobar(
     corteDespues.texto.length === huellaCorteAntes,
@@ -441,7 +486,7 @@ async function main() {
   }
 
   // ------------------------------------------------------------ descargas
-  titulo('11 · Facturación se lleva su archivo');
+  titulo('12 · Facturación se lleva su archivo');
   const csv = await s.finanzas.pedir('/api/cortes/actual');
   const lineas = csv.texto.trim().split('\r\n');
   comprobar(csv.status === 200, 'el CSV del mes en curso descarga');

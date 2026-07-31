@@ -85,7 +85,9 @@ CREATE TABLE IF NOT EXISTS servicios (
   actualizado_en             TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_servicios_estatus ON servicios(estatus);
+-- Compuesto a propósito: la pantalla siempre filtra por estatus y ordena por
+-- nombre, así el índice resuelve las dos cosas y no hace falta ordenar aparte.
+CREATE INDEX IF NOT EXISTS idx_servicios_estatus ON servicios(estatus, servicio);
 CREATE INDEX IF NOT EXISTS idx_servicios_zona    ON servicios(zona);
 CREATE INDEX IF NOT EXISTS idx_servicios_asesor  ON servicios(asesor);
 CREATE INDEX IF NOT EXISTS idx_servicios_nombre  ON servicios(servicio);
@@ -228,5 +230,26 @@ CREATE TABLE IF NOT EXISTS snapshots (
   observaciones  TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_snapshots_periodo ON snapshots(periodo);
+-- Mismo motivo: un corte se pide entero y ordenado por servicio.
+CREATE INDEX IF NOT EXISTS idx_snapshots_periodo ON snapshots(periodo, servicio);
 CREATE INDEX IF NOT EXISTS idx_snapshots_servicio ON snapshots(servicio);
+
+-- ------------------------------------------------------- comentarios por servicio
+-- Notas que el equipo se deja sobre un servicio: lo que no cabe en un campo.
+-- Cualquier rol puede escribir —una nota no cambia el estado de fuerza— y
+-- queda firmada con quién la escribió y cuándo.
+--
+-- El nombre y el rol se guardan copiados a propósito: si mañana esa persona
+-- cambia de puesto o se da de baja, la nota debe seguir diciendo quién era
+-- cuando la escribió.
+CREATE TABLE IF NOT EXISTS comentarios (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  servicio_id INTEGER NOT NULL REFERENCES servicios(id) ON DELETE CASCADE,
+  usuario_id  INTEGER REFERENCES usuarios(id),
+  usuario     TEXT NOT NULL,
+  rol         TEXT NOT NULL,
+  texto       TEXT NOT NULL,
+  creado_en   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_comentarios_servicio ON comentarios(servicio_id, id DESC);
