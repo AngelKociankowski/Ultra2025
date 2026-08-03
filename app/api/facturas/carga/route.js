@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { conPermiso, leerJson } from '@/lib/api';
 import { cargarFacturas, plantillaDeCarga } from '@/lib/facturacion';
 import { escribirCSV, leerCSV } from '@/lib/csv';
+import { mesActual } from '@/lib/fechas';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,7 @@ const COLUMNAS = [
  * no acabe cargándole la factura al servicio equivocado.
  */
 export const GET = conPermiso('editar_finanzas', async (request) => {
-  const periodo = new URL(request.url).searchParams.get('periodo') || new Date().toISOString().slice(0, 7);
+  const periodo = new URL(request.url).searchParams.get('periodo') || mesActual();
   const csv = escribirCSV(COLUMNAS, plantillaDeCarga(periodo));
   return new NextResponse(csv, {
     headers: {

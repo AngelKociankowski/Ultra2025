@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, hoyLocal } from '@/lib/utils';
 import ArchivoFactura from '@/components/ArchivoFactura';
 
 const input =
@@ -44,11 +44,11 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
   const [nueva, setNueva] = useState(() => ({
     periodo,
     concepto: sugerida?.concepto || 'Mes completo',
-    fecha_factura: sugerida?.fecha || new Date().toISOString().slice(0, 10),
+    fecha_factura: sugerida?.fecha || hoyLocal(),
     importe: sugerida?.importe ? String(Math.round(sugerida.importe * 100) / 100) : '',
     folio: '',
   }));
-  const [pago, setPago] = useState({ fecha: new Date().toISOString().slice(0, 10), importe: '', referencia: '' });
+  const [pago, setPago] = useState({ fecha: hoyLocal(), importe: '', referencia: '' });
 
   async function llamar(metodo, cuerpo, ruta = '/api/facturas') {
     setOcupado(true);
@@ -99,7 +99,7 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
           : `Pago registrado. Quedan ${formatCurrency(data.saldo)} de esa factura.`,
       });
       setAbierto(null);
-      setPago({ fecha: new Date().toISOString().slice(0, 10), importe: '', referencia: '' });
+      setPago({ fecha: hoyLocal(), importe: '', referencia: '' });
     }
   }
 

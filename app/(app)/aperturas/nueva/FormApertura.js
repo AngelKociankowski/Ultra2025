@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AUTORIZACIONES_APERTURA } from '@/lib/campos';
 import CampoCatalogo from '@/components/CampoCatalogo';
+import { hoyLocal } from '@/lib/utils';
 
 const input =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
@@ -37,7 +38,7 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
     estado_geo: '',
     asesor: '',
     gerente: '',
-    fecha: new Date().toISOString().slice(0, 10),
+    fecha: hoyLocal(),
     precio_guardia: '',
     sueldo_base: '',
     bono: '',

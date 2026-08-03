@@ -5,6 +5,7 @@ import { obtenerServicio } from '@/lib/servicios';
 import { gruposEditables, puede } from '@/lib/rbac';
 import { CAMPOS } from '@/lib/campos';
 import { opciones } from '@/lib/catalogos';
+import { mesActual } from '@/lib/fechas';
 import { ESQUEMAS, facturasDeServicio, resumenDe, programaDe } from '@/lib/facturacion';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { listarComentarios } from '@/lib/comentarios';
@@ -35,13 +36,15 @@ export default function DetalleServicio({ params }) {
     ...opciones(),
     esquemas: Object.entries(ESQUEMAS).map(([valor, e]) => ({ valor, ...e })),
   };
-  const periodoActual = new Date().toISOString().slice(0, 7);
+  const periodoActual = mesActual();
   const grupos = gruposEditables(usuario.rol).map((g) => ({
     ...g,
     campos: g.campos.map((c) => ({ nombre: c, ...CAMPOS[c] })).filter((c) => c.etiqueta),
   }));
 
   const turnos = Object.entries(s.turnos || {});
+  const sumaTurnos = turnos.reduce((a, [, v]) => a + (Number(v) || 0), 0);
+  const mayorTurno = turnos.reduce((a, [, v]) => Math.max(a, Number(v) || 0), 1);
 
   return (
     <div className="space-y-5">
@@ -92,18 +95,64 @@ export default function DetalleServicio({ params }) {
             <Dato etiqueta="Dirección" valor={s.direccion} />
             <Dato etiqueta="Uniforme" valor={s.uniforme} />
           </dl>
-          {turnos.length > 0 && (
-            <div className="mt-4">
-              <p className="text-xs text-slate-500 mb-1.5">Turnos</p>
-              <div className="flex flex-wrap gap-1.5">
-                {turnos.map(([k, v]) => (
-                  <span key={k} className="text-xs bg-slate-700/60 text-slate-300 rounded px-2 py-0.5">
-                    {k}: {v}
-                  </span>
-                ))}
-              </div>
+          {/* El desglose por turno es la mitad de la información de una
+              plantilla: doce guardias en 24 HRS y doce en 12X12 son la misma
+              cifra y dos operaciones distintas. Por eso va con su reparto y no
+              como etiquetas sueltas. */}
+          <div className="mt-4 border-t border-slate-700/50 pt-3">
+            <div className="flex items-baseline justify-between gap-2 mb-2">
+              <p className="text-xs text-slate-500">Guardias por turno</p>
+              <p className="text-xs text-slate-500 tabular-nums">
+                {turnos.length} modalidad{turnos.length === 1 ? '' : 'es'}
+              </p>
             </div>
-          )}
+
+            {turnos.length > 0 ? (
+              <>
+                <div className="space-y-1.5">
+                  {turnos
+                    .slice()
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([k, v]) => (
+                      <div key={k}>
+                        <div className="flex items-baseline justify-between gap-2 text-sm">
+                          <Link
+                            href={`/estado-fuerza?turno=${encodeURIComponent(k)}`}
+                            className="text-slate-300 hover:text-cyan-400"
+                            title={`Ver todos los servicios con ${k}`}
+                          >
+                            {k}
+                          </Link>
+                          <span className="text-slate-400 tabular-nums shrink-0">
+                            {v}
+                            <span className="text-slate-600 text-xs ml-1.5">
+                              {sumaTurnos ? Math.round((v / sumaTurnos) * 100) : 0}%
+                            </span>
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                          <div
+                            className="h-full bg-cyan-500/60 rounded-full"
+                            style={{ width: `${Math.max(3, (v / mayorTurno) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                {sumaTurnos !== s.total_guardias && (
+                  <p className="text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2.5 py-2 mt-3">
+                    El desglose suma <strong>{sumaTurnos}</strong> y el total dice{' '}
+                    <strong>{s.total_guardias}</strong>. Vino así del archivo; se arregla desde «Corregir captura».
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-amber-300/80">
+                Este servicio no tiene el desglose capturado: se sabe cuántos guardias son, no en qué horario.
+              </p>
+            )}
+          </div>
         </section>
 
         <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">

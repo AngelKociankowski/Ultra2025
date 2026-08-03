@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { conPermiso, leerJson } from '@/lib/api';
+import { mesActual } from '@/lib/fechas';
 import { puede } from '@/lib/rbac';
 import { PermisoError, ValidacionError } from '@/lib/errores';
 import {
@@ -34,7 +35,7 @@ export const GET = conPermiso('ver', async (request) => {
   }
 
   if (params.get('pendientes')) {
-    const periodo = params.get('periodo') || new Date().toISOString().slice(0, 7);
+    const periodo = params.get('periodo') || mesActual();
     return NextResponse.json(pendientesDeFacturar(periodo));
   }
 

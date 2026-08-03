@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MOTIVOS_CANCELACION, AUTORIZACIONES_CANCELACION } from '@/lib/campos';
+import { hoyLocal } from '@/lib/utils';
 
 const input =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
@@ -60,7 +61,7 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
   const [servicioId, setServicioId] = useState(preseleccion);
   const [motivo, setMotivo] = useState('');
   const [motivoOtro, setMotivoOtro] = useState('');
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(hoyLocal());
   const [cxc, setCxc] = useState('');
   const [auditoria, setAuditoria] = useState('');
   const [turnos, setTurnos] = useState({});
