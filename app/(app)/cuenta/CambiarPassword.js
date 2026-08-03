@@ -1,11 +1,27 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 const campo =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500';
 
-export default function CambiarPassword() {
+/**
+ * Cambio de contraseña propia.
+ *
+ * `obligatorio` es quien entró con la contraseña prestada. Para esa persona la
+ * barra de navegación está vacía —el layout no le ofrece pantallas a las que el
+ * portero no la va a dejar pasar— y ahí estaba el problema: al cambiarla, la
+ * bandera se apaga en la base, pero el layout ya estaba dibujado y no se vuelve
+ * a dibujar solo. El menú se quedaba vacío hasta que alguien recargaba a mano,
+ * y la plataforma parecía no tener pantallas.
+ *
+ * Por eso, al terminar, se pide de vuelta el árbol del servidor y se lleva a la
+ * persona al tablero: llega con su menú completo, que es lo que esperaría
+ * cualquiera después de poner su contraseña.
+ */
+export default function CambiarPassword({ obligatorio = false }) {
+  const router = useRouter();
   const [actual, setActual] = useState('');
   const [nueva, setNueva] = useState('');
   const [repetir, setRepetir] = useState('');
@@ -28,10 +44,19 @@ export default function CambiarPassword() {
     const datos = await r.json().catch(() => ({}));
     setCargando(false);
     if (r.ok) {
-      setEstado({ tipo: 'ok', texto: 'Contraseña actualizada. Se cerraron tus demás sesiones.' });
+      setEstado({
+        tipo: 'ok',
+        texto: obligatorio
+          ? 'Contraseña actualizada. Entrando a la plataforma…'
+          : 'Contraseña actualizada. Se cerraron tus demás sesiones.',
+      });
       setActual('');
       setNueva('');
       setRepetir('');
+      // Vuelve a pedir el árbol del servidor: es lo que redibuja la barra de
+      // navegación con el menú que a esta persona ya le corresponde.
+      router.refresh();
+      if (obligatorio) setTimeout(() => router.replace('/'), 800);
     } else {
       setEstado({ tipo: 'error', texto: datos.error || 'No se pudo cambiar la contraseña.' });
     }

@@ -32,7 +32,7 @@ export default function Cuenta() {
         <p className="text-xs text-slate-500 mb-3">
           Una contraseña que conoce otra persona no es tuya. Cámbiala en cuanto entres.
         </p>
-        <CambiarPassword />
+        <CambiarPassword obligatorio={!!usuario.debe_cambiar_password} />
       </div>
 
       <p className="text-xs text-slate-500 max-w-md">
