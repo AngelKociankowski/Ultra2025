@@ -86,6 +86,9 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
         <p className="text-xs text-slate-500">
           {porFacturar.length} pendiente{porFacturar.length === 1 ? '' : 's'} · {facturados} ya facturado
           {facturados === 1 ? '' : 's'}
+          {sinCondiciones.length > 0 && (
+            <span className="text-amber-300/90"> · {sinCondiciones.length} sin condiciones</span>
+          )}
         </p>
       </div>
 
@@ -192,10 +195,30 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
               </tr>
             ))}
 
+            {/* Dos vacíos que no significan lo mismo: uno es «ya está todo
+                facturado» y el otro es «no se puede ni proponer nada». Decirle
+                al segundo que no queda nada por facturar sería mentirle a
+                quien tiene doscientos servicios sin cobrar. */}
             {porFacturar.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                  No queda nada por facturar de {periodo}.
+                <td colSpan={6} className="px-4 py-8 text-center">
+                  {sinCondiciones.length > 0 && facturados === 0 ? (
+                    <>
+                      <p className="text-amber-300/90">
+                        Todavía no se puede proponer nada para {periodo}.
+                      </p>
+                      <p className="text-slate-500 text-xs mt-1 max-w-xl mx-auto">
+                        A los {sinCondiciones.length} servicios activos les falta capturar cuándo se les factura y
+                        con cuántos días de crédito. Sin eso no hay fecha de emisión ni de vencimiento que calcular.
+                        Están listados abajo.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-slate-500">
+                      Ya se facturó todo lo que tocaba de {periodo}
+                      {sinCondiciones.length > 0 && `, salvo los ${sinCondiciones.length} servicios de abajo`}.
+                    </p>
+                  )}
                 </td>
               </tr>
             )}
@@ -209,8 +232,12 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
             {sinCondiciones.length} servicio{sinCondiciones.length === 1 ? '' : 's'} sin fecha de facturación
           </p>
           <p className="text-xs text-slate-500 mb-2 max-w-2xl">
-            No se les puede proponer nada porque les falta capturar cuándo se les factura. Ábrelos, guarda sus
-            condiciones de cobro en «Editar», y aparecerán aquí. También se les puede facturar a mano desde su ficha.
+            No se les puede proponer nada porque les falta capturar cuándo se les factura. Puedes hacerlo a todos de
+            una vez desde{' '}
+            <Link href="/cobranza/inicio" className="text-cyan-400 hover:underline">
+              Puesta al día
+            </Link>
+            , o uno por uno desde su ficha, en «Editar».
           </p>
           <div className="flex flex-wrap gap-1.5">
             {sinCondiciones.slice(0, 40).map((s) => (

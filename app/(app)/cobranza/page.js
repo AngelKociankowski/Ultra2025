@@ -50,12 +50,20 @@ export default function CobranzaGeneral({ searchParams }) {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Cobranza</h1>
-        <p className="text-slate-400 text-sm max-w-3xl">
-          Lo que está <strong className="text-cyan-400">por vencer</strong> todavía corre dentro del plazo de crédito
-          que se le dio al cliente. Solo lo <strong className="text-red-400">vencido</strong> es adeudo.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Cobranza</h1>
+          <p className="text-slate-400 text-sm max-w-3xl">
+            Lo que está <strong className="text-cyan-400">por vencer</strong> todavía corre dentro del plazo de
+            crédito que se le dio al cliente. Solo lo <strong className="text-red-400">vencido</strong> es adeudo.
+          </p>
+        </div>
+        <Link
+          href="/cobranza/inicio"
+          className="text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-2 whitespace-nowrap"
+        >
+          ⚙ Puesta al día
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
