@@ -552,6 +552,42 @@ describe('cancelar una factura mal registrada', () => {
   });
 });
 
+describe('el calendario del año', () => {
+  /**
+   * React separa los trozos de texto con comentarios vacíos, así que
+   * «Ya facturado — 2026-03» llega al HTML partido en tres. Se quitan antes de
+   * buscar: lo que se está probando es lo que ve la persona, no cómo lo arma
+   * el framework.
+   */
+  const comoSeLee = (html) => html.replace(/<!--[\s\S]*?-->/g, '');
+
+  test('cada mes dice cuántas se emitieron y cuántas faltan', async () => {
+    const r = await finanzas.pedir('/cobranza?periodo=2026-03');
+    assert.equal(r.status, 200);
+    // los doce meses del año elegido, y el que se está viendo marcado
+    for (const mes of ['Ene', 'Feb', 'Mar', 'Dic']) {
+      assert.match(r.texto, new RegExp(mes), `falta ${mes} en el calendario`);
+    }
+    assert.match(r.texto, /Calendario de facturación/);
+    assert.match(r.texto, /emitidas \/ esperadas/);
+  });
+
+  test('la pantalla muestra también lo ya facturado de ese mes', async () => {
+    const r = await finanzas.pedir('/cobranza?periodo=2026-03');
+    const html = comoSeLee(r.texto);
+    assert.match(html, /Ya facturado — 2026-03/);
+    // en 2026-03 quedó la factura de la carga inicial, sin pagar
+    assert.match(html, /CARGA INICIAL DEMO/);
+    assert.match(html, /VENCIDA/);
+  });
+
+  test('un mes sin nada lo dice sin inventar pendientes', async () => {
+    const r = await finanzas.pedir('/cobranza?periodo=2026-12');
+    assert.equal(r.status, 200);
+    assert.match(comoSeLee(r.texto), /Todavía no se ha emitido ninguna factura de 2026-12/);
+  });
+});
+
 describe('la cartera vencida y la bitácora', () => {
   test('la cartera vencida solo trae lo que pasó su plazo', async () => {
     const r = await finanzas.pedir('/api/facturas');
