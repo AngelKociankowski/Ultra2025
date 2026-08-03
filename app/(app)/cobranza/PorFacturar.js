@@ -24,17 +24,36 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
   const router = useRouter();
   const [abierta, setAbierta] = useState(null);
   const [datos, setDatos] = useState({ fecha_factura: '', importe: '', folio: '' });
+  const [archivo, setArchivo] = useState(null);
+  const [busqueda, setBusqueda] = useState('');
   const [mensaje, setMensaje] = useState(null);
   const [ocupado, setOcupado] = useState(false);
 
   const clave = (f) => `${f.servicio_id}·${f.concepto}`;
+
+  // Buscar sin acentos y sin importar mayúsculas: nadie escribe «BAJÍO» con
+  // acento cuando está buscando a las prisas.
+  const plano = (s) =>
+    String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+  const termino = plano(busqueda.trim());
+  const visibles = termino
+    ? porFacturar.filter((f) =>
+        [f.servicio, f.razon_social, f.zona, f.asesor].some((c) => plano(c).includes(termino))
+      )
+    : porFacturar;
 
   function abrir(f) {
     if (abierta === clave(f)) return setAbierta(null);
     setAbierta(clave(f));
     setMensaje(null);
     setDatos({
-      fecha_factura: f.fecha,
+      // Sin condiciones capturadas no hay fecha que proponer, así que se ofrece
+      // la de hoy: es un punto de partida, no una suposición sobre el negocio.
+      fecha_factura: f.fecha || new Date().toISOString().slice(0, 10),
       importe: f.importe ? String(f.importe) : '',
       folio: '',
     });
@@ -60,11 +79,25 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
         setMensaje({ tipo: 'error', texto: data.error || 'No se pudo registrar la factura.' });
         return;
       }
-      setMensaje({
-        tipo: 'ok',
-        texto: `${f.servicio}: factura registrada, vence el ${data.fecha_vencimiento}.`,
-      });
+
+      // El PDF va en una segunda llamada, ya con la factura creada. Si falla,
+      // la factura no se pierde: se avisa y se puede adjuntar después desde la
+      // lista de abajo.
+      let aviso = `${f.servicio}: factura registrada, vence el ${data.fecha_vencimiento}.`;
+      if (archivo) {
+        const cuerpo = new FormData();
+        cuerpo.append('archivo', archivo);
+        const sub = await fetch(`/api/facturas/${data.id}/archivo`, { method: 'POST', body: cuerpo });
+        if (sub.ok) aviso += ` Se adjuntó ${archivo.name}.`;
+        else {
+          const err = await sub.json().catch(() => ({}));
+          aviso += ` La factura quedó guardada, pero el archivo no: ${err.error || 'no se pudo subir'}.`;
+        }
+      }
+
+      setMensaje({ tipo: 'ok', texto: aviso });
       setAbierta(null);
+      setArchivo(null);
       router.refresh();
     } catch {
       setMensaje({ tipo: 'error', texto: 'Error de red.' });
@@ -83,13 +116,33 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
             ese cliente; revísalos antes de guardar.
           </p>
         </div>
-        <p className="text-xs text-slate-500">
-          {porFacturar.length} pendiente{porFacturar.length === 1 ? '' : 's'} · {facturados} ya facturado
-          {facturados === 1 ? '' : 's'}
-          {sinCondiciones.length > 0 && (
-            <span className="text-amber-300/90"> · {sinCondiciones.length} sin condiciones</span>
-          )}
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative">
+            <input
+              type="search"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar cliente, zona o asesor…"
+              aria-label="Buscar el servicio que quieres facturar"
+              className="w-60 bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm" aria-hidden="true">
+              🔍
+            </span>
+          </div>
+          <p className="text-xs text-slate-500">
+            {termino ? (
+              <>
+                {visibles.length} de {porFacturar.length} pendientes
+              </>
+            ) : (
+              <>
+                {porFacturar.length} pendiente{porFacturar.length === 1 ? '' : 's'} · {facturados} ya facturado
+                {facturados === 1 ? '' : 's'}
+              </>
+            )}
+          </p>
+        </div>
       </div>
 
       {mensaje && (
@@ -117,7 +170,7 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
             </tr>
           </thead>
           <tbody>
-            {porFacturar.map((f) => (
+            {visibles.map((f) => (
               <tr key={clave(f)} className="border-t border-slate-800/70 align-top">
                 <td className="px-4 py-2">
                   <Link href={`/estado-fuerza/${f.servicio_id}`} className="text-slate-200 hover:text-cyan-400">
@@ -159,6 +212,17 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
                           className={campo}
                         />
                       </div>
+                      <div className="sm:col-span-3">
+                        <label className="block text-[11px] text-slate-500 mb-0.5">
+                          Factura en PDF o XML <span className="text-slate-600">(opcional, se puede subir después)</span>
+                        </label>
+                        <input
+                          type="file"
+                          accept=".pdf,.xml,application/pdf,application/xml,text/xml"
+                          onChange={(e) => setArchivo(e.target.files?.[0] || null)}
+                          className="text-xs text-slate-400 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-700 file:px-2.5 file:py-1 file:text-white hover:file:bg-slate-600"
+                        />
+                      </div>
                       <button
                         type="submit"
                         disabled={ocupado}
@@ -170,9 +234,11 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
                   )}
                 </td>
                 <td className="px-3 py-2 text-slate-400">{f.concepto}</td>
-                <td className="px-3 py-2 text-slate-400">{f.fecha}</td>
                 <td className="px-3 py-2 text-slate-400">
-                  {f.fecha_vencimiento}
+                  {f.fecha || <span className="text-amber-300/80 text-xs">la capturas tú</span>}
+                </td>
+                <td className="px-3 py-2 text-slate-400">
+                  {f.fecha_vencimiento || <span className="text-slate-600">—</span>}
                   <span className="block text-[11px] text-slate-500">
                     {f.dias_credito ? `${f.dias_credito} días de crédito` : 'sin crédito'}
                   </span>
@@ -195,30 +261,12 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
               </tr>
             ))}
 
-            {/* Dos vacíos que no significan lo mismo: uno es «ya está todo
-                facturado» y el otro es «no se puede ni proponer nada». Decirle
-                al segundo que no queda nada por facturar sería mentirle a
-                quien tiene doscientos servicios sin cobrar. */}
-            {porFacturar.length === 0 && (
+            {visibles.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center">
-                  {sinCondiciones.length > 0 && facturados === 0 ? (
-                    <>
-                      <p className="text-amber-300/90">
-                        Todavía no se puede proponer nada para {periodo}.
-                      </p>
-                      <p className="text-slate-500 text-xs mt-1 max-w-xl mx-auto">
-                        A los {sinCondiciones.length} servicios activos les falta capturar cuándo se les factura y
-                        con cuántos días de crédito. Sin eso no hay fecha de emisión ni de vencimiento que calcular.
-                        Están listados abajo.
-                      </p>
-                    </>
-                  ) : (
-                    <p className="text-slate-500">
-                      Ya se facturó todo lo que tocaba de {periodo}
-                      {sinCondiciones.length > 0 && `, salvo los ${sinCondiciones.length} servicios de abajo`}.
-                    </p>
-                  )}
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                  {termino
+                    ? `Ningún pendiente de ${periodo} coincide con «${busqueda.trim()}».`
+                    : `Ya se facturó todo lo que tocaba de ${periodo}.`}
                 </td>
               </tr>
             )}
@@ -227,33 +275,17 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
       </div>
 
       {sinCondiciones.length > 0 && (
-        <div className="px-5 py-4 border-t border-slate-700/50">
-          <p className="text-sm text-amber-300/90">
-            {sinCondiciones.length} servicio{sinCondiciones.length === 1 ? '' : 's'} sin fecha de facturación
-          </p>
-          <p className="text-xs text-slate-500 mb-2 max-w-2xl">
-            No se les puede proponer nada porque les falta capturar cuándo se les factura. Puedes hacerlo a todos de
-            una vez desde{' '}
-            <Link href="/cobranza/inicio" className="text-cyan-400 hover:underline">
-              Puesta al día
-            </Link>
-            , o uno por uno desde su ficha, en «Editar».
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {sinCondiciones.slice(0, 40).map((s) => (
-              <Link
-                key={s.id}
-                href={`/estado-fuerza/${s.id}`}
-                className="text-xs bg-slate-900/70 hover:bg-slate-700 text-slate-300 rounded-lg px-2 py-1"
-              >
-                {s.servicio}
-              </Link>
-            ))}
-            {sinCondiciones.length > 40 && (
-              <span className="text-xs text-slate-500 px-2 py-1">y {sinCondiciones.length - 40} más</span>
-            )}
-          </div>
-        </div>
+        <p className="px-5 py-3 border-t border-slate-700/50 text-xs text-slate-500 max-w-3xl">
+          <span className="text-amber-300/90">
+            {sinCondiciones.length} de estos servicios no tienen capturado cuándo se les factura.
+          </span>{' '}
+          Se pueden facturar igual —la fecha la escribes tú al registrarlos—, pero si dejas sus condiciones guardadas
+          la plataforma te propone fecha e importe cada mes y puede decirte qué te falta.{' '}
+          <Link href="/cobranza/inicio" className="text-cyan-400 hover:underline">
+            Capturarlas de una vez
+          </Link>
+          .
+        </p>
       )}
     </section>
   );

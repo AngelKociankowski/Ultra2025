@@ -98,7 +98,7 @@ export default function CobranzaGeneral({ searchParams }) {
         facturados={pendientes.facturados}
       />
 
-      <Emitidas periodo={periodo} facturas={emitidas} />
+      <Emitidas periodo={periodo} facturas={emitidas} puedeSubir={puede(usuario.rol, 'editar_finanzas')} />
 
       <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-700/50">

@@ -108,7 +108,9 @@ candado.
 
 ## Paso 5 — Cuidados
 
-- **No borres el disco** del servicio. Es la base de datos completa.
+- **No borres el disco** del servicio. Ahí viven la base de datos y los PDF de las
+  facturas. Un giga alcanza para unos años de operación; si algún día se llena, se
+  agranda desde Render sin perder nada.
 - **Respaldo:** cada mes, descarga desde *Estado de fuerza* el CSV del corte.
   Es tu copia legible fuera del sistema.
 - **Actualizaciones:** cualquier cambio que se suba a GitHub, Render lo publica
