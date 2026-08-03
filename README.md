@@ -206,14 +206,21 @@ conservan el que tenían. Esa era la condición cuando se cobró.
 
 - **Al abrir el servicio** se capturan forma de pago, esquema, días de crédito y línea de
   crédito. La forma de pago sale del [catálogo](#️-catálogos-de-captura).
-- **Por facturar** (pantalla *Cobranza*) es la lista de trabajo del mes: qué servicio
+- **El calendario del año** abre la pantalla de *Cobranza*: los doce meses con lo que se
+  emitió y lo que falta de cada uno, y un clic para trabajar el que sea. El color solo se
+  enciende donde hay algo que hacer —verde completo, ámbar a medias, rojo sin emitir—;
+  los meses anteriores a la primera factura registrada quedan en gris («sin registro»,
+  porque esos se llevaron fuera) y los que no han llegado, apagados. Un semáforo que
+  arranca medio año en rojo deja de mirarse.
+- **Por facturar** es la lista de trabajo del mes elegido: qué servicio
   toca facturar, con la fecha y el importe que le corresponderían según cómo se le cobra.
   **Cada factura se registra una por una**, revisada: el importe del mes casi nunca es el
   del mes pasado —guardias que subieron, extras, servicios que arrancaron a media
   quincena— y emitir en bloque daría por bueno el mismo número para todos. Lo que la
   lista sí evita es olvidar a alguien entre doscientos servicios; los que ni siquiera se
   pueden proponer, porque les falta capturar cuándo se les factura, se apartan a la vista
-  en vez de desaparecer en silencio.
+  en vez de desaparecer en silencio. Debajo va **Ya facturado**, con lo emitido de ese
+  mismo mes: las dos listas contestan la misma pregunta desde lados opuestos.
 - **Registrar un pago** admite abonos parciales y nunca cobra de más que el saldo.
 - **Cancelar una factura** mal registrada la deja marcada con su motivo y fuera del saldo;
   no la borra, y no se puede si ya tiene pagos. Solo el administrador.
