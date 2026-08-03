@@ -1,0 +1,15 @@
+node_modules
+.next/
+out/
+build/
+.DS_Store
+*.pem
+npm-debug.log*
+.env
+.env*.local
+.vercel
+
+# base de datos local (se genera con npm run seed)
+data/ultra.db
+data/ultra.db-wal
+data/ultra.db-shm

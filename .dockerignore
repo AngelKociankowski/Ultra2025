@@ -1,0 +1,7 @@
+node_modules
+.next
+.git
+data/ultra.db
+data/ultra.db-wal
+data/ultra.db-shm
+*.log

@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # better-sqlite3 se compila en la instalación; sin --include=dev falla el build.
+      - run: npm ci
+
+      - run: npm run build
+
+      # Las pruebas levantan la app contra una base desechable, así que
+      # necesitan el build hecho arriba.
+      - run: npm test

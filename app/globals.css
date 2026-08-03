@@ -2,9 +2,124 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #0f172a;
-  --foreground: #f8fafc;
+/*
+ * Temas
+ * ---------------------------------------------------------------------------
+ * El tema por defecto es el de día. Las variables van en formato "R G B" sin
+ * función porque tailwind.config.js las envuelve en rgb(... / <alpha-value>)
+ * para que las opacidades (bg-slate-800/50) sigan funcionando.
+ *
+ * La escala de grises se invierte entre temas: en noche slate-800 es una
+ * superficie oscura y slate-400 un texto tenue; en día slate-800 es una
+ * superficie clara y slate-400 un gris legible sobre blanco. Por eso una misma
+ * clase sirve en los dos temas.
+ *
+ * Los acentos no se invierten, se recalibran: sobre blanco hay que bajarles la
+ * luminosidad para que el contraste aguante.
+ */
+
+:root,
+[data-tema='dia'] {
+  /* superficies, de la más clara a la más oscura.
+     El fondo de página se mantiene un punto por debajo del blanco para que las
+     tarjetas (bg-slate-800/50) se despeguen sin necesitar sombra. */
+  --s-950: 234 237 241;
+  --s-900: 255 255 255;
+  --s-800: 255 255 255;
+  --s-700: 205 209 216;
+  --s-600: 176 181 189;
+  --s-500: 135 140 148;
+  --s-400: 92 98 106;
+  --s-300: 61 66 73;
+  --s-200: 40 44 49;
+  --s-100: 26 29 33;
+  --c-blanco: 16 12 8; /* text-white = negro Ultra sobre fondo claro */
+
+  --e-300: 4 108 78;
+  --e-400: 5 137 100;
+  --e-500: 16 163 118;
+  --e-600: 5 130 94;
+
+  --r-300: 163 32 26;
+  --r-400: 201 39 31;
+  --r-500: 231 52 43; /* rojo Ultra */
+  --r-600: 195 38 30;
+
+  --a-300: 161 84 8;
+  --a-400: 190 100 10;
+  --a-500: 217 119 6;
+  --a-600: 180 98 5;
+
+  --c-300: 14 88 105;
+  --c-400: 12 116 137;
+  --c-500: 8 145 178;
+  --c-600: 7 122 150;
+
+  --v-300: 92 47 168;
+  --v-400: 109 60 190;
+  --v-500: 124 74 209;
+  --v-600: 105 60 180;
+
+  --b-300: 26 74 176;
+  --b-400: 30 88 200;
+  --b-500: 37 99 235;
+  --b-600: 29 84 200;
+
+  --fondo: linear-gradient(to bottom right, #f2f4f7, #e8ebf0 45%, #eef0f4);
+  --barra: rgba(0, 0, 0, 0.16);
+  --barra-hover: rgba(0, 0, 0, 0.28);
+  --rejilla: #e2e4e7;
+  --eje: #5c626a;
+}
+
+[data-tema='noche'] {
+  --s-950: 2 6 23;
+  --s-900: 15 23 42;
+  --s-800: 30 41 59;
+  --s-700: 51 65 85;
+  --s-600: 71 85 105;
+  --s-500: 100 116 139;
+  --s-400: 148 163 184;
+  --s-300: 203 213 225;
+  --s-200: 226 232 240;
+  --s-100: 241 245 249;
+  --c-blanco: 255 255 255;
+
+  --e-300: 110 231 183;
+  --e-400: 52 211 153;
+  --e-500: 16 185 129;
+  --e-600: 5 150 105;
+
+  --r-300: 252 165 160;
+  --r-400: 244 113 105;
+  --r-500: 231 52 43; /* rojo Ultra */
+  --r-600: 208 39 31;
+
+  --a-300: 252 211 77;
+  --a-400: 251 191 36;
+  --a-500: 245 158 11;
+  --a-600: 217 119 6;
+
+  --c-300: 103 232 249;
+  --c-400: 34 211 238;
+  --c-500: 6 182 212;
+  --c-600: 8 145 178;
+
+  --v-300: 196 181 253;
+  --v-400: 167 139 250;
+  --v-500: 139 92 246;
+  --v-600: 124 58 237;
+
+  --b-300: 147 197 253;
+  --b-400: 96 165 250;
+  --b-500: 59 130 246;
+  --b-600: 37 99 235;
+
+  --fondo: linear-gradient(to bottom right, #0b1020, #131c31 45%, #0b1020);
+  --barra: rgba(255, 255, 255, 0.16);
+  --barra-hover: rgba(255, 255, 255, 0.28);
+  --rejilla: #24314a;
+  --eje: #94a3b8;
 }
 
 * {
@@ -17,86 +132,60 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  background: linear-gradient(to bottom right, #0f172a, #1e293b, #0f172a);
-  color: var(--foreground);
+  background: var(--fondo);
+  background-attachment: fixed;
   min-height: 100vh;
 }
 
-/* Custom scrollbar */
+/*
+ * El cambio de tema no debe verse como un parpadeo. Solo se animan fondos y
+ * bordes: animar `color` en body lo hereda toda la página y el texto pasa
+ * varias décimas por tonos intermedios ilegibles.
+ */
+body,
+header,
+input,
+select,
+textarea {
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #1e293b;
-  border-radius: 4px;
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: var(--barra);
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: var(--barra-hover);
 }
 
-/* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes pulse-slow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out forwards;
 }
 
-.animate-pulse-slow {
-  animation: pulse-slow 2s ease-in-out infinite;
-}
-
-/* Card hover effects */
-.card-hover {
-  transition: all 0.3s ease;
-}
-
-.card-hover:hover {
-  transform: translateY(-2px);
-  border-color: rgba(16, 185, 129, 0.3);
-  box-shadow: 0 10px 40px -10px rgba(16, 185, 129, 0.2);
-}
-
-/* Tab styles */
-.tab-active {
-  background: linear-gradient(to right, #10b981, #06b6d4);
-  color: white;
-  box-shadow: 0 4px 15px -3px rgba(16, 185, 129, 0.4);
-}
-
-/* Progress bar */
-.progress-bar {
-  transition: width 0.5s ease-out;
-}
-
-/* Recharts customization */
+/* Recharts no acepta clases de Tailwind en sus ejes; van por CSS. */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
-  stroke: #334155;
+  stroke: var(--rejilla);
 }
 
 .recharts-text {
-  fill: #94a3b8;
-}
-
-/* Glass effect */
-.glass {
-  background: rgba(30, 41, 59, 0.5);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  fill: var(--eje);
 }
