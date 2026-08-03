@@ -23,7 +23,7 @@ function SinCatalogo({ que }) {
   );
 }
 
-export default function FormApertura({ catalogos, opciones, serviciosActivos }) {
+export default function FormApertura({ catalogos, opciones, esquemas, serviciosActivos }) {
   const router = useRouter();
   const [tipo, setTipo] = useState('APERTURA');
   const [f, setF] = useState({
@@ -43,7 +43,9 @@ export default function FormApertura({ catalogos, opciones, serviciosActivos }) 
     bono: '',
     uniforme: '',
     credito_autorizado: false,
-    credito_plazo: '',
+    dias_credito: '',
+    credito_maximo: '',
+    esquema_facturacion: '',
     forma_pago: '',
     cobro: '',
     tipo_repse: '',
@@ -61,6 +63,7 @@ export default function FormApertura({ catalogos, opciones, serviciosActivos }) 
   );
 
   const esIncremento = tipo === 'INCREMENTO';
+  const ayudaEsquema = esquemas.find((e) => e.valor === f.esquema_facturacion)?.ayuda;
 
   function set(k, v) {
     setF((prev) => ({ ...prev, [k]: v }));
@@ -284,13 +287,54 @@ export default function FormApertura({ catalogos, opciones, serviciosActivos }) 
             <label className={label}>Tipo de uniforme</label>
             <input value={f.uniforme} onChange={(e) => set('uniforme', e.target.value)} className={input} />
           </div>
-          <div>
-            <label className={label}>Forma de pago</label>
-            <input value={f.forma_pago} onChange={(e) => set('forma_pago', e.target.value)} className={input} />
+        </div>
+        <div className="mt-3">
+          <label className={label}>Comentarios</label>
+          <textarea rows={2} value={f.comentarios} onChange={(e) => set('comentarios', e.target.value)} className={input} />
+        </div>
+      </section>
+
+      <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
+        <h2 className="text-base font-semibold text-white mb-1">Cómo se cobra</h2>
+        <p className="text-xs text-slate-500 mb-3">
+          El plazo del crédito no corre desde que se presta el servicio, sino desde que se emite la factura. Por eso
+          hace falta saber cuándo se factura este cliente.
+        </p>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="lg:col-span-2">
+            <label className={label} htmlFor="esquema">
+              Cuándo se factura
+            </label>
+            <CampoCatalogo
+              id="esquema"
+              valor={f.esquema_facturacion}
+              opciones={esquemas}
+              onChange={(v) => set('esquema_facturacion', v)}
+              vacio="— Selecciona —"
+              className={input}
+            />
           </div>
           <div>
-            <label className={label}>Cobro</label>
-            <input value={f.cobro} onChange={(e) => set('cobro', e.target.value)} className={input} />
+            <label className={label} htmlFor="forma-pago">
+              Forma de pago
+            </label>
+            <CampoCatalogo
+              id="forma-pago"
+              valor={f.forma_pago}
+              opciones={opciones.formasPago}
+              onChange={(v) => set('forma_pago', v)}
+              vacio="— Selecciona —"
+              className={input}
+            />
+          </div>
+          <div>
+            <label className={label}>Detalle del cobro</label>
+            <input
+              value={f.cobro}
+              onChange={(e) => set('cobro', e.target.value)}
+              placeholder="Banco, cuenta, portal…"
+              className={input}
+            />
           </div>
           <div>
             <label className={label}>¿Se autorizó crédito?</label>
@@ -305,14 +349,36 @@ export default function FormApertura({ catalogos, opciones, serviciosActivos }) 
             </label>
           </div>
           <div>
-            <label className={label}>Plazo del crédito</label>
-            <input value={f.credito_plazo} onChange={(e) => set('credito_plazo', e.target.value)} className={input} />
+            <label className={label}>Días de crédito</label>
+            <input
+              type="number"
+              min="0"
+              value={f.dias_credito}
+              onChange={(e) => set('dias_credito', e.target.value)}
+              placeholder="0"
+              className={input}
+            />
+          </div>
+          <div>
+            <label className={label}>Línea de crédito</label>
+            <input
+              type="number"
+              step="any"
+              value={f.credito_maximo}
+              onChange={(e) => set('credito_maximo', e.target.value)}
+              className={input}
+            />
           </div>
         </div>
-        <div className="mt-3">
-          <label className={label}>Comentarios</label>
-          <textarea rows={2} value={f.comentarios} onChange={(e) => set('comentarios', e.target.value)} className={input} />
-        </div>
+
+        {ayudaEsquema && (
+          <p className="text-xs text-cyan-300/80 bg-cyan-500/5 border border-cyan-500/20 rounded-lg px-3 py-2 mt-3">
+            {ayudaEsquema}{' '}
+            {Number(f.dias_credito) > 0
+              ? `Cada factura vence ${f.dias_credito} días después de emitida; hasta entonces es cuenta corriente, no adeudo.`
+              : 'Sin días de crédito, la factura vence el mismo día en que se emite.'}
+          </p>
+        )}
       </section>
 
       <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">

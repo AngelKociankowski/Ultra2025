@@ -68,6 +68,7 @@ Si vas a tocar algo, empieza por ahí:
 | `lib/queries.js` | agregados del tablero y consulta de cortes mensuales |
 | `lib/comentarios.js` | notas por servicio: quién escribe, quién borra |
 | `lib/catalogos.js` | zonas, asesores y turnos: la lista de la que se captura |
+| `lib/facturacion.js` | facturas, pagos y saldos; qué es adeudo y qué todavía no |
 | `scripts/import-xlsx.mjs` | lee los dos `.xlsx` originales y arma `data/seed.json` |
 | `scripts/seed.mjs` | carga `data/seed.json` a SQLite |
 
@@ -75,10 +76,16 @@ Los permisos son **por campo, no por pantalla**. Si jurídico manda contrato y
 factura en la misma petición, se aplica el contrato y la factura vuelve en
 `rechazados`. Esconder un botón no es un permiso.
 
-Por el mismo motivo, **zona, asesor y turno se validan contra el catálogo en el
-servidor**, no solo en la lista desplegable: si la API siguiera aceptando texto
-libre, la lista sería una sugerencia. Quien alimenta el catálogo es el
-administrador, desde *Catálogos*.
+Por el mismo motivo, **zona, asesor, forma de pago y turno se validan contra el
+catálogo en el servidor**, no solo en la lista desplegable: si la API siguiera
+aceptando texto libre, la lista sería una sugerencia. Quien alimenta el catálogo
+es el administrador, desde *Catálogos*.
+
+En cobranza manda la misma idea: **el saldo no se captura, se calcula**.
+`importe_pendiente` y `saldo_vencido` viven en `servicios` como copia, pero los
+escribe `recalcular()` a partir del libro de facturas; por API están bloqueados.
+Y lo vencido no es todo lo que falta cobrar: solo lo que ya pasó su fecha de
+vencimiento, que es `fecha de factura + días de crédito`.
 
 ---
 
@@ -150,3 +157,11 @@ traer meses históricos, no para recargar el mes en curso.
   copiar `servicios` a `snapshots` con el periodo que cierra.
 - **Recuperación de contraseña por correo.** Hoy la restablece un administrador
   desde *Usuarios*.
+- **Saldos de cobranza anteriores a la plataforma.** El libro de facturas
+  arranca vacío a propósito: la hoja no traía una cuenta por cobrar factura por
+  factura —solo un renglón con datos, y su «saldo vencido» medía otra cosa (lo
+  que sobraba de la línea de crédito, negativo cuando había holgura)—. Si hace
+  falta arrastrar el adeudo que ya existía, se captura como facturas abiertas
+  con su fecha real; a partir de ahí las cuentas cierran solas.
+- **Timbrado y CFDI.** La plataforma registra la factura y su cobranza, no la
+  emite ante el SAT. El folio fiscal se captura si se tiene.

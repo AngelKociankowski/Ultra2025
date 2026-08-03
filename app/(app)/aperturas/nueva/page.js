@@ -3,6 +3,7 @@ import { usuarioActual } from '@/lib/auth';
 import { puede } from '@/lib/rbac';
 import { catalogos } from '@/lib/servicios';
 import { opciones } from '@/lib/catalogos';
+import { ESQUEMAS } from '@/lib/facturacion';
 import { serviciosActivosParaSelect } from '@/lib/queries';
 import FormApertura from './FormApertura';
 
@@ -39,6 +40,7 @@ export default function NuevaApertura() {
       <FormApertura
         catalogos={catalogos()}
         opciones={opciones()}
+        esquemas={Object.entries(ESQUEMAS).map(([valor, e]) => ({ valor, ...e }))}
         serviciosActivos={serviciosActivosParaSelect()}
       />
     </div>

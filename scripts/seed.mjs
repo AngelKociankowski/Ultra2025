@@ -236,8 +236,13 @@ const cargar = db.transaction(() => {
       ficha.pct_utilidad ?? null, ficha.utilidad_bruta ?? null,
       ficha.importe_factura ? 1 : 0, ficha.status_cobranza || null, ficha.fecha_pago || null,
       null, null,
-      ficha.credito_maximo ?? null, ficha.dias_credito ?? null, ficha.importe_pendiente ?? null,
-      ficha.saldo_vencido ?? null,
+      ficha.credito_maximo ?? null, ficha.dias_credito ?? null,
+      // El pendiente y el vencido arrancan en cero y los llena el libro de
+      // facturas. Los de la hoja no se copian: venían de una columna que medía
+      // otra cosa —el saldo *contra* la línea de crédito, negativo cuando
+      // sobraba— y traerlos aquí pondría al tablero a sumar peras con manzanas.
+      // Los cortes cerrados sí los conservan tal como llegaron.
+      null, null,
       ficha.tiene_contrato ? 1 : 0, ficha.fecha_contrato || null, ficha.fecha_vencimiento_contrato || null,
       ficha.condiciones_comerciales || null, ficha.comentarios_contrato || null,
       ap.lastInsertRowid, fechaAlta

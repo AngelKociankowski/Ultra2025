@@ -335,13 +335,77 @@ async function main() {
         importe_factura: importe,
         importe_sin_iva: Math.round(guardias * nv.precio_guardia),
         guardias_en_factura: guardias,
-        facturado: true,
         status_cobranza: 'POR COBRAR',
+        esquema_facturacion: 'MES_VENCIDO',
         dias_credito: 30,
       }),
     });
-    comprobar(r.status === 200, `factura de ${nv.servicio}`, `${guardias} guardias · ${dinero(importe)}`);
+    comprobar(r.status === 200, `condiciones de cobro de ${nv.servicio}`, `${dinero(importe)} · mes vencido a 30 días`);
+    nv.importe = importe;
   }
+
+  // El saldo no se teclea: se sigue de las facturas emitidas y de los pagos.
+  const sinTeclear = await s.finanzas.pedir(`/api/servicios/${nuevos[0].id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ importe_pendiente: 999999, saldo_vencido: 999999 }),
+  });
+  comprobar(sinTeclear.status === 403, 'el saldo NO se puede capturar a mano', sinTeclear.json?.error?.slice(0, 55));
+
+  // Una factura emitida hoy a 30 días es cuenta corriente, no adeudo.
+  const hoy = new Date().toISOString().slice(0, 10);
+  const corriente = await s.finanzas.pedir('/api/facturas', {
+    method: 'POST',
+    body: JSON.stringify({
+      servicio_id: nuevos[0].id,
+      periodo: hoy.slice(0, 7),
+      fecha_factura: hoy,
+      importe: nuevos[0].importe,
+    }),
+  });
+  comprobar(corriente.status === 201, `factura emitida a ${nuevos[0].servicio}`, `vence ${corriente.json?.fecha_vencimiento}`);
+
+  const estadoCuenta = await s.finanzas.pedir(`/api/facturas?servicio_id=${nuevos[0].id}`);
+  comprobar(
+    estadoCuenta.json?.resumen.porVencer === nuevos[0].importe && estadoCuenta.json?.resumen.vencido === 0,
+    'dentro del plazo de crédito no hay adeudo',
+    `${dinero(estadoCuenta.json?.resumen.porVencer || 0)} por vencer · ${dinero(estadoCuenta.json?.resumen.vencido || 0)} vencido`
+  );
+
+  // La misma factura, emitida hace 45 días, sí es adeudo.
+  const hace45 = new Date(Date.now() - 45 * 86400000).toISOString().slice(0, 10);
+  const vencida = await s.finanzas.pedir('/api/facturas', {
+    method: 'POST',
+    body: JSON.stringify({
+      servicio_id: nuevos[1].id,
+      periodo: hace45.slice(0, 7),
+      fecha_factura: hace45,
+      importe: nuevos[1].importe,
+    }),
+  });
+  const cartera = await s.finanzas.pedir(`/api/facturas?servicio_id=${nuevos[1].id}`);
+  comprobar(
+    vencida.status === 201 && cartera.json?.resumen.vencido === nuevos[1].importe,
+    'pasado el plazo, la misma factura es adeudo',
+    `${dinero(cartera.json?.resumen.vencido || 0)} vencidos`
+  );
+
+  // Y un pago la baja.
+  const pago = await s.finanzas.pedir('/api/facturas', {
+    method: 'PATCH',
+    body: JSON.stringify({ id: vencida.json?.id, pago: { fecha: hoy } }),
+  });
+  const saldada = await s.finanzas.pedir(`/api/facturas?servicio_id=${nuevos[1].id}`);
+  comprobar(
+    pago.json?.saldada === true && saldada.json?.resumen.vencido === 0,
+    'al registrar el pago, el adeudo desaparece',
+    `cobrado ${dinero(saldada.json?.resumen.cobrado || 0)}`
+  );
+
+  const ventasCobra = await s.ventas.pedir('/api/facturas', {
+    method: 'POST',
+    body: JSON.stringify({ servicio_id: nuevos[0].id, periodo: '2026-01', fecha_factura: hoy, importe: 1 }),
+  });
+  comprobar(ventasCobra.status === 403, 'ventas NO factura', ventasCobra.json?.error?.slice(0, 55));
 
   const finanzasContrato = await s.finanzas.pedir(`/api/servicios/${nuevos[1].id}`, {
     method: 'PATCH',

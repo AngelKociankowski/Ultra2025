@@ -80,13 +80,17 @@ fecha de alta— con estas reglas:
 
 ## 👥 Roles
 
-| Rol | Consultar | Aperturas | Cancelaciones | Contratos | Facturas / pagos | Datos operativos | Usuarios | Catálogos |
+| Rol | Consultar | Aperturas | Cancelaciones | Contratos | Facturas y cobranza | Datos operativos | Usuarios | Catálogos |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | **Administrador** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Jurídico** | ✅ | — | — | ✅ | — | — | — | — |
 | **Finanzas** | ✅ | — | — | — | ✅ | — | — | — |
 | **Operaciones** | ✅ | ✅ | ✅ | — | — | — | — | — |
 | **Ventas** | ✅ | ✅ | ✅ | — | — | — | — | — |
+
+Emitir facturas y registrar pagos va con **facturas y cobranza**: finanzas y admin.
+Cancelar una factura ya emitida es solo del administrador, igual que las correcciones de
+captura, porque las dos borran un hecho que ya se había dado por bueno.
 
 Las **correcciones de captura** son exclusivas del administrador; los demás roles reciben
 403 aunque llamen la API directo.
@@ -156,6 +160,63 @@ para adoptarlo o corregirlo.
 Desactivar un turno lo quita de las capturas nuevas pero **no congela a quien ya lo trae**:
 una disminución sobre ese servicio sigue pudiendo nombrarlo, porque si no, el desglose se
 volvería intocable.
+
+---
+
+## 💰 Cobranza
+
+El saldo **no se captura: se calcula**. Finanzas registra dos hechos —«se emitió esta
+factura» y «entró este pago»— y de ahí salen el pendiente, lo que está por vencer y el
+adeudo. Un saldo tecleado a mano acabaría contradiciendo a las facturas que lo componen,
+que es la misma clase de error que un total de guardias peleado con su desglose.
+
+### La regla que ordena todo
+
+> Hay adeudo cuando **se acaba el plazo del crédito**, no cuando se factura.
+
+Una factura recién emitida a 30 días no es una deuda: es cuenta corriente. Se vuelve
+adeudo el día 31. Por eso el tablero y la pantalla de cobranza separan siempre las dos
+cifras:
+
+| | Qué es | Cuándo |
+|---|---|---|
+| **Por vencer** | dinero facturado que el cliente aún no debe | dentro del plazo |
+| **Vencido** | adeudo real | pasó la fecha de vencimiento |
+
+Sin crédito pactado el plazo es cero, así que la factura vence el mismo día que se emite.
+
+### Cuándo se factura
+
+El plazo corre **desde la fecha de la factura**, no desde que se prestó el servicio. Por
+eso el esquema de facturación se captura desde la apertura, y de él sale la fecha:
+
+| Esquema | La factura del mes se emite |
+|---|---|
+| `INICIO_MES` | el día 1 del mes que se va a cubrir (anticipado) |
+| `QUINCENAL` | el día 1 y el día 16, cada una por la mitad |
+| `FIN_MES` | el último día del mes trabajado |
+| `MES_VENCIDO` | el día 1 del mes siguiente |
+| `SIN_CALENDARIO` | no hay fecha pactada; se registra a mano |
+
+La fecha de vencimiento se calcula al emitir (`fecha de factura + días de crédito`) y se
+**guarda**: si mañana al cliente le renegocian el plazo, las facturas ya emitidas
+conservan el que tenían. Esa era la condición cuando se cobró.
+
+### Cómo se usa
+
+- **Al abrir el servicio** se capturan forma de pago, esquema, días de crédito y línea de
+  crédito. La forma de pago sale del [catálogo](#️-catálogos-de-captura).
+- **Emitir la facturación del mes** (pantalla *Cobranza*) crea de una vez la factura que
+  le toca a cada servicio activo según su esquema. Es repetible: salta lo ya emitido, y
+  dice qué servicios quedaron fuera y por qué —sin esquema, sin importe— en vez de dejar
+  el hueco callado.
+- **Registrar un pago** admite abonos parciales y nunca cobra de más que el saldo.
+- **Cancelar una factura** mal registrada la deja marcada con su motivo y fuera del saldo;
+  no la borra, y no se puede si ya tiene pagos. Solo el administrador.
+
+Cada movimiento queda en la bitácora, y el pendiente y el vencido se copian al servicio
+para que el tablero, los filtros y el corte del mes no recorran el libro entero en cada
+pantalla.
 
 ---
 
@@ -392,6 +453,7 @@ app/
 │   ├── aperturas/nueva/       # captura con desglose de turnos y autorizaciones
 │   ├── cancelaciones/nueva/   # ampliación, disminución o cancelación total
 │   ├── bitacora/              # historial de cambios
+│   ├── cobranza/              # cartera vencida y facturación del mes
 │   ├── catalogos/             # zonas, asesores y turnos que se pueden capturar
 │   └── usuarios/              # altas, roles, contraseñas, matriz de permisos
 └── api/                       # auth, aperturas, cancelaciones, servicios, usuarios, catálogos
@@ -403,6 +465,7 @@ components/
 lib/
 ├── schema.sql                 # DDL
 ├── catalogos.js               # zonas, asesores y turnos: la lista y sus reglas
+├── facturacion.js             # facturas, pagos y saldos: el adeudo se calcula
 ├── comentarios.js             # notas por servicio
 ├── servicios.js               # ÚNICO punto de escritura del estado de fuerza
 ├── rbac.js                    # roles, permisos, campos por bloque

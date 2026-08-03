@@ -19,13 +19,17 @@ export default function CampoCatalogo({
   ...resto
 }) {
   const actual = valor ?? '';
-  const fuera = actual && !opciones.includes(actual);
+  // Acepta una lista de textos —zonas, asesores, turnos— o de pares con
+  // etiqueta propia, que es lo que necesitan los esquemas de facturación:
+  // se guarda MES_VENCIDO y en pantalla dice «Mes vencido».
+  const items = (opciones || []).map((o) => (typeof o === 'string' ? { valor: o, etiqueta: o } : o));
+  const fuera = actual && !items.some((o) => o.valor === actual);
   return (
     <select id={id} value={actual} onChange={(e) => onChange(e.target.value)} className={className} {...resto}>
       <option value="">{vacio}</option>
-      {opciones.map((o) => (
-        <option key={o} value={o}>
-          {o}
+      {items.map((o) => (
+        <option key={o.valor} value={o.valor}>
+          {o.etiqueta}
         </option>
       ))}
       {fuera && <option value={actual}>{actual} (fuera de catálogo)</option>}

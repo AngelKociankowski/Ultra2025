@@ -5,11 +5,13 @@ import { obtenerServicio } from '@/lib/servicios';
 import { gruposEditables, puede } from '@/lib/rbac';
 import { CAMPOS } from '@/lib/campos';
 import { opciones } from '@/lib/catalogos';
+import { ESQUEMAS, facturasDeServicio, resumenDe, programaDe } from '@/lib/facturacion';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { listarComentarios } from '@/lib/comentarios';
 import EditorServicio from './EditorServicio';
 import Comentarios from './Comentarios';
 import CorreccionServicio from './CorreccionServicio';
+import Cobranza from './Cobranza';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +31,11 @@ export default function DetalleServicio({ params }) {
 
   const comentarios = listarComentarios(s.id);
 
-  const cat = opciones();
+  const cat = {
+    ...opciones(),
+    esquemas: Object.entries(ESQUEMAS).map(([valor, e]) => ({ valor, ...e })),
+  };
+  const periodoActual = new Date().toISOString().slice(0, 7);
   const grupos = gruposEditables(usuario.rol).map((g) => ({
     ...g,
     campos: g.campos.map((c) => ({ nombre: c, ...CAMPOS[c] })).filter((c) => c.etiqueta),
@@ -131,6 +137,16 @@ export default function DetalleServicio({ params }) {
           )}
         </section>
       </div>
+
+      <Cobranza
+        servicio={s}
+        facturas={facturasDeServicio(s.id)}
+        resumen={resumenDe(s.id)}
+        programa={programaDe(s, periodoActual)}
+        periodo={periodoActual}
+        puedeFacturar={puede(usuario.rol, 'editar_finanzas')}
+        puedeCancelar={puede(usuario.rol, 'corregir')}
+      />
 
       {grupos.length > 0 && s.estatus === 'ACTIVO' && (
         <EditorServicio servicio={s} grupos={grupos} rol={usuario.rol} opciones={cat} />

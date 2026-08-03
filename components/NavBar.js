@@ -35,12 +35,15 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
             <LogoConNombre size={30} />
           </Link>
 
-          <nav className="hidden md:flex items-center gap-1">
+          {/* El menú completo pasa a botón a partir de lg: con las ocho
+              pestañas del administrador, en pantallas medianas los nombres se
+              partían en dos renglones y la barra crecía. */}
+          <nav className="hidden lg:flex items-center gap-0.5">
             {items.map((i) => (
               <Link
                 key={i.href}
                 href={i.href}
-                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                className={`px-2.5 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors ${
                   activo(i.href)
                     ? 'bg-ultra-rojo text-ultra-blanco font-medium'
                     : 'text-slate-400 hover:text-white hover:bg-slate-700/40'
@@ -52,7 +55,7 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
             ))}
           </nav>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <TemaToggle />
             {/* El nombre lleva a la cuenta propia: ahí se cambia la contraseña. */}
             <Link
@@ -60,7 +63,7 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
               title="Mi cuenta"
               className="text-right hidden sm:block rounded-lg px-2 py-1 hover:bg-slate-700/40 transition-colors"
             >
-              <p className="text-sm text-white leading-tight">{usuario.nombre}</p>
+              <p className="text-sm text-white leading-tight whitespace-nowrap">{usuario.nombre}</p>
               <span
                 className={`inline-block text-[10px] px-1.5 py-0.5 rounded border ${
                   COLOR_ROL[etiquetaRol] || 'bg-slate-700 text-slate-300 border-slate-600'
@@ -77,7 +80,7 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
             </button>
             <button
               onClick={() => setAbierto((v) => !v)}
-              className="md:hidden text-slate-400 hover:text-white px-2"
+              className="lg:hidden text-slate-400 hover:text-white px-2"
               aria-label="Menú"
             >
               ☰
@@ -86,7 +89,7 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
         </div>
 
         {abierto && (
-          <nav className="md:hidden pb-3 flex flex-col gap-1">
+          <nav className="lg:hidden pb-3 flex flex-col gap-1">
             {items.map((i) => (
               <Link
                 key={i.href}

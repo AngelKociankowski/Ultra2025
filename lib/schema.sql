@@ -61,11 +61,20 @@ CREATE TABLE IF NOT EXISTS servicios (
   utilidad_bruta             REAL,
   facturado                  INTEGER NOT NULL DEFAULT 0,
   status_cobranza            TEXT,
-  fecha_pago                 TEXT,
   forma_pago                 TEXT,
   cobro                      TEXT,
   credito_maximo             REAL,
   dias_credito               INTEGER,
+
+  -- Cuándo se emite la factura del mes. De aquí sale la fecha de la factura y,
+  -- con los días de crédito, la de vencimiento: el plazo no corre desde que se
+  -- presta el servicio, sino desde que se factura.
+  esquema_facturacion        TEXT,
+
+  -- Estas tres las calcula el libro de facturas, no se capturan. Viven aquí
+  -- copiadas para que el tablero, los filtros y el corte del mes no tengan que
+  -- recorrer la cobranza entera cada vez que alguien abre una pantalla.
+  fecha_pago                 TEXT,
   importe_pendiente          REAL,
   saldo_vencido              REAL,
 
@@ -115,7 +124,10 @@ CREATE TABLE IF NOT EXISTS aperturas (
   bono               REAL,
   uniforme           TEXT,
   credito_autorizado INTEGER,
-  credito_plazo      TEXT,
+  credito_plazo      TEXT,               -- texto libre de las hojas viejas
+  dias_credito       INTEGER,            -- el plazo capturado en la plataforma
+  credito_maximo     REAL,
+  esquema_facturacion TEXT,
   forma_pago         TEXT,
   cobro              TEXT,
   tipo_repse         TEXT,
@@ -262,6 +274,74 @@ CREATE TABLE IF NOT EXISTS correcciones (
 
 CREATE INDEX IF NOT EXISTS idx_correcciones_servicio ON correcciones(servicio_id, id DESC);
 
+-- ------------------------------------------------------------------ facturas
+-- El libro de cobranza: una fila por factura emitida.
+--
+-- Antes la cobranza vivía en tres campos sueltos del servicio (importe
+-- pendiente, saldo vencido, ¿ya se pagó?). Eso alcanza para una foto, no para
+-- un saldo: si a un cliente se le facturan tres meses y paga uno, un campo solo
+-- no sabe cuál quedó a deber ni desde cuándo. Y un saldo tecleado a mano puede
+-- contradecir a las facturas, que es la misma clase de error que el total de
+-- guardias contra su desglose.
+--
+-- Por eso el saldo no se captura: se calcula. Finanzas registra la factura y
+-- registra el pago; pendiente, vencido y por vencer salen de aquí.
+--
+-- La fecha de vencimiento se guarda calculada (fecha de factura + días de
+-- crédito) y no se recalcula después: si mañana al servicio le cambian el
+-- plazo, las facturas ya emitidas conservan el que tenían cuando se emitieron.
+-- Esa es la condición que se pactó para ese cobro.
+CREATE TABLE IF NOT EXISTS facturas (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  servicio_id       INTEGER NOT NULL REFERENCES servicios(id) ON DELETE CASCADE,
+  periodo           TEXT NOT NULL,              -- mes de servicio que cubre (YYYY-MM)
+  concepto          TEXT NOT NULL DEFAULT 'Mes completo',
+  folio             TEXT,                       -- el folio fiscal, si ya se tiene
+  fecha_factura     TEXT NOT NULL,
+  dias_credito      INTEGER NOT NULL DEFAULT 0,
+  fecha_vencimiento TEXT NOT NULL,
+  importe           REAL NOT NULL,
+  importe_pagado    REAL NOT NULL DEFAULT 0,
+  fecha_pago        TEXT,                       -- la del último pago recibido
+  forma_pago        TEXT,
+  referencia        TEXT,
+
+  -- Una factura mal registrada no se borra: se cancela con motivo y deja de
+  -- contar para el saldo. Borrarla haría desaparecer el renglón que explica
+  -- por qué el saldo era otro la semana pasada.
+  cancelada         INTEGER NOT NULL DEFAULT 0,
+  motivo_cancelacion TEXT,
+  cancelada_por     TEXT,
+  cancelada_en      TEXT,
+
+  creado_por        INTEGER REFERENCES usuarios(id),
+  creado_en         TEXT NOT NULL DEFAULT (datetime('now')),
+
+  -- Evita facturar dos veces el mismo tramo del mismo mes, que es justo lo que
+  -- pasaría si alguien vuelve a pulsar «generar la facturación del mes».
+  UNIQUE (servicio_id, periodo, concepto)
+);
+
+CREATE INDEX IF NOT EXISTS idx_facturas_servicio ON facturas(servicio_id, fecha_factura DESC);
+CREATE INDEX IF NOT EXISTS idx_facturas_periodo  ON facturas(periodo);
+-- Las dos preguntas de cobranza —qué está vencido y qué está por vencer— se
+-- resuelven con este índice sin recorrer el libro entero.
+CREATE INDEX IF NOT EXISTS idx_facturas_saldo    ON facturas(cancelada, fecha_vencimiento);
+
+CREATE TABLE IF NOT EXISTS pagos (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  factura_id  INTEGER NOT NULL REFERENCES facturas(id) ON DELETE CASCADE,
+  fecha       TEXT NOT NULL,
+  importe     REAL NOT NULL,
+  forma_pago  TEXT,
+  referencia  TEXT,
+  usuario_id  INTEGER REFERENCES usuarios(id),
+  usuario     TEXT NOT NULL,
+  creado_en   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_pagos_factura ON pagos(factura_id, id DESC);
+
 -- ------------------------------------------------------------------ catálogos
 -- Las listas de las que se elige al capturar: zonas, asesores y turnos.
 --
@@ -278,7 +358,7 @@ CREATE INDEX IF NOT EXISTS idx_correcciones_servicio ON correcciones(servicio_id
 -- a los cortes cerrados, que son el respaldo de facturación.
 CREATE TABLE IF NOT EXISTS catalogos (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
-  tipo      TEXT NOT NULL CHECK (tipo IN ('zona','asesor','turno')),
+  tipo      TEXT NOT NULL CHECK (tipo IN ('zona','asesor','turno','forma_pago')),
   valor     TEXT NOT NULL,
   -- Los turnos se ordenan como los lee la operación (8X16, 12X12, 24X48…), no
   -- alfabéticamente. Zonas y asesores se quedan en 0 y salen por nombre.

@@ -10,6 +10,7 @@ import {
   contratosPorVencer,
   ultimosMovimientos,
 } from '@/lib/queries';
+import { kpisCobranza } from '@/lib/facturacion';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import MovimientosChart from '@/components/MovimientosChart';
 
@@ -40,6 +41,7 @@ function Kpi({ titulo, valor, sub, icono, tono = 'slate' }) {
 export default function Tablero() {
   const usuario = usuarioActual();
   const k = kpisEstadoFuerza();
+  const cobranza = kpisCobranza();
   const movimientos = movimientosPorPeriodo(18);
   const motivos = motivosCancelacion(8);
   const zonas = distribucionPorZona();
@@ -84,7 +86,16 @@ export default function Tablero() {
         <Kpi titulo="Facturación mensual" valor={formatCurrency(k.facturacion)} icono="💰" tono="emerald" />
         <Kpi titulo="Sin contrato" valor={formatNumber(k.sinContrato)} sub={`${k.conContrato} con contrato`} icono="📄" tono={k.sinContrato ? 'amber' : 'emerald'} />
         <Kpi titulo="Sin facturar" valor={formatNumber(k.sinFacturar)} sub={`${k.facturados} facturados`} icono="🧾" tono={k.sinFacturar ? 'amber' : 'emerald'} />
-        <Kpi titulo="Saldo vencido" valor={formatCurrency(k.vencido)} sub={`${formatCurrency(k.pendiente)} por cobrar`} icono="⚠️" tono={k.vencido < 0 ? 'red' : 'slate'} />
+        {/* Vencido y por vencer van separados a propósito: los dos son dinero
+            sin cobrar, pero solo el primero es adeudo. Al segundo todavía le
+            corre el plazo de crédito que se le concedió al cliente. */}
+        <Kpi
+          titulo="Saldo vencido"
+          valor={formatCurrency(cobranza.vencido)}
+          sub={`${formatCurrency(cobranza.porVencer)} por vencer`}
+          icono="⚠️"
+          tono={cobranza.vencido > 0 ? 'red' : 'slate'}
+        />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
