@@ -206,10 +206,14 @@ conservan el que tenían. Esa era la condición cuando se cobró.
 
 - **Al abrir el servicio** se capturan forma de pago, esquema, días de crédito y línea de
   crédito. La forma de pago sale del [catálogo](#️-catálogos-de-captura).
-- **Emitir la facturación del mes** (pantalla *Cobranza*) crea de una vez la factura que
-  le toca a cada servicio activo según su esquema. Es repetible: salta lo ya emitido, y
-  dice qué servicios quedaron fuera y por qué —sin esquema, sin importe— en vez de dejar
-  el hueco callado.
+- **Por facturar** (pantalla *Cobranza*) es la lista de trabajo del mes: qué servicio
+  toca facturar, con la fecha y el importe que le corresponderían según cómo se le cobra.
+  **Cada factura se registra una por una**, revisada: el importe del mes casi nunca es el
+  del mes pasado —guardias que subieron, extras, servicios que arrancaron a media
+  quincena— y emitir en bloque daría por bueno el mismo número para todos. Lo que la
+  lista sí evita es olvidar a alguien entre doscientos servicios; los que ni siquiera se
+  pueden proponer, porque les falta capturar cuándo se les factura, se apartan a la vista
+  en vez de desaparecer en silencio.
 - **Registrar un pago** admite abonos parciales y nunca cobra de más que el saldo.
 - **Cancelar una factura** mal registrada la deja marcada con su motivo y fuera del saldo;
   no la borra, y no se puede si ya tiene pagos. Solo el administrador.
