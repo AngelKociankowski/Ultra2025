@@ -9,21 +9,36 @@ import {
   registrarPago,
   cancelarFactura,
   facturasVencidas,
+  pendientesDeFacturar,
 } from '@/lib/facturacion';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Cobranza de un servicio, o la cartera vencida completa si no se pide uno.
+ * Tres consultas, según lo que se pida:
+ *   ?servicio_id=…            estado de cuenta de un servicio
+ *   ?pendientes=1&periodo=…   qué falta facturar de ese mes
+ *   (sin nada)                la cartera vencida completa
+ *
  * Consultar es de cualquier rol; mover la cobranza es de finanzas y admin.
  */
 export const GET = conPermiso('ver', async (request) => {
-  const servicioId = new URL(request.url).searchParams.get('servicio_id');
-  if (!servicioId) return NextResponse.json({ vencidas: facturasVencidas() });
-  return NextResponse.json({
-    facturas: facturasDeServicio(servicioId),
-    resumen: resumenDe(servicioId),
-  });
+  const params = new URL(request.url).searchParams;
+
+  const servicioId = params.get('servicio_id');
+  if (servicioId) {
+    return NextResponse.json({
+      facturas: facturasDeServicio(servicioId),
+      resumen: resumenDe(servicioId),
+    });
+  }
+
+  if (params.get('pendientes')) {
+    const periodo = params.get('periodo') || new Date().toISOString().slice(0, 7);
+    return NextResponse.json(pendientesDeFacturar(periodo));
+  }
+
+  return NextResponse.json({ vencidas: facturasVencidas() });
 });
 
 export const POST = conPermiso('editar_finanzas', async (request, { usuario }) =>

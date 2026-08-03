@@ -292,9 +292,15 @@ describe('quién mueve la cobranza', () => {
   });
 });
 
-describe('facturación del mes en bloque', () => {
-  test('emite una factura por servicio con esquema e importe, y es repetible', async () => {
-    const id = await abrir('COBRANZA GENERADA', {
+describe('la lista de lo que falta facturar', () => {
+  const pendientes = async (periodo) => {
+    const r = await finanzas.pedir(`/api/facturas?pendientes=1&periodo=${periodo}`);
+    assert.equal(r.status, 200);
+    return r.json;
+  };
+
+  test('propone fecha e importe a cada servicio, pero no emite nada', async () => {
+    const id = await abrir('COBRANZA PENDIENTE', {
       esquema_facturacion: 'MES_VENCIDO',
       dias_credito: 30,
     });
@@ -303,42 +309,39 @@ describe('facturación del mes en bloque', () => {
       body: JSON.stringify({ importe_factura: 200000 }),
     });
 
-    const primera = await finanzas.pedir('/api/facturas/generar', {
-      method: 'POST',
-      body: JSON.stringify({ periodo: '2026-08' }),
-    });
-    assert.equal(primera.status, 201, primera.texto);
-    assert.ok(primera.json.creadas >= 1);
+    const lista = await pendientes('2026-08');
+    const fila = lista.porFacturar.find((f) => f.servicio_id === id);
+    assert.ok(fila, 'el servicio con condiciones aparece en la lista');
+    assert.equal(fila.importe, 200000);
+    // mes vencido: se facturaría el día 1 del mes siguiente al trabajado
+    assert.equal(fila.fecha, '2026-09-01');
+    assert.equal(fila.fecha_vencimiento, '2026-10-01');
 
-    const { facturas } = await cobranza(id);
-    const generada = facturas.find((f) => f.periodo === '2026-08');
-    assert.ok(generada, 'al servicio con esquema le tocó su factura');
-    assert.equal(generada.importe, 200000);
-    // mes vencido: se factura el día 1 del mes siguiente al trabajado
-    assert.equal(generada.fecha_factura, '2026-09-01');
-    assert.equal(generada.fecha_vencimiento, '2026-10-01');
-
-    // volver a pulsar no duplica nada
-    const segunda = await finanzas.pedir('/api/facturas/generar', {
-      method: 'POST',
-      body: JSON.stringify({ periodo: '2026-08' }),
-    });
-    assert.equal(segunda.status, 201);
-    assert.equal(segunda.json.creadas, 0, 'la segunda vez no emite nada');
-
-    const despues = await cobranza(id);
-    assert.equal(despues.facturas.filter((f) => f.periodo === '2026-08').length, 1);
+    // consultar la lista no crea nada: el servicio sigue sin facturas
+    assert.equal((await cobranza(id)).facturas.length, 0);
   });
 
-  test('dice qué servicios se quedaron fuera y por qué', async () => {
-    const r = await finanzas.pedir('/api/facturas/generar', {
-      method: 'POST',
-      body: JSON.stringify({ periodo: '2026-08' }),
+  test('al facturarlo, sale de la lista', async () => {
+    const antes = await pendientes('2026-08');
+    const fila = antes.porFacturar.find((f) => f.servicio === 'COBRANZA PENDIENTE');
+
+    const r = await facturar(fila.servicio_id, {
+      periodo: '2026-08',
+      concepto: fila.concepto,
+      fecha_factura: fila.fecha,
+      importe: fila.importe,
     });
-    assert.ok(r.json.omitidos.sinEsquema.length > 0, 'los servicios de la carga inicial no tienen esquema');
+    assert.equal(r.status, 201, r.texto);
+
+    const despues = await pendientes('2026-08');
+    assert.ok(
+      !despues.porFacturar.some((f) => f.servicio_id === fila.servicio_id),
+      'ya no debería aparecer como pendiente'
+    );
+    assert.equal(despues.facturados, antes.facturados + 1);
   });
 
-  test('las quincenas se emiten como dos facturas de la mitad', async () => {
+  test('las quincenas aparecen como dos renglones de la mitad', async () => {
     const id = await abrir('COBRANZA QUINCENAL', {
       esquema_facturacion: 'QUINCENAL',
       dias_credito: 15,
@@ -347,19 +350,26 @@ describe('facturación del mes en bloque', () => {
       method: 'PATCH',
       body: JSON.stringify({ importe_factura: 100000 }),
     });
-    await finanzas.pedir('/api/facturas/generar', {
-      method: 'POST',
-      body: JSON.stringify({ periodo: '2026-09' }),
-    });
 
-    const { facturas } = await cobranza(id);
-    const delMes = facturas.filter((f) => f.periodo === '2026-09');
-    assert.equal(delMes.length, 2);
-    assert.deepEqual(
-      delMes.map((f) => f.fecha_factura).sort(),
-      ['2026-09-01', '2026-09-16']
-    );
-    assert.equal(delMes.reduce((a, f) => a + f.importe, 0), 100000);
+    const lista = await pendientes('2026-09');
+    const suyas = lista.porFacturar.filter((f) => f.servicio_id === id);
+    assert.equal(suyas.length, 2);
+    assert.deepEqual(suyas.map((f) => f.fecha).sort(), ['2026-09-01', '2026-09-16']);
+    assert.equal(suyas.reduce((a, f) => a + f.importe, 0), 100000);
+  });
+
+  test('los servicios sin esquema se apartan en vez de colarse con una fecha inventada', async () => {
+    const lista = await pendientes('2026-08');
+    assert.ok(lista.sinCondiciones.length > 0, 'los de la carga inicial no traen esquema');
+    assert.ok(lista.sinCondiciones.every((s) => s.servicio && s.id));
+  });
+
+  test('no existe una vía para facturarlo todo de golpe', async () => {
+    const r = await finanzas.pedir('/api/facturas/generar', {
+      method: 'POST',
+      body: JSON.stringify({ periodo: '2026-08' }),
+    });
+    assert.ok([404, 405].includes(r.status), `debería no existir; contestó ${r.status}`);
   });
 
   test('no se factura dos veces el mismo tramo del mismo mes', async () => {
@@ -426,7 +436,7 @@ describe('la cartera vencida y la bitácora', () => {
 
   test('facturas, pagos y cancelaciones quedan registrados', async () => {
     const r = await admin.pedir('/bitacora');
-    for (const accion of ['factura', 'pago', 'factura_cancelada', 'facturacion_mes']) {
+    for (const accion of ['factura', 'pago', 'factura_cancelada']) {
       assert.match(r.texto, new RegExp(accion), `falta ${accion} en la bitácora`);
     }
   });

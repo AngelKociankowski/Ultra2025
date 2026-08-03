@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { usuarioActual } from '@/lib/auth';
 import { puede } from '@/lib/rbac';
-import { kpisCobranza, facturasVencidas } from '@/lib/facturacion';
+import { kpisCobranza, facturasVencidas, pendientesDeFacturar } from '@/lib/facturacion';
 import { formatCurrency, formatNumber } from '@/lib/utils';
-import GenerarFacturacion from './GenerarFacturacion';
+import PorFacturar from './PorFacturar';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +25,7 @@ function Kpi({ titulo, valor, sub, tono = 'slate' }) {
   );
 }
 
-export default function CobranzaGeneral() {
+export default function CobranzaGeneral({ searchParams }) {
   const usuario = usuarioActual();
   if (!puede(usuario.rol, 'editar_finanzas')) {
     return (
@@ -41,7 +41,12 @@ export default function CobranzaGeneral() {
 
   const k = kpisCobranza();
   const vencidas = facturasVencidas(200);
-  const periodo = new Date().toISOString().slice(0, 7);
+  // El mes se puede cambiar desde la pantalla: facturar suele hacerse a
+  // principios del siguiente, cuando ya cerró el que se va a cobrar.
+  const periodo = /^\d{4}-\d{2}$/.test(searchParams?.periodo || '')
+    ? searchParams.periodo
+    : new Date().toISOString().slice(0, 7);
+  const pendientes = pendientesDeFacturar(periodo);
 
   return (
     <div className="space-y-5">
@@ -66,7 +71,33 @@ export default function CobranzaGeneral() {
         <Kpi titulo="Pendiente total" valor={formatCurrency(k.pendiente)} sub="vencido + por vencer" />
       </div>
 
-      <GenerarFacturacion periodoSugerido={periodo} />
+      <form className="flex flex-wrap items-end gap-2">
+        <div>
+          <label htmlFor="periodo" className="block text-xs text-slate-400 mb-1">
+            Mes de servicio
+          </label>
+          <input
+            id="periodo"
+            name="periodo"
+            defaultValue={periodo}
+            placeholder="2026-08"
+            className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500"
+          />
+        </div>
+        <button
+          type="submit"
+          className="bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg px-3 py-1.5"
+        >
+          Ver ese mes
+        </button>
+      </form>
+
+      <PorFacturar
+        periodo={pendientes.periodo}
+        porFacturar={pendientes.porFacturar}
+        sinCondiciones={pendientes.sinCondiciones}
+        facturados={pendientes.facturados}
+      />
 
       <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-700/50">
