@@ -314,6 +314,12 @@ CREATE TABLE IF NOT EXISTS facturas (
   cancelada_por     TEXT,
   cancelada_en      TEXT,
 
+  -- 1 = venía de antes de la plataforma y entró por la carga inicial, no se
+  -- emitió aquí. Cuenta igual para el saldo —el cliente debe lo mismo— pero
+  -- conviene poder distinguirla: es lo que separa lo que la plataforma vio
+  -- suceder de lo que le contaron que ya había pasado.
+  carga_inicial     INTEGER NOT NULL DEFAULT 0,
+
   creado_por        INTEGER REFERENCES usuarios(id),
   creado_en         TEXT NOT NULL DEFAULT (datetime('now')),
 

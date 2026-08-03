@@ -222,6 +222,31 @@ Cada movimiento queda en la bitácora, y el pendiente y el vencido se copian al 
 para que el tablero, los filtros y el corte del mes no recorran el libro entero en cada
 pantalla.
 
+### Puesta al día (una sola vez)
+
+Al arrancar hay dos trabajos que no se pueden hacer factura por factura, y viven en
+*Cobranza → Puesta al día*:
+
+1. **Condiciones de cobro en bloque.** Doscientos servicios se cobran casi todos igual;
+   capturarlo uno por uno son horas de teclear el mismo dato. Se aplican de una vez —a
+   los que aún no tienen, o a todos— y las excepciones se ajustan luego desde cada ficha.
+   Es configuración: **no emite ni una factura**.
+2. **Carga de lo que ya se había facturado.** Para que la cartera arranque diciendo la
+   verdad, se descarga una plantilla CSV con un renglón por servicio, se completa en
+   Excel —incluyendo meses anteriores sin cobrar— y se sube. Antes de guardar nada hay
+   una **revisión en seco** que enseña cuántos renglones entran, cuánto suman y qué
+   renglón falla y por qué.
+
+Las facturas cargadas quedan marcadas como `carga_inicial`: cuentan igual para el saldo
+—el cliente debe lo mismo— pero se distinguen de las emitidas en la plataforma. Una cosa
+es lo que la plataforma vio suceder y otra lo que le contaron que ya había pasado.
+
+El lector de CSV está hecho para archivos de Excel en español: acepta `;` o `,`, se come
+la marca invisible del principio, entiende `$ 1,234.56` y `1.234,56`, y fechas en
+`AAAA-MM-DD` o `DD/MM/AAAA`. Los encabezados admiten variantes («Fecha de factura»,
+«fecha_factura», «fecha»). Lo que no entiende **no lo adivina**: lo reporta con su número
+de renglón.
+
 ---
 
 ## 🚀 Arranque

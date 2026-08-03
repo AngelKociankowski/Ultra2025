@@ -381,6 +381,135 @@ describe('la lista de lo que falta facturar', () => {
   });
 });
 
+describe('puesta al día: condiciones en bloque y carga de lo ya facturado', () => {
+  test('ventas no puede tocar ninguna de las dos', async () => {
+    const a = await ventas.pedir('/api/facturas/condiciones', {
+      method: 'POST',
+      body: JSON.stringify({ esquema_facturacion: 'MES_VENCIDO', dias_credito: 30 }),
+    });
+    assert.equal(a.status, 403);
+
+    const b = await ventas.pedir('/api/facturas/carga', {
+      method: 'POST',
+      body: JSON.stringify({ csv: 'id;servicio\n1;X', simular: true }),
+    });
+    assert.equal(b.status, 403);
+  });
+
+  test('las condiciones se aplican a los servicios que no tenían, sin emitir nada', async () => {
+    const antes = await finanzas.pedir('/api/facturas?pendientes=1&periodo=2026-10');
+    assert.ok(antes.json.sinCondiciones.length > 100, 'la carga inicial viene sin condiciones');
+    const facturasAntes = (await finanzas.pedir('/api/facturas')).json.vencidas.length;
+
+    const r = await finanzas.pedir('/api/facturas/condiciones', {
+      method: 'POST',
+      body: JSON.stringify({
+        esquema_facturacion: 'MES_VENCIDO',
+        dias_credito: 30,
+        forma_pago: 'TRANSFERENCIA',
+        alcance: 'sin_condiciones',
+      }),
+    });
+    assert.equal(r.status, 200, r.texto);
+    assert.ok(r.json.aplicados > 100);
+
+    const despues = await finanzas.pedir('/api/facturas?pendientes=1&periodo=2026-10');
+    assert.equal(despues.json.sinCondiciones.length, 0, 'ya nadie se queda sin fecha');
+    assert.ok(despues.json.porFacturar.length > 100, 'ahora sí se les puede proponer factura');
+
+    // configurar no emite: la cartera no se movió
+    assert.equal((await finanzas.pedir('/api/facturas')).json.vencidas.length, facturasAntes);
+  });
+
+  test('un esquema inventado se rechaza', async () => {
+    const r = await finanzas.pedir('/api/facturas/condiciones', {
+      method: 'POST',
+      body: JSON.stringify({ esquema_facturacion: 'CUANDO_CAIGA', dias_credito: 10 }),
+    });
+    assert.equal(r.status, 400);
+  });
+
+  test('la plantilla sale en CSV con un renglón por servicio', async () => {
+    const r = await finanzas.pedir('/api/facturas/carga?periodo=2026-10');
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type'), /text\/csv/);
+    const lineas = r.texto.trim().split('\r\n');
+    assert.match(lineas[0], /Servicio/);
+    assert.ok(lineas.length > 100, 'trae los servicios activos');
+  });
+
+  test('la revisión en seco encuentra los errores y no guarda nada', async () => {
+    const id = await abrir('CARGA INICIAL DEMO', { esquema_facturacion: 'MES_VENCIDO', dias_credito: 30 });
+    const csv = [
+      'id;Servicio;Periodo;Concepto;Fecha de factura;Días de crédito;Importe;Folio fiscal;¿Pagada?;Fecha de pago',
+      `${id};CARGA INICIAL DEMO;2026-03;Mes completo;01/04/2026;30;$ 120,000.00;A-1;;`,
+      `${id};CARGA INICIAL DEMO;2026-04;Mes completo;01/05/2026;30;120000;A-2;SI;15/05/2026`,
+      `;SERVICIO QUE NO EXISTE;2026-03;Mes completo;01/04/2026;30;5000;;;`,
+      `${id};CARGA INICIAL DEMO;2026-05;Mes completo;;30;5000;;;`,
+    ].join('\n');
+
+    const r = await finanzas.pedir('/api/facturas/carga', {
+      method: 'POST',
+      body: JSON.stringify({ csv, simular: true }),
+    });
+    assert.equal(r.status, 200, r.texto);
+    assert.equal(r.json.listas, 2, 'dos renglones buenos');
+    assert.equal(r.json.errores.length, 2, 'uno sin servicio y otro sin fecha');
+    assert.equal(r.json.importe, 240000, 'lee "$ 120,000.00" y "120000" igual');
+    assert.equal(r.json.pagadas, 1);
+    assert.equal(r.json.porCobrar, 120000);
+    assert.match(r.json.errores[0].motivo, /No se encontró/);
+    assert.match(r.json.errores[1].motivo, /fecha/);
+
+    // en seco no guarda
+    assert.equal((await cobranza(id)).facturas.length, 0);
+  });
+
+  test('la carga de verdad crea las facturas y mueve el saldo', async () => {
+    const lista = (await finanzas.pedir('/api/facturas?pendientes=1&periodo=2026-03')).json;
+    const fila = lista.porFacturar.find((f) => f.servicio === 'CARGA INICIAL DEMO');
+    assert.ok(fila, 'estaba pendiente antes de cargarla');
+
+    const csv = [
+      'id;Servicio;Periodo;Concepto;Fecha de factura;Días de crédito;Importe;Folio fiscal;¿Pagada?;Fecha de pago',
+      `${fila.servicio_id};CARGA INICIAL DEMO;2026-03;Mes completo;01/04/2026;30;$ 120,000.00;A-1;;`,
+      `${fila.servicio_id};CARGA INICIAL DEMO;2026-04;Mes completo;01/05/2026;30;120000;A-2;SI;15/05/2026`,
+    ].join('\n');
+
+    const r = await finanzas.pedir('/api/facturas/carga', {
+      method: 'POST',
+      body: JSON.stringify({ csv, simular: false }),
+    });
+    assert.equal(r.status, 200, r.texto);
+    assert.equal(r.json.cargadas, 2);
+
+    const { facturas, resumen } = await cobranza(fila.servicio_id);
+    assert.equal(facturas.length, 2);
+    assert.equal(resumen.emitido, 240000);
+    assert.equal(resumen.cobrado, 120000, 'la marcada como pagada entra cobrada');
+    // ambas son de meses pasados: la que quedó sin pagar es adeudo
+    assert.equal(resumen.vencido, 120000);
+    assert.equal(facturas.find((f) => f.periodo === '2026-04').estado, 'PAGADA');
+    assert.equal(facturas.find((f) => f.periodo === '2026-03').estado, 'VENCIDA');
+  });
+
+  test('subir dos veces el mismo archivo no duplica nada', async () => {
+    const lista = (await finanzas.pedir('/api/facturas?pendientes=1&periodo=2026-05')).json;
+    const servicioId = lista.porFacturar.find((f) => f.servicio === 'CARGA INICIAL DEMO')?.servicio_id;
+    const csv = [
+      'id;Servicio;Periodo;Concepto;Fecha de factura;Días de crédito;Importe',
+      `${servicioId};CARGA INICIAL DEMO;2026-03;Mes completo;01/04/2026;30;120000`,
+    ].join('\n');
+
+    const r = await finanzas.pedir('/api/facturas/carga', {
+      method: 'POST',
+      body: JSON.stringify({ csv, simular: true }),
+    });
+    assert.equal(r.json.listas, 0);
+    assert.match(r.json.errores[0].motivo, /Ya hay una factura/);
+  });
+});
+
 describe('cancelar una factura mal registrada', () => {
   test('solo el administrador, y sale del saldo', async () => {
     const id = await abrir('COBRANZA CANCELAR', { dias_credito: 30 });
