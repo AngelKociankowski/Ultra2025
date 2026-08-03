@@ -9,6 +9,7 @@ import {
   calendarioFacturacion,
 } from '@/lib/facturacion';
 import { formatCurrency, formatNumber } from '@/lib/utils';
+import { mesActual } from '@/lib/fechas';
 import PorFacturar from './PorFacturar';
 import CalendarioMeses from './CalendarioMeses';
 import Emitidas from './Emitidas';
@@ -53,7 +54,7 @@ export default function CobranzaGeneral({ searchParams }) {
   // principios del siguiente, cuando ya cerró el que se va a cobrar.
   const periodo = /^\d{4}-\d{2}$/.test(searchParams?.periodo || '')
     ? searchParams.periodo
-    : new Date().toISOString().slice(0, 7);
+    : mesActual();
   const pendientes = pendientesDeFacturar(periodo);
   const calendario = calendarioFacturacion(periodo.slice(0, 4));
   const emitidas = facturasDelPeriodo(periodo);

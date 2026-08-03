@@ -4,6 +4,7 @@ import { puede } from '@/lib/rbac';
 import { getDb } from '@/lib/db';
 import { ESQUEMAS } from '@/lib/facturacion';
 import { opciones } from '@/lib/catalogos';
+import { mesActual } from '@/lib/fechas';
 import PuestaAlDia from './PuestaAlDia';
 
 export const dynamic = 'force-dynamic';
@@ -50,7 +51,7 @@ export default function InicioCobranza() {
         formasPago={opciones().formasPago}
         sinCondiciones={sinCondiciones}
         totalActivos={totalActivos}
-        periodo={new Date().toISOString().slice(0, 7)}
+        periodo={mesActual()}
       />
 
       <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">

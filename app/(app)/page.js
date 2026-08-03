@@ -6,6 +6,7 @@ import {
   movimientosPorPeriodo,
   motivosCancelacion,
   distribucionPorZona,
+  distribucionPorTurno,
   rankingAsesores,
   contratosPorVencer,
   ultimosMovimientos,
@@ -13,6 +14,7 @@ import {
 import { kpisCobranza } from '@/lib/facturacion';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import MovimientosChart from '@/components/MovimientosChart';
+import RepartoTurnos from '@/components/RepartoTurnos';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +47,7 @@ export default function Tablero() {
   const movimientos = movimientosPorPeriodo(18);
   const motivos = motivosCancelacion(8);
   const zonas = distribucionPorZona();
+  const turnos = distribucionPorTurno();
   const asesores = rankingAsesores(10);
   const vencen = contratosPorVencer(90);
   const recientes = ultimosMovimientos(12);
@@ -145,6 +148,8 @@ export default function Tablero() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
+        <RepartoTurnos reparto={turnos} base="/estado-fuerza" />
+
         <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
           <h2 className="text-lg font-semibold text-white mb-3">Por zona</h2>
           <table className="w-full text-sm">

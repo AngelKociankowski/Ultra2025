@@ -10,6 +10,7 @@ export const GET = conPermiso('ver', async (request) => {
     estatus: searchParams.get('estatus') || undefined,
     zona: searchParams.get('zona') || undefined,
     asesor: searchParams.get('asesor') || undefined,
+    turno: searchParams.get('turno') || undefined,
     contrato: searchParams.get('contrato') || undefined,
     facturado: searchParams.get('facturado') || undefined,
     q: searchParams.get('q') || undefined,

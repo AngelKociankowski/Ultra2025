@@ -96,6 +96,17 @@ export default function Filtros({ valores, catalogos, periodos = [], vigente }) 
         ))}
       </select>
 
+      {catalogos.turnos?.length > 0 && (
+        <select value={f.turno} onChange={(e) => cambiar('turno', e.target.value)} className={clase}>
+          <option value="">Todos los turnos</option>
+          {catalogos.turnos.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      )}
+
       <select value={f.contrato} onChange={(e) => cambiar('contrato', e.target.value)} className={clase}>
         <option value="">Contrato: todos</option>
         <option value="si">Con contrato</option>

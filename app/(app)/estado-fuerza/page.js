@@ -6,12 +6,14 @@ import {
   periodoVigente,
   serviciosDeCorte,
   catalogosDeCorte,
+  repartoDeTurnos,
   comparativoCorte,
 } from '@/lib/queries';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { gruposEditables } from '@/lib/rbac';
 import { conteoComentarios } from '@/lib/comentarios';
 import Filtros from './Filtros';
+import RepartoTurnos from '@/components/RepartoTurnos';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +44,7 @@ export default function EstadoFuerza({ searchParams }) {
     estatus: searchParams?.estatus ?? 'ACTIVO',
     zona: searchParams?.zona || '',
     asesor: searchParams?.asesor || '',
+    turno: searchParams?.turno || '',
     contrato: searchParams?.contrato || '',
     facturado: searchParams?.facturado || '',
     q: searchParams?.q || '',
@@ -49,7 +52,29 @@ export default function EstadoFuerza({ searchParams }) {
   };
 
   const servicios = esCorte ? serviciosDeCorte(pedido, filtros) : listarServicios(filtros);
+
+  /**
+   * El reparto por turno se calcula sobre los mismos filtros pero sin el de
+   * turno. Si no, al elegir uno el panel se quedaría mostrando solo ése y no
+   * habría manera de saltar a otro sin volver atrás.
+   */
+  const sinFiltroTurno = { ...filtros, turno: '' };
+  const reparto = repartoDeTurnos(
+    filtros.turno
+      ? esCorte
+        ? serviciosDeCorte(pedido, sinFiltroTurno)
+        : listarServicios(sinFiltroTurno)
+      : servicios
+  );
+
   const cat = esCorte ? catalogosDeCorte(pedido) : catalogos();
+  cat.turnos = reparto.turnos.map((t) => t.turno);
+
+  // Los enlaces del panel conservan los demás filtros: elegir un turno afina la
+  // búsqueda, no la reinicia.
+  const otrosFiltros = new URLSearchParams();
+  for (const [k, v] of Object.entries(filtros)) if (v && k !== 'turno') otrosFiltros.set(k, v);
+  const baseTurnos = `/estado-fuerza${otrosFiltros.toString() ? `?${otrosFiltros}` : ''}`;
   const comparativo = esCorte ? comparativoCorte(pedido) : null;
   // Un solo GROUP BY para toda la tabla, no una consulta por renglón.
   const notas = esCorte ? new Map() : conteoComentarios();
@@ -137,6 +162,23 @@ export default function EstadoFuerza({ searchParams }) {
 
       <Filtros valores={filtros} catalogos={cat} periodos={periodos} vigente={vigente} />
 
+      {reparto.turnos.length > 0 && (
+        <RepartoTurnos
+          reparto={reparto}
+          base={baseTurnos}
+          filtroActivo={filtros.turno}
+          tira
+          titulo={filtros.turno ? `Viendo solo ${filtros.turno}` : 'Guardias por turno'}
+          ayuda={
+            filtros.turno
+              ? `${servicios.length} servicio(s) tienen guardias en ${filtros.turno}. La tabla ya está filtrada; toca el turno otra vez para verlos todos.`
+              : `Cada renglón de la tabla muestra, debajo del total, en qué horario está cada guardia. La modalidad más numerosa es ${reparto.turnos[0].turno} con ${formatNumber(
+                  reparto.turnos[0].guardias
+                )} guardias (${reparto.turnos[0].pct}%). Toca un turno para ver solo esos servicios.`
+          }
+        />
+      )}
+
       <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[1100px]">
@@ -185,7 +227,21 @@ export default function EstadoFuerza({ searchParams }) {
                   <td className="px-3 py-2 text-slate-400 truncate max-w-[220px]">{s.razon_social || '—'}</td>
                   <td className="px-3 py-2 text-slate-400">{s.zona || '—'}</td>
                   <td className="px-3 py-2 text-slate-400 truncate max-w-[150px]">{s.asesor || '—'}</td>
-                  <td className="px-3 py-2 text-right text-white">{s.total_guardias}</td>
+                  <td className="px-3 py-2 text-right">
+                    <span className="text-white tabular-nums">{s.total_guardias}</span>
+                    {/* El total no dice cómo está armada la plantilla: doce en
+                        24 HRS y doce en 12X12 son la misma cifra y dos
+                        operaciones distintas. */}
+                    {Object.keys(s.turnos || {}).length > 0 ? (
+                      <span className="block text-[11px] text-slate-500 whitespace-nowrap">
+                        {Object.entries(s.turnos)
+                          .map(([t, n]) => `${t}: ${n}`)
+                          .join(' · ')}
+                      </span>
+                    ) : (
+                      <span className="block text-[11px] text-amber-300/70">sin desglose</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right text-slate-300">
                     {s.importe_factura ? formatCurrency(s.importe_factura) : '—'}
                   </td>

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, hoyLocal } from '@/lib/utils';
 
 const campo =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-cyan-500';
@@ -53,7 +53,7 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
     setDatos({
       // Sin condiciones capturadas no hay fecha que proponer, así que se ofrece
       // la de hoy: es un punto de partida, no una suposición sobre el negocio.
-      fecha_factura: f.fecha || new Date().toISOString().slice(0, 10),
+      fecha_factura: f.fecha || hoyLocal(),
       importe: f.importe ? String(f.importe) : '',
       folio: '',
     });
