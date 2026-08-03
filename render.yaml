@@ -1,0 +1,44 @@
+# Receta de instalación para Render.
+#
+# Con este archivo en el repositorio, Render no pregunta casi nada: lee de aquí
+# qué construir, cómo arrancar y —lo más importante— que necesita un disco que
+# no se borre entre actualizaciones. Ahí vive la base de datos.
+#
+# Si algún día se cambia de proveedor, el Dockerfile de al lado sirve para
+# cualquier otro (Railway, Fly, un servidor propio).
+
+services:
+  - type: web
+    name: ultra-guardias
+    runtime: node
+    # Tiene que ser un plan de paga: los gratuitos no admiten disco y se
+    # duermen solos, y una plataforma de trabajo no puede tardar un minuto en
+    # despertar cuando alguien entra a capturar.
+    plan: starter
+    region: oregon
+    # Sin `branch`: Render usa la rama que se elija al conectar el repositorio.
+
+    buildCommand: npm ci && npm run build
+
+    # La siembra corre en cada arranque a propósito: la primera vez carga el
+    # Estado de Fuerza y crea al administrador; de ahí en adelante ve que la
+    # base ya tiene servicios y no toca nada. Así una actualización nunca
+    # puede borrar la operación.
+    startCommand: node scripts/seed.mjs && npm run start
+
+    healthCheckPath: /login
+
+    disk:
+      name: datos
+      mountPath: /var/data
+      sizeGB: 1
+
+    envVars:
+      - key: DATABASE_PATH
+        value: /var/data/ultra.db
+      - key: NODE_VERSION
+        value: "20"
+      # Se pide al instalar y no se guarda en el repositorio: es la contraseña
+      # prestada con la que el administrador entra la primera vez.
+      - key: SEED_PASSWORD
+        sync: false
