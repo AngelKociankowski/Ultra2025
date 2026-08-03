@@ -358,10 +358,29 @@ describe('la lista de lo que falta facturar', () => {
     assert.equal(suyas.reduce((a, f) => a + f.importe, 0), 100000);
   });
 
-  test('los servicios sin esquema se apartan en vez de colarse con una fecha inventada', async () => {
+  test('un servicio sin condiciones también se puede facturar: entra sin fecha propuesta', async () => {
     const lista = await pendientes('2026-08');
     assert.ok(lista.sinCondiciones.length > 0, 'los de la carga inicial no traen esquema');
-    assert.ok(lista.sinCondiciones.every((s) => s.servicio && s.id));
+
+    const suelto = lista.porFacturar.find((f) => f.sinCondiciones);
+    assert.ok(suelto, 'tiene que aparecer en la lista, no apartado de ella');
+    assert.equal(suelto.fecha, null, 'sin esquema no hay fecha que proponer');
+    assert.equal(suelto.concepto, 'Mes completo');
+
+    // y facturarlo funciona capturando la fecha a mano
+    const r = await facturar(suelto.servicio_id, {
+      periodo: '2026-08',
+      concepto: suelto.concepto,
+      fecha_factura: '2026-08-31',
+      importe: 12345,
+    });
+    assert.equal(r.status, 201, r.texto);
+
+    const despues = await pendientes('2026-08');
+    assert.ok(
+      !despues.porFacturar.some((f) => f.servicio_id === suelto.servicio_id),
+      'ya facturado, sale de la lista'
+    );
   });
 
   test('no existe una vía para facturarlo todo de golpe', async () => {
@@ -549,6 +568,78 @@ describe('cancelar una factura mal registrada', () => {
     });
     assert.equal(r.status, 400);
     assert.match(r.json.error, /pagos registrados/);
+  });
+});
+
+describe('el archivo de la factura', () => {
+  /** Un PDF mínimo pero válido: empieza con la firma que trae cualquier PDF. */
+  const PDF = Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n%%EOF\n');
+
+  async function subir(cliente, facturaId, { nombre = 'factura.pdf', tipo = 'application/pdf', datos = PDF } = {}) {
+    const form = new FormData();
+    form.append('archivo', new Blob([datos], { type: tipo }), nombre);
+    // sin Content-Type propio: lo pone fetch con su frontera
+    const r = await fetch(`${app.base}/api/facturas/${facturaId}/archivo`, {
+      method: 'POST',
+      headers: { cookie: cliente.cookie },
+      body: form,
+      redirect: 'manual',
+    });
+    const texto = await r.text();
+    let json = null;
+    try { json = JSON.parse(texto); } catch { /* html */ }
+    return { status: r.status, json, texto };
+  }
+
+  let facturaId;
+
+  test('se adjunta el PDF a una factura ya registrada', async () => {
+    const id = await abrir('COBRANZA CON PDF', { dias_credito: 30 });
+    const alta = await facturar(id, { periodo: '2026-07', fecha_factura: HOY, importe: 90000 });
+    assert.equal(alta.status, 201);
+    facturaId = alta.json.id;
+
+    const r = await subir(finanzas, facturaId, { nombre: 'A-1234.pdf' });
+    assert.equal(r.status, 201, r.texto);
+    assert.equal(r.json.archivo_nombre, 'A-1234.pdf');
+
+    const { facturas } = await cobranza(id);
+    assert.ok(facturas[0].archivo, 'la factura queda con su archivo');
+    assert.equal(facturas[0].archivo_tipo, 'application/pdf');
+  });
+
+  test('se descarga con el nombre con el que se subió', async () => {
+    const r = await fetch(`${app.base}/api/facturas/${facturaId}/archivo`, {
+      headers: { cookie: ventas.cookie },
+    });
+    assert.equal(r.status, 200, 'consultar el respaldo es de cualquier rol');
+    assert.equal(r.headers.get('content-type'), 'application/pdf');
+    assert.match(r.headers.get('content-disposition'), /attachment; filename="A-1234\.pdf"/);
+    const cuerpo = Buffer.from(await r.arrayBuffer());
+    assert.ok(cuerpo.subarray(0, 5).toString() === '%PDF-', 'llega el archivo tal cual');
+  });
+
+  test('solo entran PDF y XML', async () => {
+    const r = await subir(finanzas, facturaId, {
+      nombre: 'virus.exe',
+      tipo: 'application/x-msdownload',
+      datos: Buffer.from('MZ...'),
+    });
+    assert.equal(r.status, 400);
+    assert.match(r.json.error, /PDF o XML/);
+  });
+
+  test('ventas no sube archivos', async () => {
+    const r = await subir(ventas, facturaId);
+    assert.equal(r.status, 403);
+  });
+
+  test('una factura sin archivo lo dice, no truena', async () => {
+    const id = await abrir('COBRANZA SIN PDF', { dias_credito: 15 });
+    const alta = await facturar(id, { periodo: '2026-07', fecha_factura: HOY, importe: 1000 });
+    const r = await ventas.pedir(`/api/facturas/${alta.json.id}/archivo`);
+    assert.equal(r.status, 404);
+    assert.match(r.json.error, /no tiene archivo/);
   });
 });
 

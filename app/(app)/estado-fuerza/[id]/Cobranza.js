@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
+import ArchivoFactura from '@/components/ArchivoFactura';
 
 const input =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
@@ -268,6 +269,7 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
               <th className="text-right pb-2 px-2">Pagado</th>
               <th className="text-right pb-2 px-2">Saldo</th>
               <th className="text-center pb-2 px-2">Estado</th>
+              <th className="text-left pb-2 px-2">Factura</th>
               <th className="text-right pb-2 pl-2">Acciones</th>
             </tr>
           </thead>
@@ -302,6 +304,9 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
                     <span className="block text-[11px] text-slate-500 max-w-[160px]">{f.motivo_cancelacion}</span>
                   )}
                 </td>
+                <td className="px-2 py-2">
+                  <ArchivoFactura factura={f} puedeSubir={puedeFacturar} />
+                </td>
                 <td className="px-2 py-2 text-right whitespace-nowrap">
                   {puedeFacturar && f.saldo > 0 && (
                     <button
@@ -327,7 +332,7 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
 
             {facturas.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-6 text-center text-slate-500">
+                <td colSpan={9} className="py-6 text-center text-slate-500">
                   Todavía no se le ha facturado nada a este servicio por la plataforma.
                 </td>
               </tr>

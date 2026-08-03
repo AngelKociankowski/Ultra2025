@@ -221,6 +221,14 @@ conservan el que tenían. Esa era la condición cuando se cobró.
   pueden proponer, porque les falta capturar cuándo se les factura, se apartan a la vista
   en vez de desaparecer en silencio. Debajo va **Ya facturado**, con lo emitido de ese
   mismo mes: las dos listas contestan la misma pregunta desde lados opuestos.
+- **Buscar el cliente** filtra la lista por nombre, razón social, zona o asesor —sin
+  acentos y sin importar mayúsculas—, porque con doscientos servicios no se factura
+  recorriendo la tabla.
+- **El PDF de la factura** se adjunta al registrarla o después, desde el renglón. Se
+  aceptan PDF y XML (el CFDI y su representación impresa), hasta 10 MB. Se guardan en el
+  disco, junto a la base; en la tabla solo va el nombre. Van aparte del registro a
+  propósito: el papel casi nunca llega al mismo tiempo que la factura, y el saldo no
+  puede esperar a un archivo.
 - **Registrar un pago** admite abonos parciales y nunca cobra de más que el saldo.
 - **Cancelar una factura** mal registrada la deja marcada con su motivo y fuera del saldo;
   no la borra, y no se puede si ya tiene pagos. Solo el administrador.

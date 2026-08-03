@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils';
+import ArchivoFactura from '@/components/ArchivoFactura';
 
 const TONO = {
   PAGADA: 'bg-emerald-500/20 text-emerald-300',
@@ -15,7 +16,7 @@ const TONO = {
  * pregunta desde lados opuestos, y tenerlas separadas obligaba a recordar de
  * memoria qué se había emitido para saber si un pendiente era real.
  */
-export default function Emitidas({ periodo, facturas }) {
+export default function Emitidas({ periodo, facturas, puedeSubir }) {
   const vivas = facturas.filter((f) => !f.cancelada);
   const total = vivas.reduce((a, f) => a + f.importe, 0);
   const cobrado = vivas.reduce((a, f) => a + (Number(f.importe_pagado) || 0), 0);
@@ -45,7 +46,8 @@ export default function Emitidas({ periodo, facturas }) {
               <th className="text-left px-3 py-3">Vence</th>
               <th className="text-right px-3 py-3">Importe</th>
               <th className="text-right px-3 py-3">Saldo</th>
-              <th className="text-center px-4 py-3">Estado</th>
+              <th className="text-center px-3 py-3">Estado</th>
+              <th className="text-left px-4 py-3">Factura</th>
             </tr>
           </thead>
           <tbody>
@@ -81,16 +83,19 @@ export default function Emitidas({ periodo, facturas }) {
                 <td className="px-3 py-2 text-right text-slate-200 tabular-nums">
                   {f.saldo ? formatCurrency(f.saldo) : '—'}
                 </td>
-                <td className="px-4 py-2 text-center">
+                <td className="px-3 py-2 text-center">
                   <span className={`text-[11px] px-1.5 py-0.5 rounded ${TONO[f.estado]}`}>{f.estado}</span>
                   {f.parcial && <span className="block text-[11px] text-slate-500">pago parcial</span>}
+                </td>
+                <td className="px-4 py-2">
+                  <ArchivoFactura factura={f} puedeSubir={puedeSubir} />
                 </td>
               </tr>
             ))}
 
             {facturas.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                   Todavía no se ha emitido ninguna factura de {periodo}.
                 </td>
               </tr>

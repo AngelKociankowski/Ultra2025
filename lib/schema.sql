@@ -320,6 +320,14 @@ CREATE TABLE IF NOT EXISTS facturas (
   -- suceder de lo que le contaron que ya había pasado.
   carga_inicial     INTEGER NOT NULL DEFAULT 0,
 
+  -- El PDF (o el XML del CFDI) de la factura, guardado en el disco junto a la
+  -- base. En la tabla solo va el nombre con el que se guardó y el que traía el
+  -- archivo, para poder devolverlo llamándose como el usuario lo conoce.
+  archivo           TEXT,
+  archivo_nombre    TEXT,
+  archivo_tipo      TEXT,
+  archivo_bytes     INTEGER,
+
   creado_por        INTEGER REFERENCES usuarios(id),
   creado_en         TEXT NOT NULL DEFAULT (datetime('now')),
 
