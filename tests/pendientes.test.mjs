@@ -140,17 +140,19 @@ describe('quién puede aplicarlas', () => {
 });
 
 describe('la pantalla lo dice', () => {
-  test('avisa cuántas aperturas no están sumando y ofrece el botón', async () => {
+  test('el aviso está en la pantalla, se abra el mes que se abra', async () => {
     const html = (await admin.pedir('/aperturas')).texto;
     assert.match(html, /sin aplicar/i);
-    assert.match(html, /Pendiente/);
     assert.match(html, /no están sumando/i);
+    assert.match(html, /Ver solo las pendientes/);
   });
 
-  test('se pueden ver solo las pendientes, que son las viejas y no caben en la lista completa', async () => {
+  test('el atajo las junta todas, que es donde aparece el botón', async () => {
+    // Son casi todas viejas, así que pedirlas salta el corte por mes y muestra
+    // el histórico: buscarlas mes por mes sería el trabajo que esto ahorra.
     const r = await admin.pedir('/aperturas?pendientes=1');
     assert.equal(r.status, 200);
-    assert.match(r.texto, /Ver todas/);
+    assert.match(r.texto, /Volver al mes/);
     assert.match(r.texto, /Pendiente · Aplicar/);
   });
 
