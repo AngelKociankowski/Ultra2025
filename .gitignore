@@ -13,3 +13,7 @@ npm-debug.log*
 data/ultra.db
 data/ultra.db-wal
 data/ultra.db-shm
+
+# respaldos generados por la plataforma
+data/respaldos/
+data/archivos/
