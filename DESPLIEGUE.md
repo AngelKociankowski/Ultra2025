@@ -111,8 +111,19 @@ candado.
 - **No borres el disco** del servicio. Ahí viven la base de datos y los PDF de las
   facturas. Un giga alcanza para unos años de operación; si algún día se llena, se
   agranda desde Render sin perder nada.
-- **Respaldo:** cada mes, descarga desde *Estado de fuerza* el CSV del corte.
-  Es tu copia legible fuera del sistema.
+- **Respaldos:** la plataforma hace uno solo, todos los días, y los guarda en el
+  mismo disco (pestaña **Respaldos**, solo el administrador). Eso te cubre de un
+  error de captura o de una carga que salió mal. Lo que NO te cubre es que el
+  servidor se pierda, porque esas copias se irían con él: para eso, **bájate un
+  respaldo a tu computadora cada semana** con el botón *Bajar el último*. Es un
+  .zip con la base entera y los PDF de las facturas, y se abre con doble clic.
+  El tablero te avisa si el último respaldo se pasa de dos días.
+- **Volver atrás:** desde la misma pantalla, *Restaurar…*. Deja la plataforma
+  como estaba el día de ese respaldo y guarda antes una copia de cómo está
+  ahorita, por si la restauración fue el error.
+- **Copia legible:** además, cada mes puedes descargar desde *Estado de fuerza*
+  el CSV del corte. No sustituye al respaldo —no sirve para restaurar—, pero se
+  abre en Excel sin la plataforma de por medio.
 - **Actualizaciones:** cualquier cambio que se suba a GitHub, Render lo publica
   solo. La base no se toca: la siembra revisa si ya hay servicios cargados y no
   hace nada cuando los hay.

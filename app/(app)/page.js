@@ -12,6 +12,7 @@ import {
   ultimosMovimientos,
 } from '@/lib/queries';
 import { kpisCobranza } from '@/lib/facturacion';
+import { estado as estadoRespaldos } from '@/lib/respaldos';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import MovimientosChart from '@/components/MovimientosChart';
 import RepartoTurnos from '@/components/RepartoTurnos';
@@ -54,6 +55,10 @@ export default function Tablero() {
 
   const netoTotal = movimientos.reduce((a, m) => a + m.neto, 0);
 
+  // Un respaldo que dejó de correr no se nota por sí solo: nada falla, nada se
+  // ve distinto, y el día que hace falta ya es tarde. Por eso se avisa aquí.
+  const respaldos = puede(usuario.rol, 'respaldos') ? estadoRespaldos() : null;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -82,6 +87,24 @@ export default function Tablero() {
           )}
         </div>
       </div>
+
+      {respaldos && !respaldos.alDia && (
+        <Link
+          href="/respaldos"
+          className="block bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3 hover:bg-amber-500/15"
+        >
+          <p className="text-sm text-amber-300 font-semibold">
+            {respaldos.ultimo
+              ? `El último respaldo es de hace ${respaldos.dias} días`
+              : 'Todavía no hay ningún respaldo de la plataforma'}
+          </p>
+          <p className="text-xs text-amber-400 mt-0.5">
+            {respaldos.ultimo
+              ? 'El respaldo automático se está atrasando. Entra a Respaldos, haz uno y bájatelo.'
+              : 'Entra a Respaldos, haz el primero y guárdalo fuera del servidor. Hasta entonces no hay a dónde volver.'}
+          </p>
+        </Link>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
         <Kpi titulo="Servicios activos" valor={formatNumber(k.servicios)} icono="🏢" />
