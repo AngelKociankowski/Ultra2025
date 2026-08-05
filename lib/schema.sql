@@ -84,6 +84,15 @@ CREATE TABLE IF NOT EXISTS servicios (
   fecha_vencimiento_contrato TEXT,
   condiciones_comerciales    TEXT,
   comentarios_contrato       TEXT,
+  -- El PDF del contrato firmado. Vive en el disco junto a la base, igual que
+  -- los CFDI: aquí solo queda el nombre con el que se guardó. «Sí tiene
+  -- contrato» sin poder enseñarlo obliga a ir a buscarlo a un cajón, que es
+  -- justo lo que esta plataforma existe para evitar.
+  contrato_archivo           TEXT,
+  contrato_archivo_nombre    TEXT,
+  contrato_archivo_tipo      TEXT,
+  contrato_archivo_bytes     INTEGER,
+  contrato_archivo_subido_en TEXT,
 
   -- trazabilidad
   apertura_id                INTEGER REFERENCES aperturas(id),
@@ -403,3 +412,38 @@ CREATE TABLE IF NOT EXISTS comentarios (
 );
 
 CREATE INDEX IF NOT EXISTS idx_comentarios_servicio ON comentarios(servicio_id, id DESC);
+
+-- ---------------------------------------------------- historial de precios
+-- Cada año se le sube el precio al cliente, y no a todos en el mismo mes: cada
+-- servicio trae el suyo (`servicios.mes_incremento`) desde que se contrató.
+--
+-- Aquí queda el rastro de cada movimiento de precio: de cuánto a cuánto, desde
+-- qué mes aplica, con qué criterio y quién lo hizo. Sin esto, dentro de un año
+-- la única respuesta a «¿por qué este cliente paga esto?» sería el importe que
+-- quedó en la ficha, que no explica nada.
+--
+-- El precio vigente sigue viviendo en `servicios` —es lo que se consulta mil
+-- veces al día—; esta tabla es la memoria, no la fuente.
+CREATE TABLE IF NOT EXISTS precios_historial (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  servicio_id       INTEGER NOT NULL REFERENCES servicios(id),
+  -- PORCENTAJE / MONTO / IMPORTE: cómo se pidió el cambio.
+  -- MANUAL: alguien editó el importe desde la ficha del servicio.
+  tipo              TEXT NOT NULL CHECK (tipo IN ('PORCENTAJE','MONTO','IMPORTE','MANUAL')),
+  porcentaje        REAL,               -- el % efectivo, calculado siempre
+  vigente_desde     TEXT,               -- AAAA-MM a partir del cual se cobra así
+  motivo            TEXT,
+  -- agrupa los renglones de una misma aplicación masiva
+  lote              TEXT,
+  importe_anterior  REAL,
+  importe_nuevo     REAL,
+  sin_iva_anterior  REAL,
+  sin_iva_nuevo     REAL,
+  precio_anterior   REAL,
+  precio_nuevo      REAL,
+  usuario_id        INTEGER REFERENCES usuarios(id),
+  usuario           TEXT,
+  creado_en         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_precios_servicio ON precios_historial(servicio_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_precios_lote ON precios_historial(lote);

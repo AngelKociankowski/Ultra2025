@@ -115,7 +115,7 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
   const sinCondiciones = !servicio.esquema_facturacion;
 
   return (
-    <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5 space-y-4">
+    <section id="cobranza" className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5 space-y-4 scroll-mt-20">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-white">Cobranza</h2>

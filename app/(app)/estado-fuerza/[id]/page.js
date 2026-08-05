@@ -9,9 +9,11 @@ import { mesActual } from '@/lib/fechas';
 import { ESQUEMAS, facturasDeServicio, resumenDe, programaDe } from '@/lib/facturacion';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { listarComentarios } from '@/lib/comentarios';
+import { historialDe, estadoDeAumento, ETIQUETA_ESTADO } from '@/lib/precios';
 import EditorServicio from './EditorServicio';
 import Comentarios from './Comentarios';
 import CorreccionServicio from './CorreccionServicio';
+import ArchivoContrato from './ArchivoContrato';
 import Cobranza from './Cobranza';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +33,8 @@ export default function DetalleServicio({ params }) {
   if (!s) notFound();
 
   const comentarios = listarComentarios(s.id);
+  const precios = historialDe(s.id);
+  const aumento = estadoDeAumento(s);
 
   const cat = {
     ...opciones(),
@@ -173,7 +177,7 @@ export default function DetalleServicio({ params }) {
           </dl>
         </section>
 
-        <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
+        <section id="contrato" className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5 scroll-mt-20">
           <h2 className="text-base font-semibold text-white mb-3">Contrato</h2>
           <dl className="grid grid-cols-2 gap-3">
             <Dato etiqueta="Cuenta con contrato" valor={s.tiene_contrato ? 'Sí' : 'No'} />
@@ -184,8 +188,98 @@ export default function DetalleServicio({ params }) {
           {s.comentarios_contrato && (
             <p className="text-xs text-slate-400 mt-3 bg-slate-900/50 rounded-lg p-2">{s.comentarios_contrato}</p>
           )}
+          <ArchivoContrato
+            servicioId={s.id}
+            archivo={s.contrato_archivo}
+            nombre={s.contrato_archivo_nombre}
+            bytes={s.contrato_archivo_bytes}
+            subidoEn={s.contrato_archivo_subido_en}
+            puedeEditar={puede(usuario.rol, 'editar_contrato')}
+          />
         </section>
       </div>
+
+      {/* El precio del cliente y por qué está donde está. Vive junto a la
+          cobranza porque es la pregunta que nace al ver una factura: «¿este
+          importe de dónde salió?». */}
+      <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-700/50 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold text-white">Precio y su historia</h2>
+            <p className="text-xs text-slate-500">
+              Revisión anual{' '}
+              {s.mes_incremento ? (
+                <>
+                  en <strong className="text-slate-400">{s.mes_incremento}</strong>
+                </>
+              ) : (
+                <span className="text-amber-400/80">sin mes anotado</span>
+              )}
+              {s.anio_ultimo_incremento && ` · la última fue en ${s.anio_ultimo_incremento}`} ·{' '}
+              <span className={aumento === 'vencido' ? 'text-red-400' : 'text-slate-400'}>
+                {ETIQUETA_ESTADO[aumento]}
+              </span>
+            </p>
+          </div>
+          {puede(usuario.rol, 'precios') && s.estatus === 'ACTIVO' && (
+            <Link
+              href={`/precios?q=${encodeURIComponent(s.servicio)}`}
+              className="text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-2 whitespace-nowrap"
+            >
+              🏷️ Cambiar el precio
+            </Link>
+          )}
+        </div>
+        {precios.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-slate-500">
+            Todavía no se le ha movido el precio desde la plataforma. El importe de la ficha es el que se trajo del
+            archivo.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead className="bg-slate-900/60">
+                <tr className="text-slate-400 text-xs">
+                  <th className="text-left px-4 py-3">Se cobra así desde</th>
+                  <th className="text-right px-3 py-3">Antes</th>
+                  <th className="text-right px-3 py-3">Después</th>
+                  <th className="text-right px-3 py-3">Cambio</th>
+                  <th className="text-left px-3 py-3">Motivo</th>
+                  <th className="text-left px-4 py-3">Quién</th>
+                </tr>
+              </thead>
+              <tbody>
+                {precios.map((h) => (
+                  <tr key={h.id} className="border-t border-slate-800/70">
+                    <td className="px-4 py-2 text-slate-300">
+                      {h.vigente_desde || '—'}
+                      <span className="block text-[11px] text-slate-500">
+                        {h.tipo === 'MANUAL' ? 'editado en la ficha' : 'aumento aplicado'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-400">
+                      {h.importe_anterior ? formatCurrency(h.importe_anterior) : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-200">
+                      {h.importe_nuevo ? formatCurrency(h.importe_nuevo) : '—'}
+                    </td>
+                    <td
+                      className={`px-3 py-2 text-right ${(h.porcentaje || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                    >
+                      {h.porcentaje == null ? '—' : `${h.porcentaje >= 0 ? '+' : ''}${h.porcentaje}%`}
+                    </td>
+                    <td className="px-3 py-2 text-slate-500 text-xs">{h.motivo || '—'}</td>
+                    <td className="px-4 py-2 text-slate-500 text-xs">
+                      {h.usuario || 'sistema'}
+                      <span className="block">{(h.creado_en || '').slice(0, 10)}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <Cobranza
         servicio={s}
