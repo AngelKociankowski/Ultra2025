@@ -19,7 +19,7 @@ export const GET = conPermiso('ver', async (request, { params }) => {
   return NextResponse.json({ comentarios: listarComentarios(params.id) });
 });
 
-export const POST = conPermiso('ver', async (request, { params, usuario }) => {
+export const POST = conPermiso('comentar', async (request, { params, usuario }) => {
   const { texto } = await leerJson(request);
   const comentario = agregarComentario(params.id, texto, usuario);
   return NextResponse.json({ comentario }, { status: 201 });
