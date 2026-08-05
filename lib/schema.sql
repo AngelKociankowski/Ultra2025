@@ -84,6 +84,15 @@ CREATE TABLE IF NOT EXISTS servicios (
   fecha_vencimiento_contrato TEXT,
   condiciones_comerciales    TEXT,
   comentarios_contrato       TEXT,
+  -- El PDF del contrato firmado. Vive en el disco junto a la base, igual que
+  -- los CFDI: aquí solo queda el nombre con el que se guardó. «Sí tiene
+  -- contrato» sin poder enseñarlo obliga a ir a buscarlo a un cajón, que es
+  -- justo lo que esta plataforma existe para evitar.
+  contrato_archivo           TEXT,
+  contrato_archivo_nombre    TEXT,
+  contrato_archivo_tipo      TEXT,
+  contrato_archivo_bytes     INTEGER,
+  contrato_archivo_subido_en TEXT,
 
   -- trazabilidad
   apertura_id                INTEGER REFERENCES aperturas(id),

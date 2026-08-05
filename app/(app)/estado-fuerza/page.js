@@ -12,8 +12,11 @@ import {
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { gruposEditables } from '@/lib/rbac';
 import { conteoComentarios } from '@/lib/comentarios';
+import { facturasDelPeriodoPorServicio, numerosDelHistorico, idsPorNombre } from '@/lib/facturacion';
 import Filtros from './Filtros';
 import RepartoTurnos from '@/components/RepartoTurnos';
+import CeldaFactura from '@/components/CeldaFactura';
+import CeldaContrato from '@/components/CeldaContrato';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,9 +83,17 @@ export default function EstadoFuerza({ searchParams }) {
   const notas = esCorte ? new Map() : conteoComentarios();
   const grupos = gruposEditables(usuario.rol);
 
+  // El número de factura y el contrato se resuelven de una vez para toda la
+  // tabla: una consulta agrupada, no una por renglón.
+  const facturasDelMes = facturasDelPeriodoPorServicio(esCorte ? pedido : vigente);
+  const numerosViejos = esCorte ? new Map() : numerosDelHistorico();
+  // En un corte, el renglón es del snapshot y no trae el id del servicio: se
+  // resuelve por nombre, y solo cuando ese nombre no se repite.
+  const idDe = esCorte ? idsPorNombre() : null;
+  const servicioIdDe = (s) => (esCorte ? idDe.get(s.servicio) ?? null : s.id);
+
   const totalGuardias = servicios.reduce((a, s) => a + (s.total_guardias || 0), 0);
   const totalFactura = servicios.reduce((a, s) => a + (s.importe_factura || 0), 0);
-  const facturadoDe = (s) => (esCorte ? s.importe_factura > 0 : s.facturado);
 
   /**
    * Los cortes de 2023 y algunos de 2024 no traen la facturación capturada por
@@ -181,7 +192,7 @@ export default function EstadoFuerza({ searchParams }) {
 
       <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[1100px]">
+          <table className="w-full text-sm min-w-[1280px]">
             <thead className="bg-slate-900/60">
               <tr className="text-slate-400 text-xs">
                 <th className="text-left px-4 py-3">Servicio</th>
@@ -190,10 +201,9 @@ export default function EstadoFuerza({ searchParams }) {
                 <th className="text-left px-3 py-3">Zona</th>
                 <th className="text-left px-3 py-3">Asesor</th>
                 <th className="text-right px-3 py-3">Guardias</th>
-                <th className="text-right px-3 py-3">Factura</th>
-                <th className="text-center px-3 py-3">Facturado</th>
-                <th className="text-center px-3 py-3">Contrato</th>
-                <th className="text-left px-3 py-3">Vence</th>
+                <th className="text-right px-3 py-3">Importe</th>
+                <th className="text-left px-3 py-3">Factura</th>
+                <th className="text-left px-3 py-3">Contrato</th>
                 <th className="text-center px-3 py-3">{esCorte ? 'Cobranza' : 'Estatus'}</th>
               </tr>
             </thead>
@@ -245,9 +255,28 @@ export default function EstadoFuerza({ searchParams }) {
                   <td className="px-3 py-2 text-right text-slate-300">
                     {s.importe_factura ? formatCurrency(s.importe_factura) : '—'}
                   </td>
-                  <td className="px-3 py-2 text-center">{facturadoDe(s) ? '✅' : '⛔'}</td>
-                  <td className="px-3 py-2 text-center">{s.tiene_contrato ? '✅' : '⛔'}</td>
-                  <td className="px-3 py-2 text-slate-500 text-xs">{s.fecha_vencimiento_contrato || '—'}</td>
+                  <td className="px-3 py-2">
+                    <CeldaFactura
+                      servicioId={servicioIdDe(s)}
+                      factura={facturasDelMes.get(servicioIdDe(s))}
+                      historico={
+                        esCorte
+                          ? s.factura_mensual
+                            ? { numero: String(s.factura_mensual).trim(), periodo: pedido }
+                            : null
+                          : numerosViejos.get(s.id)
+                      }
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <CeldaContrato
+                      servicioId={servicioIdDe(s)}
+                      tiene={!!s.tiene_contrato}
+                      archivo={esCorte ? null : s.contrato_archivo}
+                      nombre={s.contrato_archivo_nombre}
+                      vence={s.fecha_vencimiento_contrato}
+                    />
+                  </td>
                   <td className="px-3 py-2 text-center">
                     {esCorte ? (
                       <span className="text-xs text-slate-400">{s.status_cobranza || '—'}</span>

@@ -13,6 +13,7 @@ import { historialDe, estadoDeAumento, ETIQUETA_ESTADO } from '@/lib/precios';
 import EditorServicio from './EditorServicio';
 import Comentarios from './Comentarios';
 import CorreccionServicio from './CorreccionServicio';
+import ArchivoContrato from './ArchivoContrato';
 import Cobranza from './Cobranza';
 
 export const dynamic = 'force-dynamic';
@@ -176,7 +177,7 @@ export default function DetalleServicio({ params }) {
           </dl>
         </section>
 
-        <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
+        <section id="contrato" className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5 scroll-mt-20">
           <h2 className="text-base font-semibold text-white mb-3">Contrato</h2>
           <dl className="grid grid-cols-2 gap-3">
             <Dato etiqueta="Cuenta con contrato" valor={s.tiene_contrato ? 'Sí' : 'No'} />
@@ -187,6 +188,14 @@ export default function DetalleServicio({ params }) {
           {s.comentarios_contrato && (
             <p className="text-xs text-slate-400 mt-3 bg-slate-900/50 rounded-lg p-2">{s.comentarios_contrato}</p>
           )}
+          <ArchivoContrato
+            servicioId={s.id}
+            archivo={s.contrato_archivo}
+            nombre={s.contrato_archivo_nombre}
+            bytes={s.contrato_archivo_bytes}
+            subidoEn={s.contrato_archivo_subido_en}
+            puedeEditar={puede(usuario.rol, 'editar_contrato')}
+          />
         </section>
       </div>
 
