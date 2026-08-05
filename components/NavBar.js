@@ -69,8 +69,11 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
                 }`}
               >
                 {/* Los iconos son adorno: en la franja donde la barra va justa
-                    se quitan antes que cortar una pestaña. */}
-                <span className="mr-1.5 hidden xl:inline">{i.icono}</span>
+                    se quitan antes que cortar una pestaña. Aparecen hasta 2xl y
+                    no en xl: con la pestaña de jurídico, en 1280 los iconos y el
+                    nombre de la cuenta volvían los dos a la vez y la barra se
+                    pasaba 65 px. */}
+                <span className="mr-1.5 hidden 2xl:inline">{i.icono}</span>
                 {i.etiqueta}
               </Link>
             ))}
@@ -88,7 +91,7 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
                       : 'text-slate-400 hover:text-white hover:bg-slate-700/40'
                   }`}
                 >
-                  <span className="mr-1.5 hidden xl:inline">⚙</span>
+                  <span className="mr-1.5 hidden 2xl:inline">⚙</span>
                   Administrar
                   <span className="ml-1 text-[10px]">▾</span>
                 </button>
@@ -120,15 +123,15 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <TemaToggle />
             {/* El nombre lleva a la cuenta propia: ahí se cambia la contraseña.
-                Entre lg y xl se quita: es la única franja donde el menú completo
-                ya está desplegado pero la pantalla todavía no da para las dos
+                Entre lg y 2xl se quita: es la franja donde el menú completo ya
+                está desplegado pero la pantalla todavía no da para las dos
                 cosas, y las pestañas importan más que saber cómo te llamas. */}
             <Link
               href="/cuenta"
               title="Mi cuenta"
-              className="text-right hidden sm:block lg:hidden xl:block rounded-lg px-2 py-1 hover:bg-slate-700/40 transition-colors"
+              className="text-right hidden sm:block lg:hidden 2xl:block rounded-lg px-2 py-1 hover:bg-slate-700/40 transition-colors"
             >
-              <p className="text-sm text-white leading-tight whitespace-nowrap hidden xl:block">{usuario.nombre}</p>
+              <p className="text-sm text-white leading-tight whitespace-nowrap hidden 2xl:block">{usuario.nombre}</p>
               <span
                 className={`inline-block text-[10px] px-1.5 py-0.5 rounded border ${
                   COLOR_ROL[etiquetaRol] || 'bg-slate-700 text-slate-300 border-slate-600'
