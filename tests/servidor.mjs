@@ -9,6 +9,7 @@
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -49,8 +50,41 @@ function ejecutar(cmd, args, env) {
   });
 }
 
-async function esperar(url, intentos = 60) {
+/**
+ * Un puerto que el sistema operativo confirma libre, en lugar de uno al azar.
+ *
+ * Antes se elegía con Math.random() entre 3000 y 5000. Con catorce archivos de
+ * prueba levantando su propio servidor, tarde o temprano dos escogen el mismo:
+ * el segundo muere con EADDRINUSE, su `before` revienta y todas las pruebas de
+ * ese archivo salen canceladas. No falla ninguna —el reporte dice «fail 0»—
+ * pero la corrida termina en rojo, y el rojo no es del código.
+ *
+ * Pedirlo al sistema deja una carrera diminuta entre cerrar este socket y que
+ * Next abra el suyo; el reintento de abajo cubre ese resto.
+ */
+function puertoLibre() {
+  return new Promise((resolve, reject) => {
+    const s = net.createServer();
+    s.once('error', reject);
+    s.listen(0, '127.0.0.1', () => {
+      const { port } = s.address();
+      s.close(() => resolve(port));
+    });
+  });
+}
+
+/**
+ * Espera a que responda, y se rinde en cuanto el proceso muere.
+ *
+ * Sin mirar al proceso, un servidor que no arrancó costaba treinta segundos de
+ * reintentos contra un puerto donde ya no había nadie, y el error final no
+ * decía por qué.
+ */
+async function esperar(url, proc, intentos = 180) {
   for (let i = 0; i < intentos; i++) {
+    if (proc.exitCode !== null || proc.signalCode) {
+      throw new Error(`El servidor se cayó al arrancar (${proc.exitCode ?? proc.signalCode}): ${proc.salida.slice(-500)}`);
+    }
     try {
       const r = await fetch(url);
       if (r.status < 500) return;
@@ -65,28 +99,45 @@ async function esperar(url, intentos = 60) {
 export async function arrancar() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ultra-test-'));
   const dbPath = path.join(dir, 'prueba.db');
-  const puerto = 3000 + Math.floor(Math.random() * 2000);
-  const env = { DATABASE_PATH: dbPath, PORT: String(puerto), NODE_ENV: 'production' };
+  const envBase = { DATABASE_PATH: dbPath, NODE_ENV: 'production' };
 
-  await ejecutar('node', ['scripts/seed.mjs', '--reset'], env);
+  await ejecutar('node', ['scripts/seed.mjs', '--reset'], envBase);
 
   if (!fs.existsSync(path.join(RAIZ, '.next', 'BUILD_ID'))) {
     throw new Error('Falta compilar. Corre `npm run build` antes de las pruebas.');
   }
 
-  const proc = spawn('node', [path.join(RAIZ, 'node_modules', 'next', 'dist', 'bin', 'next'), 'start'], {
-    cwd: RAIZ,
-    env: { ...process.env, ...env },
-    stdio: 'ignore',
-  });
+  // Tres intentos: si el puerto se lo ganó otro entre que lo soltamos y que
+  // Next lo abre, se pide otro en lugar de tumbar el archivo entero.
+  let proc;
+  let base;
+  let ultimo;
+  for (let intento = 1; intento <= 3; intento++) {
+    const puerto = await puertoLibre();
+    const env = { ...envBase, PORT: String(puerto) };
+    proc = spawn('node', [path.join(RAIZ, 'node_modules', 'next', 'dist', 'bin', 'next'), 'start'], {
+      cwd: RAIZ,
+      env: { ...process.env, ...env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    // Se guarda la salida para que el error diga qué pasó y no solo que no hubo
+    // respuesta.
+    proc.salida = '';
+    proc.stdout.on('data', (d) => (proc.salida += d));
+    proc.stderr.on('data', (d) => (proc.salida += d));
 
-  const base = `http://127.0.0.1:${puerto}`;
-  try {
-    await esperar(`${base}/login`);
-  } catch (e) {
-    proc.kill('SIGKILL');
-    throw e;
+    base = `http://127.0.0.1:${puerto}`;
+    try {
+      await esperar(`${base}/login`, proc);
+      ultimo = null;
+      break;
+    } catch (e) {
+      ultimo = e;
+      proc.kill('SIGKILL');
+      proc = null;
+    }
   }
+  if (ultimo) throw ultimo;
 
   /** Cliente con cookies por sesión: cada rol se autentica por separado. */
   const cliente = (cookie = '') => ({

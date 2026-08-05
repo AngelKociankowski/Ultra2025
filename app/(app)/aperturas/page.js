@@ -24,7 +24,8 @@ export default function Aperturas({ searchParams }) {
   // Las que nunca llegaron al estado de fuerza son casi todas viejas, así que
   // pedirlas implica mirar el histórico completo y no un mes suelto.
   const soloPendientes = searchParams?.pendientes === '1';
-  const pedido = soloPendientes ? 'todo' : searchParams?.periodo || '';
+  const soloDescartadas = searchParams?.descartadas === '1';
+  const pedido = soloPendientes || soloDescartadas ? 'todo' : searchParams?.periodo || '';
   const todo = pedido === 'todo';
   const periodo = todo ? '' : /^\d{4}-\d{2}$/.test(pedido) ? pedido : mesActual();
   const anio = Number((periodo || pedido || mesActual()).slice(0, 4)) || Number(mesActual().slice(0, 4));
@@ -36,6 +37,7 @@ export default function Aperturas({ searchParams }) {
     tipo: searchParams?.tipo || '',
     q: searchParams?.q || '',
     sinAplicar: soloPendientes,
+    descartadas: soloDescartadas,
   });
   const neto = periodo ? netoDelPeriodo(periodo) : null;
 
@@ -45,8 +47,11 @@ export default function Aperturas({ searchParams }) {
   const conAviso = movimientos.map((m) => ({ ...m, vieja: !!corte && (m.periodo || '') <= corte }));
 
   const pendientes = db
-    .prepare('SELECT COUNT(*) AS n, COALESCE(SUM(guardias), 0) AS g FROM aperturas WHERE servicio_id IS NULL')
+    .prepare(
+      'SELECT COUNT(*) AS n, COALESCE(SUM(guardias), 0) AS g FROM aperturas WHERE servicio_id IS NULL AND descartada = 0'
+    )
     .get();
+  const descartadas = db.prepare('SELECT COUNT(*) AS n FROM aperturas WHERE descartada = 1').get().n;
 
   return (
     <div className="space-y-4">
@@ -78,17 +83,38 @@ export default function Aperturas({ searchParams }) {
             <p className="text-xs text-amber-400 max-w-3xl mt-0.5">
               Están anotadas, pero nunca se les creó el servicio, así que no aparecen en el estado de fuerza.
               {puedeAplicar
-                ? ' El botón Aplicar de cada renglón lo crea con los datos que la propia apertura ya trae. Revisa antes las viejas: si el servicio ya no opera, aplicarla lo daría de alta hoy.'
-                : ' Ventas, operaciones o el administrador pueden aplicarlas.'}
+                ? ' Aplicar crea el servicio con los datos que la propia apertura ya trae. Si el servicio ya no opera —casi todas son viejas—, Descartar la saca de esta cuenta sin borrarla del histórico.'
+                : ' Ventas, operaciones o el administrador pueden aplicarlas o descartarlas.'}
             </p>
           </div>
-          <Link
-            href={soloPendientes ? '/aperturas' : '/aperturas?pendientes=1'}
-            className="text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-lg px-3 py-2 whitespace-nowrap"
-          >
-            {soloPendientes ? 'Volver al mes' : 'Ver solo las pendientes'}
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={soloPendientes ? '/aperturas' : '/aperturas?pendientes=1'}
+              className="text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-lg px-3 py-2 whitespace-nowrap"
+            >
+              {soloPendientes ? 'Volver al mes' : 'Ver solo las pendientes'}
+            </Link>
+            {descartadas > 0 && (
+              <Link
+                href={soloDescartadas ? '/aperturas' : '/aperturas?descartadas=1'}
+                className="text-xs bg-slate-700/60 hover:bg-slate-700 text-slate-300 border border-slate-600/60 rounded-lg px-3 py-2 whitespace-nowrap"
+              >
+                {soloDescartadas ? 'Volver al mes' : `${formatNumber(descartadas)} descartadas`}
+              </Link>
+            )}
+          </div>
         </div>
+      )}
+
+      {pendientes.n === 0 && descartadas > 0 && (
+        // Cuando ya no queda ninguna pendiente el aviso de arriba desaparece, y
+        // con él la única puerta a las descartadas. Esta la deja abierta.
+        <p className="text-xs text-slate-500">
+          No queda ninguna apertura pendiente de aplicar ·{' '}
+          <Link href={soloDescartadas ? '/aperturas' : '/aperturas?descartadas=1'} className="text-cyan-400 hover:underline">
+            {soloDescartadas ? 'volver al mes' : `ver las ${formatNumber(descartadas)} descartadas`}
+          </Link>
+        </p>
       )}
 
       <BarraMeses
