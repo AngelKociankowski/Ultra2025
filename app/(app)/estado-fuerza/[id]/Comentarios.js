@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
  * Hilo de notas sobre un servicio. Cualquiera con sesión puede escribir; borrar
  * solo el autor o un administrador, y el servidor lo vuelve a comprobar.
  */
-export default function Comentarios({ servicioId, iniciales, usuarioId, esAdmin }) {
+export default function Comentarios({ servicioId, iniciales, usuarioId, esAdmin, puedeComentar = true }) {
   const router = useRouter();
   const [comentarios, setComentarios] = useState(iniciales);
   const [texto, setTexto] = useState('');
@@ -78,6 +78,14 @@ export default function Comentarios({ servicioId, iniciales, usuarioId, esAdmin 
         Lo que no cabe en un campo: acuerdos con el cliente, pendientes, avisos para el turno que sigue.
       </p>
 
+      {/* Un espectador lee las notas y no escribe ninguna: dejar el formulario
+          a la vista para que el servidor lo rechace después sería prometer algo
+          que no se puede hacer. */}
+      {!puedeComentar && (
+        <p className="text-xs text-slate-500 mb-4">Tu rol consulta los comentarios, no los escribe.</p>
+      )}
+
+      {puedeComentar && (
       <form onSubmit={enviar} className="space-y-2 mb-4">
         <textarea
           value={texto}
@@ -100,6 +108,7 @@ export default function Comentarios({ servicioId, iniciales, usuarioId, esAdmin 
           </button>
         </div>
       </form>
+      )}
 
       {error && (
         <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-3">

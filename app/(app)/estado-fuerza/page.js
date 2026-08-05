@@ -289,10 +289,18 @@ export default function EstadoFuerza({ searchParams }) {
                       <span className="text-xs text-slate-400">{s.status_cobranza || '—'}</span>
                     ) : (
                       <span
+                        title={
+                          s.estatus === 'SUSPENDIDO'
+                            ? `En pausa desde ${s.suspendido_desde || 'sin fecha'}${
+                                s.suspendido_motivo ? `: ${s.suspendido_motivo}` : ''
+                              }`
+                            : undefined
+                        }
                         className={`text-xs px-2 py-0.5 rounded ${
-                          s.estatus === 'ACTIVO'
-                            ? 'bg-emerald-500/20 text-emerald-300'
-                            : 'bg-slate-600/40 text-slate-400'
+                          {
+                            ACTIVO: 'bg-emerald-500/20 text-emerald-300',
+                            SUSPENDIDO: 'bg-amber-500/20 text-amber-300',
+                          }[s.estatus] || 'bg-slate-600/40 text-slate-400'
                         }`}
                       >
                         {s.estatus}
