@@ -246,7 +246,7 @@ describe('mirar es de todos, mover no', () => {
   test('a jurídico no se le ofrecen los botones de captura', async () => {
     const ap = comoSeLee((await juridico.pedir('/aperturas')).texto);
     assert.doesNotMatch(ap, /Nueva apertura/);
-    assert.doesNotMatch(ap, /Pendiente · Aplicar/);
+    assert.doesNotMatch(ap, />Aplicar</);
 
     const can = comoSeLee((await juridico.pedir('/cancelaciones')).texto);
     assert.doesNotMatch(can, /Movimiento de guardias/);

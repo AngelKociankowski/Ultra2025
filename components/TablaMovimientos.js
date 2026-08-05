@@ -4,7 +4,7 @@ import { Fragment, useState } from 'react';
 import Link from 'next/link';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { EXPEDIENTE_APERTURA, EXPEDIENTE_CANCELACION } from '@/lib/campos';
-import AplicarApertura from './AplicarApertura';
+import AccionesApertura from './AccionesApertura';
 
 const dinero = (v) => (v === null || v === undefined || v === '' ? null : formatCurrency(v));
 
@@ -110,17 +110,31 @@ export default function TablaMovimientos({ clase, movimientos, puedeAplicar = fa
                     </td>
                     <td className="px-4 py-2 text-xs">
                       {esApertura ? (
-                        f.estatus_servicio ? (
+                        puedeAplicar ? (
+                          <>
+                            {f.estatus_servicio && (
+                              <span
+                                className={`block mb-1 ${
+                                  f.estatus_servicio === 'ACTIVO' ? 'text-emerald-400' : 'text-slate-500'
+                                }`}
+                              >
+                                {f.estatus_servicio}
+                              </span>
+                            )}
+                            <AccionesApertura
+                              apertura={f}
+                              vieja={!!f.vieja}
+                              aplicada={!!f.servicio_id}
+                              descartada={!!f.descartada}
+                            />
+                          </>
+                        ) : f.estatus_servicio ? (
                           <span className={f.estatus_servicio === 'ACTIVO' ? 'text-emerald-400' : 'text-slate-500'}>
                             {f.estatus_servicio}
                           </span>
                         ) : (
-                          <span onClick={(e) => e.stopPropagation()}>
-                            {puedeAplicar ? (
-                              <AplicarApertura apertura={f} vieja={!!f.vieja} />
-                            ) : (
-                              <span className="text-amber-400/80">Sin aplicar</span>
-                            )}
+                          <span className={f.descartada ? 'text-slate-500' : 'text-amber-400/80'}>
+                            {f.descartada ? 'Descartada' : 'Sin aplicar'}
                           </span>
                         )
                       ) : (

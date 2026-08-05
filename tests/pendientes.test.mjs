@@ -153,12 +153,14 @@ describe('la pantalla lo dice', () => {
     const r = await admin.pedir('/aperturas?pendientes=1');
     assert.equal(r.status, 200);
     assert.match(r.texto, /Volver al mes/);
-    assert.match(r.texto, /Pendiente · Aplicar/);
+    assert.match(r.texto, />Aplicar</);
+    assert.match(r.texto, />Descartar</, 'y la salida para las que no se van a aplicar');
   });
 
-  test('a jurídico la pantalla le enseña el estado, no el botón', async () => {
+  test('a jurídico la pantalla le enseña el estado, no los botones', async () => {
     const html = (await juridico.pedir('/aperturas?pendientes=1')).texto;
     assert.match(html, /Sin aplicar/);
-    assert.doesNotMatch(html, /Pendiente · Aplicar/);
+    assert.doesNotMatch(html, />Aplicar</);
+    assert.doesNotMatch(html, />Descartar</);
   });
 });

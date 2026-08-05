@@ -145,6 +145,13 @@ CREATE TABLE IF NOT EXISTS aperturas (
   -- 1 = alta técnica de la carga inicial del Estado de Fuerza, no un movimiento
   -- real del mes; se excluye de las gráficas de aperturas vs cancelaciones.
   carga_inicial      INTEGER NOT NULL DEFAULT 0,
+  -- 1 = anotada pero decidida a no aplicarse nunca: el servicio ya no opera, se
+  -- capturó por error o quedó sin efecto. No se borra —el movimiento se anotó y
+  -- eso es parte del histórico— pero deja de contarse como pendiente.
+  descartada         INTEGER NOT NULL DEFAULT 0,
+  descartada_motivo  TEXT,
+  descartada_en      TEXT,
+  descartada_por     INTEGER REFERENCES usuarios(id),
   -- servicio_id destino: nuevo servicio (APERTURA) o existente (INCREMENTO)
   servicio_id        INTEGER REFERENCES servicios(id),
   creado_por         INTEGER REFERENCES usuarios(id),

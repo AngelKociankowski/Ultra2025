@@ -12,7 +12,7 @@ import {
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { gruposEditables } from '@/lib/rbac';
 import { conteoComentarios } from '@/lib/comentarios';
-import { facturasDelPeriodoPorServicio, numerosDelHistorico, idsPorNombre } from '@/lib/facturacion';
+import { facturasDelPeriodoPorServicio, numerosDelCorte, idsPorNombre } from '@/lib/facturacion';
 import Filtros from './Filtros';
 import RepartoTurnos from '@/components/RepartoTurnos';
 import CeldaFactura from '@/components/CeldaFactura';
@@ -85,8 +85,12 @@ export default function EstadoFuerza({ searchParams }) {
 
   // El número de factura y el contrato se resuelven de una vez para toda la
   // tabla: una consulta agrupada, no una por renglón.
-  const facturasDelMes = facturasDelPeriodoPorServicio(esCorte ? pedido : vigente);
-  const numerosViejos = esCorte ? new Map() : numerosDelHistorico();
+  // Siempre del periodo que se está viendo: la factura de mayo no es la de
+  // agosto, y enseñar «la última que hubo» haría que un mes sin facturar
+  // pareciera facturado.
+  const periodoTabla = esCorte ? pedido : vigente;
+  const facturasDelMes = facturasDelPeriodoPorServicio(periodoTabla);
+  const numerosDelMes = esCorte ? new Map() : numerosDelCorte(periodoTabla);
   // En un corte, el renglón es del snapshot y no trae el id del servicio: se
   // resuelve por nombre, y solo cuando ese nombre no se repite.
   const idDe = esCorte ? idsPorNombre() : null;
@@ -202,7 +206,9 @@ export default function EstadoFuerza({ searchParams }) {
                 <th className="text-left px-3 py-3">Asesor</th>
                 <th className="text-right px-3 py-3">Guardias</th>
                 <th className="text-right px-3 py-3">Importe</th>
-                <th className="text-left px-3 py-3">Factura</th>
+                {/* Con el mes en el encabezado, la columna no admite dudas: lo
+                    que hay debajo es la factura de ESE mes y de ningún otro. */}
+                <th className="text-left px-3 py-3">Factura de {nombreMes(periodoTabla)}</th>
                 <th className="text-left px-3 py-3">Contrato</th>
                 <th className="text-center px-3 py-3">{esCorte ? 'Cobranza' : 'Estatus'}</th>
               </tr>
@@ -264,8 +270,9 @@ export default function EstadoFuerza({ searchParams }) {
                           ? s.factura_mensual
                             ? { numero: String(s.factura_mensual).trim(), periodo: pedido }
                             : null
-                          : numerosViejos.get(s.id)
+                          : numerosDelMes.get(s.id)
                       }
+                      periodo={periodoTabla}
                     />
                   </td>
                   <td className="px-3 py-2">

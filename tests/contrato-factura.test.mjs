@@ -234,16 +234,32 @@ describe('la factura deja de ser una palomita', () => {
     assert.match(html, new RegExp(`/api/facturas/${factura.json.id}/archivo`));
   });
 
-  test('el número anotado en los cortes viejos también se enseña', async () => {
-    // 6,148 renglones del archivo traen su número de factura. No tienen PDF,
-    // pero saber con qué número se cobró vale más que un hueco.
-    const html = comoSeLee((await admin.pedir('/estado-fuerza')).texto);
-    assert.match(html, /del corte 20\d\d-\d\d/, 'debería salir al menos un número del histórico');
+  test('cada mes enseña SU factura, no la última que hubo', async () => {
+    // Un servicio facturado en julio y no en agosto tiene que decir «sin
+    // factura» en agosto. Si enseñara la de julio, un mes sin facturar
+    // parecería facturado y el número obligaría a preguntar de cuándo es.
+    const julio = comoSeLee((await admin.pedir('/estado-fuerza?periodo=2026-07')).texto);
+    const numero = julio.match(/>(CG\d+)</);
+    assert.ok(numero, 'julio tiene números de factura en su corte');
+
+    const agosto = comoSeLee((await admin.pedir('/estado-fuerza')).texto);
+    assert.doesNotMatch(
+      agosto,
+      new RegExp(`>${numero[1]}<`),
+      'el número de julio no puede aparecer en el mes en curso'
+    );
   });
 
   test('en un corte cerrado sale el número que ese mes tenía', async () => {
     const html = comoSeLee((await admin.pedir('/estado-fuerza?periodo=2026-07')).texto);
     assert.match(html, /CG\d+/, 'los números del corte de julio');
-    assert.match(html, /del corte 2026-07/);
+    assert.match(html, /del corte, sin PDF/);
+  });
+
+  test('un mes que no se facturó lo dice, aunque el anterior sí', async () => {
+    const html = comoSeLee((await admin.pedir('/estado-fuerza?periodo=2026-06')).texto);
+    // junio existe como corte; lo que se comprueba es que la columna se resuelve
+    // contra junio y no arrastra los números de julio
+    assert.doesNotMatch(html, /del corte 2026-07/);
   });
 });
