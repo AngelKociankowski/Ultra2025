@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   email         TEXT NOT NULL UNIQUE,
   nombre        TEXT NOT NULL,
-  rol           TEXT NOT NULL CHECK (rol IN ('admin','juridico','finanzas','operaciones','ventas')),
+  rol           TEXT NOT NULL CHECK (rol IN ('admin','juridico','finanzas','operaciones','ventas','espectador')),
   password_hash TEXT NOT NULL,
   activo        INTEGER NOT NULL DEFAULT 1,
 
@@ -38,7 +38,13 @@ CREATE TABLE IF NOT EXISTS servicios (
   gerente                    TEXT,
 
   -- estado de fuerza
-  estatus                    TEXT NOT NULL DEFAULT 'ACTIVO' CHECK (estatus IN ('ACTIVO','BAJA')),
+  -- ACTIVO     opera y cuenta en el estado de fuerza
+  -- SUSPENDIDO existe, conserva su plantilla y su historia, pero no cuenta:
+  --            el cliente paró el servicio y va a volver, o quedó en pausa.
+  --            No es una baja, y por eso no lleva folio de cancelación ni
+  --            aparece en las gráficas de bajas del mes.
+  -- BAJA       se fue. Solo se llega aquí por una cancelación.
+  estatus                    TEXT NOT NULL DEFAULT 'ACTIVO' CHECK (estatus IN ('ACTIVO','SUSPENDIDO','BAJA')),
   total_guardias             INTEGER NOT NULL DEFAULT 0,
   turnos_json                TEXT NOT NULL DEFAULT '{}',
   precio_guardia             REAL,
@@ -99,6 +105,9 @@ CREATE TABLE IF NOT EXISTS servicios (
   cancelacion_id             INTEGER REFERENCES cancelaciones(id),
   fecha_alta                 TEXT,
   fecha_baja                 TEXT,
+  -- Desde cuándo está en pausa y por qué. Se limpian al reactivarlo.
+  suspendido_desde           TEXT,
+  suspendido_motivo          TEXT,
   creado_en                  TEXT NOT NULL DEFAULT (datetime('now')),
   actualizado_en             TEXT NOT NULL DEFAULT (datetime('now'))
 );

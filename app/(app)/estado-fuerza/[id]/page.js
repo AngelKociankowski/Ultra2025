@@ -16,6 +16,7 @@ import Comentarios from './Comentarios';
 import CorreccionServicio from './CorreccionServicio';
 import ArchivoContrato from './ArchivoContrato';
 import Partidas from './Partidas';
+import Suspension from './Suspension';
 import Cobranza from './Cobranza';
 
 export const dynamic = 'force-dynamic';
@@ -202,12 +203,14 @@ export default function DetalleServicio({ params }) {
         </section>
       </div>
 
+      <Suspension servicio={s} puedeMover={puede(usuario.rol, 'cancelacion')} />
+
       <Partidas
         servicio={s}
         resumen={partidas}
         puestos={cat.puestos || []}
         turnos={cat.turnos || []}
-        puedeEditar={puede(usuario.rol, 'precios') && s.estatus === 'ACTIVO'}
+        puedeEditar={puede(usuario.rol, 'precios') && s.estatus !== 'BAJA'}
       />
 
       {/* El precio del cliente y por qué está donde está. Vive junto a la
@@ -378,6 +381,7 @@ export default function DetalleServicio({ params }) {
           iniciales={comentarios}
           usuarioId={usuario.id}
           esAdmin={usuario.rol === 'admin'}
+        puedeComentar={puede(usuario.rol, 'comentar')}
         />
 
         <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">

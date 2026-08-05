@@ -73,6 +73,7 @@ export default function Filtros({ valores, catalogos, periodos = [], vigente }) 
       {!enCorte && (
         <select value={f.estatus} onChange={(e) => cambiar('estatus', e.target.value)} className={clase}>
           <option value="ACTIVO">Activos</option>
+          <option value="SUSPENDIDO">Suspendidos</option>
           <option value="BAJA">Bajas</option>
           <option value="">Todos</option>
         </select>
