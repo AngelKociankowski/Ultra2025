@@ -10,10 +10,12 @@ import { ESQUEMAS, facturasDeServicio, resumenDe, programaDe } from '@/lib/factu
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { listarComentarios } from '@/lib/comentarios';
 import { historialDe, estadoDeAumento, ETIQUETA_ESTADO } from '@/lib/precios';
+import { resumenDe as resumenPartidas } from '@/lib/partidas';
 import EditorServicio from './EditorServicio';
 import Comentarios from './Comentarios';
 import CorreccionServicio from './CorreccionServicio';
 import ArchivoContrato from './ArchivoContrato';
+import Partidas from './Partidas';
 import Cobranza from './Cobranza';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +36,7 @@ export default function DetalleServicio({ params }) {
 
   const comentarios = listarComentarios(s.id);
   const precios = historialDe(s.id);
+  const partidas = resumenPartidas(s);
   const aumento = estadoDeAumento(s);
 
   const cat = {
@@ -198,6 +201,14 @@ export default function DetalleServicio({ params }) {
           />
         </section>
       </div>
+
+      <Partidas
+        servicio={s}
+        resumen={partidas}
+        puestos={cat.puestos || []}
+        turnos={cat.turnos || []}
+        puedeEditar={puede(usuario.rol, 'precios') && s.estatus === 'ACTIVO'}
+      />
 
       {/* El precio del cliente y por qué está donde está. Vive junto a la
           cobranza porque es la pregunta que nace al ver una factura: «¿este

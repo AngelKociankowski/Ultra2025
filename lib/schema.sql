@@ -388,7 +388,7 @@ CREATE INDEX IF NOT EXISTS idx_pagos_factura ON pagos(factura_id, id DESC);
 -- a los cortes cerrados, que son el respaldo de facturación.
 CREATE TABLE IF NOT EXISTS catalogos (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
-  tipo      TEXT NOT NULL CHECK (tipo IN ('zona','asesor','turno','forma_pago')),
+  tipo      TEXT NOT NULL CHECK (tipo IN ('zona','asesor','turno','forma_pago','puesto')),
   valor     TEXT NOT NULL,
   -- Los turnos se ordenan como los lee la operación (8X16, 12X12, 24X48…), no
   -- alfabéticamente. Zonas y asesores se quedan en 0 y salen por nombre.
@@ -454,3 +454,31 @@ CREATE TABLE IF NOT EXISTS precios_historial (
 );
 CREATE INDEX IF NOT EXISTS idx_precios_servicio ON precios_historial(servicio_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_precios_lote ON precios_historial(lote);
+
+
+-- ------------------------------------------------- precio por puesto y turno
+-- En un servicio los guardias no cuestan lo mismo. Un jefe de servicio cuesta
+-- más que un guardia raso, y el mismo puesto en 24 horas no vale lo que en
+-- 12X12: son horas distintas y prestaciones distintas.
+--
+-- Un solo `servicios.precio_guardia` obligaba a promediar, y un promedio no
+-- sirve para cotizar, ni para explicarle al cliente su factura, ni para subir
+-- el precio de un puesto sin tocar los demás.
+--
+-- Cada renglón es una partida: tantos guardias de tal puesto en tal turno, a
+-- tal precio. El importe mensual del servicio es la suma de sus partidas.
+CREATE TABLE IF NOT EXISTS partidas_precio (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  servicio_id     INTEGER NOT NULL REFERENCES servicios(id) ON DELETE CASCADE,
+  puesto          TEXT NOT NULL,
+  -- El turno es opcional: hay servicios que cobran igual sin importar el
+  -- horario, y obligar a partirlos sería inventar un detalle que no existe.
+  turno           TEXT,
+  cantidad        INTEGER NOT NULL DEFAULT 1,
+  precio_unitario REAL NOT NULL DEFAULT 0,
+  nota            TEXT,
+  orden           INTEGER NOT NULL DEFAULT 0,
+  creado_en       TEXT NOT NULL DEFAULT (datetime('now')),
+  actualizado_en  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_partidas_servicio ON partidas_precio(servicio_id, orden, id);
