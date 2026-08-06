@@ -137,12 +137,21 @@ describe('permisos por campo', () => {
   });
 
   test('el admin edita los tres bloques a la vez', async () => {
+    // Desde la revisión de operaciones el supervisor sale de catálogo. Se da de
+    // alta uno propio de la prueba para que el cambio sea real: si se usara uno
+    // que el servicio ya trae, no contaría como modificación y la prueba pasaría
+    // a medir otra cosa.
+    await s.admin.pedir('/api/catalogos', {
+      method: 'POST',
+      body: JSON.stringify({ tipo: 'supervisor', valor: 'SUPERVISOR DE LA PRUEBA' }),
+    });
+
     const r = await s.admin.pedir('/api/servicios/4', {
       method: 'PATCH',
       body: JSON.stringify({
         fecha_vencimiento_contrato: '2027-06-30',
         importe_factura: 260000,
-        supervisor: 'J. PEÑA',
+        supervisor: 'SUPERVISOR DE LA PRUEBA',
       }),
     });
     assert.equal(r.status, 200);

@@ -91,6 +91,45 @@ export default function RepartoTurnos({
           guardias cuentan en el total pero no aparecen en este reparto.
         </p>
       )}
+
+      {/* Cuando el desglose no cuadra con la plantilla, decirlo importa más que
+          la gráfica. Las barras salen bien dibujadas de todos modos —cada una
+          suma lo suyo— y el número de abajo deja de ser el del estado de fuerza
+          sin que nada lo anuncie. Un reparto que no suma el total es un reparto
+          en el que no se puede confiar, y callarlo lo vuelve peor que no
+          tenerlo. */}
+      {reparto.descuadrados?.length > 0 && (
+        <div className="text-xs mt-3 border-t border-slate-700/50 pt-3">
+          <p className="text-red-400">
+            Este reparto suma <strong>{formatNumber(reparto.total + reparto.guardiasSinDesglose)}</strong> guardias
+            y el estado de fuerza dice <strong>{formatNumber(reparto.totalPlantilla)}</strong>.
+          </p>
+          <p className="text-slate-500 mt-1">
+            {reparto.descuadrados.length} servicio{reparto.descuadrados.length === 1 ? '' : 's'} con el desglose
+            descuadrado. Mientras no se corrijan, los porcentajes de arriba están repartiendo guardias que la
+            plantilla no tiene:
+          </p>
+          <ul className="mt-1.5 space-y-0.5">
+            {reparto.descuadrados.slice(0, 6).map((d) => (
+              <li key={d.id ?? d.servicio} className="flex justify-between gap-3 text-slate-400">
+                {d.id ? (
+                  <Link href={`/estado-fuerza/${d.id}`} className="hover:text-white hover:underline truncate">
+                    {d.servicio}
+                  </Link>
+                ) : (
+                  <span className="truncate">{d.servicio}</span>
+                )}
+                <span className="whitespace-nowrap text-slate-500">
+                  plantilla {d.plantilla} · desglose {d.desglose}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {reparto.descuadrados.length > 6 && (
+            <p className="text-slate-600 mt-1">y {reparto.descuadrados.length - 6} más.</p>
+          )}
+        </div>
+      )}
     </section>
   );
 }

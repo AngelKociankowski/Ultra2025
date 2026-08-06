@@ -5,7 +5,8 @@ import { obtenerServicio } from '@/lib/servicios';
 import { gruposEditables, puede } from '@/lib/rbac';
 import { CAMPOS } from '@/lib/campos';
 import { opciones } from '@/lib/catalogos';
-import { mesActual } from '@/lib/fechas';
+import { mesActual, hoy } from '@/lib/fechas';
+import { MODALIDADES, estadoDelTermino } from '@/lib/modalidades';
 import { ESQUEMAS, facturasDeServicio, resumenDe, programaDe } from '@/lib/facturacion';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { listarComentarios } from '@/lib/comentarios';
@@ -33,6 +34,7 @@ function Dato({ etiqueta, valor }) {
 export default function DetalleServicio({ params }) {
   const usuario = usuarioActual();
   const s = obtenerServicio(Number(params.id));
+  const termino = estadoDelTermino(s, hoy());
   if (!s) notFound();
 
   const comentarios = listarComentarios(s.id);
@@ -76,9 +78,41 @@ export default function DetalleServicio({ params }) {
             <span className="text-xs px-2 py-1 rounded bg-slate-700/60 text-slate-300">
               {s.total_guardias} guardias
             </span>
+            {/* La modalidad solo se enseña cuando dice algo. Poner «FIJO» en los
+                220 servicios fijos convierte la etiqueta en ruido y hace que
+                nadie note el temporal cuando aparece. */}
+            {s.modalidad && s.modalidad !== 'FIJO' && (
+              <span
+                title={
+                  termino?.vencido
+                    ? `Terminaba el ${termino.fin} y sigue activo.`
+                    : termino?.sinFecha
+                      ? 'No tiene fecha de término capturada.'
+                      : `Termina el ${termino?.fin}.`
+                }
+                className={`text-xs px-2 py-1 rounded ${
+                  termino?.vencido
+                    ? 'bg-red-500/20 text-red-300'
+                    : 'bg-cyan-500/20 text-cyan-300'
+                }`}
+              >
+                {MODALIDADES[s.modalidad]?.etiqueta || s.modalidad}
+                {termino?.fin && ` · hasta ${termino.fin}`}
+                {termino?.sinFecha && ' · sin fecha'}
+              </span>
+            )}
           </div>
         </div>
       </div>
+
+      {termino?.vencido && s.estatus === 'ACTIVO' && (
+        <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
+          Este servicio {MODALIDADES[s.modalidad]?.etiqueta.toLowerCase()} terminaba el{' '}
+          <strong>{termino.fin}</strong> y sigue activo: sus {s.total_guardias} guardias siguen contando en el estado
+          de fuerza y se le sigue proponiendo factura. Si de verdad terminó, regístrale una cancelación; si se
+          extendió, corrige la fecha de término.
+        </p>
+      )}
 
       {s.estatus === 'BAJA' && (
         <p className="text-sm text-slate-300 bg-slate-700/30 border border-slate-600/50 rounded-xl px-4 py-3">

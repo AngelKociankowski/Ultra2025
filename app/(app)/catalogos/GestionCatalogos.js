@@ -73,6 +73,43 @@ export default function GestionCatalogos({ datos, tipos }) {
     }
   }
 
+  /**
+   * Unir dos opciones que siempre fueron la misma.
+   *
+   * Es lo que faltaba y se nota en los datos: «JUAN JAIR TREJO» con 1 servicio
+   * y «JUAN JAIR TREJO TREJO» con 26 son el mismo supervisor, escrito una vez
+   * sin el apellido materno. Renombrar no servía —el destino ya existe— y el
+   * mensaje mandaba a mover los servicios uno por uno.
+   */
+  async function fusionar(fila) {
+    const candidatos = opciones.filter((o) => o.id !== fila.id);
+    if (!candidatos.length) {
+      setMensaje({ tipo: 'error', texto: 'No hay otra opción con la que unirlo.' });
+      return;
+    }
+    const lista = candidatos.map((o, i) => `${i + 1}. ${o.valor} (${o.usos})`).join('\n');
+    const eleccion = window.prompt(
+      `Unir «${fila.valor}» (${fila.usos} servicio(s)) con otra opción.\n\n` +
+        `Sus servicios y movimientos pasan a llamarse como la que elijas, y «${fila.valor}» se borra del catálogo. ` +
+        `Los cortes cerrados no se tocan.\n\nEscribe el número:\n\n${lista}`
+    );
+    if (eleccion === null) return;
+    const destino = candidatos[Number(eleccion) - 1];
+    if (!destino) {
+      setMensaje({ tipo: 'error', texto: 'Ese número no está en la lista.' });
+      return;
+    }
+    if (!window.confirm(`¿Unir «${fila.valor}» dentro de «${destino.valor}»?`)) return;
+
+    const data = await llamar('PATCH', { id: fila.id, fusionarCon: destino.id });
+    if (data) {
+      setMensaje({
+        tipo: 'ok',
+        texto: `«${data.origen}» se unió a «${data.destino}»: se actualizaron ${data.servicios} servicio(s) y ${data.movimientos} movimiento(s).`,
+      });
+    }
+  }
+
   async function alternar(fila) {
     const data = await llamar('PATCH', { id: fila.id, activo: !fila.activo });
     if (data) {
@@ -83,6 +120,12 @@ export default function GestionCatalogos({ datos, tipos }) {
           : `«${fila.valor}» vuelve a estar disponible.`,
       });
     }
+  }
+
+  /** Convertir un huérfano en opción, sin volver a escribirlo a mano. */
+  async function adoptar(valor) {
+    const data = await llamar('PUT', { tipo: tipoActivo, valor });
+    if (data) setMensaje({ tipo: 'ok', texto: `«${data.valor}» ya es una opción del catálogo.` });
   }
 
   async function borrar(fila) {
@@ -186,6 +229,14 @@ export default function GestionCatalogos({ datos, tipos }) {
                       Renombrar
                     </button>
                     <button
+                      onClick={() => fusionar(o)}
+                      disabled={ocupado || opciones.length < 2}
+                      title="Unir con otra opción que sea la misma escrita distinto"
+                      className="text-xs text-amber-400 hover:underline disabled:opacity-40"
+                    >
+                      Fusionar
+                    </button>
+                    <button
                       onClick={() => alternar(o)}
                       disabled={ocupado}
                       className="text-xs text-slate-400 hover:underline disabled:opacity-40"
@@ -228,7 +279,7 @@ export default function GestionCatalogos({ datos, tipos }) {
               <button
                 key={h.valor}
                 type="button"
-                onClick={(e) => agregar(e, h.valor)}
+                onClick={() => adoptar(h.valor)}
                 disabled={ocupado}
                 className="text-xs bg-slate-900/70 hover:bg-slate-700 text-slate-300 rounded-lg px-2.5 py-1.5 disabled:opacity-40"
               >

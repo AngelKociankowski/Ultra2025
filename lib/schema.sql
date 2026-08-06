@@ -45,6 +45,23 @@ CREATE TABLE IF NOT EXISTS servicios (
   --            aparece en las gráficas de bajas del mes.
   -- BAJA       se fue. Solo se llega aquí por una cancelación.
   estatus                    TEXT NOT NULL DEFAULT 'ACTIVO' CHECK (estatus IN ('ACTIVO','SUSPENDIDO','BAJA')),
+
+  -- Si el servicio nació para quedarse o para terminar.
+  --
+  -- `aperturas.tipo` ya distinguía TEMPORAL desde el principio, pero esa marca
+  -- se quedaba en el movimiento: una vez aplicado, el servicio temporal era
+  -- indistinguible de uno fijo y se quedaba en el estado de fuerza para
+  -- siempre, porque nadie sabía que tenía que salir. Aquí es donde esa
+  -- diferencia sobrevive al movimiento que la creó.
+  --
+  -- FIJO     el que se contrata sin fecha de término
+  -- TEMPORAL el que se abre por un periodo acordado y tiene que salir al final
+  -- EVENTO   el de unos días: una feria, una asamblea, una mudanza
+  modalidad                  TEXT NOT NULL DEFAULT 'FIJO' CHECK (modalidad IN ('FIJO','TEMPORAL','EVENTO')),
+  -- Hasta cuándo se comprometió. Solo tiene sentido en los que no son fijos, y
+  -- es lo que permite avisar antes de que se pase la fecha en lugar de
+  -- descubrirlo al cuadrar la facturación tres meses después.
+  fecha_fin_prevista         TEXT,
   total_guardias             INTEGER NOT NULL DEFAULT 0,
   turnos_json                TEXT NOT NULL DEFAULT '{}',
   precio_guardia             REAL,
@@ -132,6 +149,7 @@ CREATE TABLE IF NOT EXISTS aperturas (
   estado_geo         TEXT,
   asesor             TEXT,
   gerente            TEXT,
+  supervisor         TEXT,
   reporta            TEXT,
   guardias           INTEGER NOT NULL DEFAULT 0,
   turnos_json        TEXT NOT NULL DEFAULT '{}',
@@ -149,6 +167,11 @@ CREATE TABLE IF NOT EXISTS aperturas (
   forma_pago         TEXT,
   cobro              TEXT,
   tipo_repse         TEXT,
+  -- La modalidad con la que se abrió y hasta cuándo se comprometió. Viajan con
+  -- el movimiento, no solo con el servicio: una apertura registrada hoy y
+  -- aplicada en tres semanas tiene que seguir sabiendo que era temporal.
+  modalidad          TEXT,
+  fecha_fin_prevista TEXT,
   comentarios        TEXT,
   aut_json           TEXT NOT NULL DEFAULT '{}',
   -- 1 = alta técnica de la carga inicial del Estado de Fuerza, no un movimiento
@@ -397,7 +420,7 @@ CREATE INDEX IF NOT EXISTS idx_pagos_factura ON pagos(factura_id, id DESC);
 -- a los cortes cerrados, que son el respaldo de facturación.
 CREATE TABLE IF NOT EXISTS catalogos (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
-  tipo      TEXT NOT NULL CHECK (tipo IN ('zona','asesor','turno','forma_pago','puesto')),
+  tipo      TEXT NOT NULL CHECK (tipo IN ('zona','asesor','turno','forma_pago','puesto','gerente','supervisor','estado_geo','tipo_repse','uniforme')),
   valor     TEXT NOT NULL,
   -- Los turnos se ordenan como los lee la operación (8X16, 12X12, 24X48…), no
   -- alfabéticamente. Zonas y asesores se quedan en 0 y salen por nombre.

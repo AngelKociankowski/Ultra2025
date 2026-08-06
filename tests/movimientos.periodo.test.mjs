@@ -171,6 +171,17 @@ describe('los totales del mes', () => {
 
 describe('la información completa de cada movimiento', () => {
   test('el renglón trae lo que se capturó, aunque no quepa en una columna', async () => {
+    // Uniforme, gerente y tipo de REPSE dejaron de ser texto libre: se eligen de
+    // catálogo y el servidor lo exige. Darlos de alta antes es lo que ahora hace
+    // el administrador de verdad, así que la prueba hace lo mismo.
+    for (const [tipo, valor] of [
+      ['uniforme', 'Institucional'],
+      ['gerente', 'GERENTE DE PRUEBA'],
+      ['tipo_repse', 'Repse Basico'],
+    ]) {
+      await admin.pedir('/api/catalogos', { method: 'POST', body: JSON.stringify({ tipo, valor }) });
+    }
+
     const r = await admin.pedir('/api/aperturas', {
       method: 'POST',
       body: JSON.stringify({

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { conPermiso, leerJson } from '@/lib/api';
-import { opciones, listarParaAdmin, crear, renombrar, alternar, eliminar } from '@/lib/catalogos';
+import { opciones, listarParaAdmin, crear, renombrar, alternar, eliminar, fusionar, adoptar } from '@/lib/catalogos';
 import { ValidacionError, PermisoError } from '@/lib/errores';
 import { puede } from '@/lib/rbac';
 
@@ -31,11 +31,20 @@ export const POST = conPermiso('catalogos', async (request, { usuario }) => {
 });
 
 export const PATCH = conPermiso('catalogos', async (request, { usuario }) => {
-  const { id, valor, activo } = await leerJson(request);
+  const { id, valor, activo, fusionarCon } = await leerJson(request);
   if (!id) throw new ValidacionError('Falta el id de la opción.');
+  // La fusión va antes que el renombre: las dos llevan `id`, y confundirlas
+  // dejaría una opción renombrada donde se pedía unir dos.
+  if (fusionarCon !== undefined) return NextResponse.json(fusionar(id, fusionarCon, usuario));
   if (valor !== undefined) return NextResponse.json(renombrar(id, valor, usuario));
   if (activo !== undefined) return NextResponse.json(alternar(id, activo, usuario));
   throw new ValidacionError('Nada que actualizar.');
+});
+
+/** Adoptar un valor huérfano: convertirlo en opción sin volver a escribirlo. */
+export const PUT = conPermiso('catalogos', async (request, { usuario }) => {
+  const { tipo, valor } = await leerJson(request);
+  return NextResponse.json(adoptar(tipo, valor, usuario), { status: 201 });
 });
 
 export const DELETE = conPermiso('catalogos', async (request, { usuario }) => {
