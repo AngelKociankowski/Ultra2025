@@ -4,6 +4,7 @@ import { Fragment, useState } from 'react';
 import Link from 'next/link';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { EXPEDIENTE_APERTURA, EXPEDIENTE_CANCELACION } from '@/lib/campos';
+import { listarEquipo } from '@/lib/equipo';
 import AccionesApertura from './AccionesApertura';
 
 const dinero = (v) => (v === null || v === undefined || v === '' ? null : formatCurrency(v));
@@ -41,7 +42,7 @@ function Turnos({ turnos, tono }) {
  * Se abre uno a la vez, a propósito: si se pudieran abrir todos, la tabla del
  * mes volvería a ser el archivero volcado en el suelo del que veníamos.
  */
-export default function TablaMovimientos({ clase, movimientos, puedeAplicar = false }) {
+export default function TablaMovimientos({ clase, movimientos, puedeAplicar = false, opciones }) {
   const [abierto, setAbierto] = useState(null);
   const esApertura = clase === 'aperturas';
   const grupos = esApertura ? EXPEDIENTE_APERTURA : EXPEDIENTE_CANCELACION;
@@ -126,6 +127,7 @@ export default function TablaMovimientos({ clase, movimientos, puedeAplicar = fa
                               vieja={!!f.vieja}
                               aplicada={!!f.servicio_id}
                               descartada={!!f.descartada}
+                              opciones={opciones}
                             />
                           </>
                         ) : f.estatus_servicio ? (
@@ -168,6 +170,27 @@ export default function TablaMovimientos({ clase, movimientos, puedeAplicar = fa
                               </div>
                             );
                           })}
+
+                          {/* El equipo va aparte: es una lista de cosas con
+                              cantidad, no pares de etiqueta y valor, y meterlo
+                              en la misma rejilla lo volvía ilegible. */}
+                          {esApertura && listarEquipo(f.equipo_json).length > 0 && (
+                            <div>
+                              <h4 className="text-xs uppercase tracking-wide text-slate-500 mb-1.5">
+                                Equipo entregado
+                              </h4>
+                              <div className="flex flex-wrap gap-1">
+                                {listarEquipo(f.equipo_json).map((e) => (
+                                  <span
+                                    key={e.clave}
+                                    className="text-[11px] px-1.5 py-0.5 rounded whitespace-nowrap bg-slate-700/60 text-slate-300"
+                                  >
+                                    {e.etiqueta} · {e.cantidad}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
                           <div>
                             <h4 className="text-xs uppercase tracking-wide text-slate-500 mb-1.5">

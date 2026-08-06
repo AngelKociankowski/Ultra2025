@@ -197,16 +197,21 @@ export default function EstadoFuerza({ searchParams }) {
 
       <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[1280px]">
+          <table className="w-full text-sm min-w-[1320px]">
             <thead className="bg-slate-900/60">
               <tr className="text-slate-400 text-xs">
+                {/* Cada columna junta lo que se lee junto. El nombre del
+                    servicio y su razón social son el mismo dato visto de dos
+                    maneras; la zona y el tipo describen dónde y de qué es; el
+                    asesor y el supervisor son quién lo lleva. Repartirlos en
+                    ocho columnas dejaba media pantalla en blanco y el renglón
+                    sin caber. */}
                 <th className="text-left px-4 py-3">Servicio</th>
-                {!esCorte && <th className="text-center px-2 py-3" title="Comentarios">💬</th>}
-                <th className="text-left px-3 py-3">Razón social</th>
-                <th className="text-left px-3 py-3">Zona</th>
-                <th className="text-left px-3 py-3">Asesor</th>
-                <th className="text-right px-3 py-3">Guardias</th>
-                <th className="text-right px-3 py-3">Importe</th>
+                <th className="text-left px-3 py-3">Zona · tipo</th>
+                <th className="text-left px-3 py-3">Quién lo lleva</th>
+                <th className="text-right px-3 py-3">Guardias y turnos</th>
+                <th className="text-right px-3 py-3">Venta al mes</th>
+                <th className="text-right px-3 py-3">Nómina y resultado</th>
                 {/* Con el mes en el encabezado, la columna no admite dudas: lo
                     que hay debajo es la factura de ESE mes y de ningún otro. */}
                 <th className="text-left px-3 py-3">Factura de {nombreMes(periodoTabla)}</th>
@@ -217,50 +222,115 @@ export default function EstadoFuerza({ searchParams }) {
             <tbody>
               {servicios.map((s) => (
                 <tr key={s.id} className="border-t border-slate-800/70 hover:bg-slate-800/40">
-                  <td className="px-4 py-2">
-                    {esCorte ? (
-                      <span className="text-white font-medium">{s.servicio}</span>
-                    ) : (
-                      <Link href={`/estado-fuerza/${s.id}`} className="text-white hover:text-cyan-400 font-medium">
-                        {s.servicio}
-                      </Link>
-                    )}
-                  </td>
-                  {!esCorte && (
-                    <td className="px-2 py-2 text-center">
-                      {notas.get(s.id) ? (
+                  <td className="px-4 py-2 max-w-[280px]">
+                    <div className="flex items-baseline gap-1.5">
+                      {esCorte ? (
+                        <span className="text-white font-medium">{s.servicio}</span>
+                      ) : (
+                        <Link href={`/estado-fuerza/${s.id}`} className="text-white hover:text-cyan-400 font-medium">
+                          {s.servicio}
+                        </Link>
+                      )}
+                      {/* El contador de notas era una columna entera para un
+                          número de una cifra que casi siempre está vacío. */}
+                      {!esCorte && notas.get(s.id) > 0 && (
                         <Link
                           href={`/estado-fuerza/${s.id}#comentarios`}
                           title={`${notas.get(s.id)} comentario(s)`}
-                          className="text-xs bg-slate-700/60 text-slate-300 rounded-full px-1.5 py-0.5 hover:text-cyan-400"
+                          className="text-[10px] bg-slate-700/60 text-slate-300 rounded-full px-1.5 shrink-0 hover:text-cyan-400"
                         >
-                          {notas.get(s.id)}
+                          💬{notas.get(s.id)}
                         </Link>
-                      ) : (
-                        <span className="text-slate-600 text-xs">—</span>
                       )}
-                    </td>
-                  )}
-                  <td className="px-3 py-2 text-slate-400 truncate max-w-[220px]">{s.razon_social || '—'}</td>
-                  <td className="px-3 py-2 text-slate-400">{s.zona || '—'}</td>
-                  <td className="px-3 py-2 text-slate-400 truncate max-w-[150px]">{s.asesor || '—'}</td>
+                    </div>
+                    {s.razon_social && s.razon_social !== s.servicio && (
+                      <p className="text-[11px] text-slate-500 leading-tight truncate" title={s.razon_social}>
+                        {s.razon_social}
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-slate-400 whitespace-nowrap">
+                    {s.zona || '—'}
+                    {/* El REPSE se enseña siempre, aunque esté vacío. Está en
+                        cero de 217 porque nunca hubo dónde ponerlo a la vista:
+                        una columna que no se ve es una columna que nadie llena,
+                        y es requisito de la autoridad para poder cobrar. */}
+                    <span className="block text-[11px] text-slate-500">
+                      {s.tipo || '—'} · REPSE{' '}
+                      {s.tipo_repse ? (
+                        s.tipo_repse
+                      ) : (
+                        <span className="text-amber-300/60">falta</span>
+                      )}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-slate-400 max-w-[170px]">
+                    <span className="block truncate" title={s.asesor || ''}>{s.asesor || '—'}</span>
+                    <span className="block text-[11px] text-slate-500 truncate" title={s.supervisor || ''}>
+                      {s.supervisor || 'sin supervisor'}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-right">
                     <span className="text-white tabular-nums">{s.total_guardias}</span>
                     {/* El total no dice cómo está armada la plantilla: doce en
                         24 HRS y doce en 12X12 son la misma cifra y dos
-                        operaciones distintas. */}
+                        operaciones distintas. En fichas sueltas se leen mejor
+                        que en un renglón de texto separado por puntos. */}
                     {Object.keys(s.turnos || {}).length > 0 ? (
-                      <span className="block text-[11px] text-slate-500 whitespace-nowrap">
-                        {Object.entries(s.turnos)
-                          .map(([t, n]) => `${t}: ${n}`)
-                          .join(' · ')}
+                      <span className="flex flex-wrap gap-1 justify-end mt-0.5">
+                        {Object.entries(s.turnos).map(([t, n]) => (
+                          <span
+                            key={t}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-300 whitespace-nowrap"
+                          >
+                            {t} <strong className="text-white">{n}</strong>
+                          </span>
+                        ))}
                       </span>
                     ) : (
                       <span className="block text-[11px] text-amber-300/70">sin desglose</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right text-slate-300">
-                    {s.importe_factura ? formatCurrency(s.importe_factura) : '—'}
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <span className="text-slate-200 tabular-nums">
+                      {s.importe_factura ? formatCurrency(s.importe_factura) : '—'}
+                    </span>
+                    <span className="block text-[11px] text-slate-500">
+                      {s.importe_sin_iva ? `${formatCurrency(s.importe_sin_iva)} sin IVA` : 'sin IVA: falta'}
+                    </span>
+                  </td>
+                  {/* La venta sola no dice si el servicio conviene. La nómina es
+                      lo que cuesta sostenerlo y el porcentaje lo que queda; los
+                      dos vivían escondidos en la ficha, y sin ellos la tabla
+                      enseña ingresos sin costo. Se pintan aunque falten, para
+                      que se note dónde hay que capturar. */}
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <span className="text-slate-300 tabular-nums">
+                      {s.nomina_total ? formatCurrency(s.nomina_total) : (
+                        <span className="text-amber-300/60 text-xs">falta</span>
+                      )}
+                    </span>
+                    {/* Una utilidad sin nómina detrás no es una utilidad. En 25
+                        servicios el archivo calculó (venta − 0) ÷ venta y dejó
+                        un 100% que se lee como un negocio redondo cuando lo que
+                        pasa es que nadie capturó el costo. Pintarlo en verde
+                        sería repetir la mentira. */}
+                    <span className="block text-[11px]">
+                      {s.pct_utilidad === null || s.pct_utilidad === undefined ? (
+                        <span className="text-slate-600">utilidad: falta</span>
+                      ) : !s.nomina_total ? (
+                        <span
+                          className="text-amber-300/70"
+                          title={`El archivo trae ${Math.round(s.pct_utilidad * 10) / 10}% de utilidad, pero sin nómina capturada ese porcentaje sale de restarle cero al importe. Captura la nómina para que signifique algo.`}
+                        >
+                          utilidad sin sustento
+                        </span>
+                      ) : (
+                        <span className={s.pct_utilidad < 0 ? 'text-red-400' : 'text-emerald-400/80'}>
+                          {Math.round(s.pct_utilidad * 10) / 10}% utilidad
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className="px-3 py-2">
                     <CeldaFactura
@@ -312,7 +382,7 @@ export default function EstadoFuerza({ searchParams }) {
               ))}
               {servicios.length === 0 && (
                 <tr>
-                  <td colSpan={esCorte ? 10 : 11} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-slate-500">
                     Ningún servicio coincide con los filtros.
                   </td>
                 </tr>

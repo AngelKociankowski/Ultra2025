@@ -47,8 +47,11 @@ describe('el reparto se ve en la lista', () => {
 
     const html = comoSeLee((await ventas.pedir('/estado-fuerza?q=TURNOS MIXTOS')).texto);
     assert.match(html, /TURNOS MIXTOS/);
-    assert.match(html, /24 HRS: 4/, 'el desglose va debajo del total, no escondido');
-    assert.match(html, /12X12 L-D: 2/);
+    // El desglose pasó de un renglón de texto —«24 HRS: 4 · 12X12 L-D: 2»— a
+    // una ficha por turno, que ocupa menos y se lee de un vistazo. Lo que se
+    // comprueba sigue siendo lo mismo: que el turno y su cantidad estén ahí.
+    assert.match(html, /24 HRS[^<]*<[^>]*>4</, 'el desglose va debajo del total, no escondido');
+    assert.match(html, /12X12 L-D[^<]*<[^>]*>2</);
   });
 
   test('el panel suma la operación por modalidad', async () => {

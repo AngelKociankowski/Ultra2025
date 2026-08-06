@@ -20,7 +20,7 @@ import { useRouter } from 'next/navigation';
  * aperturas y en el reporte de motivos. Deshacer dice que la captura estuvo
  * mal, y eso no es un movimiento del negocio.
  */
-export default function AccionesApertura({ apertura, vieja, aplicada, descartada }) {
+export default function AccionesApertura({ apertura, vieja, aplicada, descartada, opciones }) {
   const router = useRouter();
   const [ocupado, setOcupado] = useState('');
   const [error, setError] = useState('');
@@ -44,7 +44,93 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
     }
   }
 
+  /**
+   * Los campos de catálogo que la apertura trae y ya no son opción.
+   *
+   * Tres aperturas de agosto de 2026 traen zona «Centro», que la operación
+   * dejó de usar en septiembre de 2024. Aplicarlas tal cual metía al estado de
+   * fuerza servicios con una zona que no existe, y nadie se enteraba hasta
+   * verla como huérfana en Catálogos.
+   */
+  const LISTAS = {
+    zona: ['zonas', 'zona'],
+    asesor: ['asesores', 'asesor'],
+    gerente: ['gerentes', 'gerente'],
+    supervisor: ['supervisores', 'supervisor'],
+    estado_geo: ['estados', 'estado'],
+    tipo_repse: ['tiposRepse', 'tipo de REPSE'],
+    uniforme: ['uniformes', 'uniforme'],
+  };
+  const LISTA_ZONA = { campo: 'zona', clave: 'zonas', etiqueta: 'zona', valor: apertura.zona };
+  // La comparación ignora mayúsculas y acentos: «Traje» y «TRAJE» son el mismo
+  // valor escrito distinto, y avisar de eso llenaría la lista de advertencias
+  // que no son errores. «Centro», en cambio, no se parece a ninguna zona viva.
+  const plano = (v) =>
+    String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+  const fueraDeCatalogo = Object.entries(LISTAS)
+    .filter(([campo, [clave]]) => {
+      const v = apertura[campo];
+      // Contra TODO lo que el catálogo conoce, no solo contra lo que ofrece
+      // hoy. Un uniforme retirado —«Institucional», que sale en cuarenta y una
+      // aperturas— no se puede elegir pero tampoco es un desconocido: avisar de
+      // él sería llenar la lista de alarmas por cosas que están bien.
+      const lista = opciones?.conocidos?.[clave] || opciones?.[clave];
+      return v && lista?.length && !lista.some((o) => plano(o) === plano(v));
+    })
+    .map(([campo, [clave, etiqueta]]) => ({ campo, clave, etiqueta, valor: apertura[campo] }));
+
+  /** Pregunta por un campo y devuelve el valor elegido, o null si se canceló. */
+  function preguntar(f, encabezado) {
+    const lista = opciones[f.clave];
+    const elegido = prompt(
+      `${apertura.servicio}\n\n${encabezado}\n\n` +
+        `Escribe el número del bueno, o déjalo vacío para no cambiarlo:\n\n` +
+        lista.map((v, i) => `${i + 1}. ${v}`).join('\n')
+    );
+    if (elegido === null) return null;
+    return lista[Number(elegido) - 1] || undefined;
+  }
+
+  /**
+   * Arreglar la apertura sin aplicarla.
+   *
+   * Es lo que faltaba: poder corregir al aplicar no alcanzaba, porque mientras
+   * tanto la lista seguía enseñando el dato malo y el dato malo seguía
+   * guardado. Las tres aperturas de agosto con zona «Centro» se arreglan aquí,
+   * y se quedan arregladas.
+   */
+  async function corregir() {
+    const cambios = {};
+    for (const f of fueraDeCatalogo) {
+      const v = preguntar(f, `Trae ${f.etiqueta} «${f.valor}», que no está en el catálogo.`);
+      if (v === null) return;
+      if (v) cambios[f.campo] = v;
+    }
+    if (!Object.keys(cambios).length) {
+      // Sin nada fuera de catálogo, se ofrece cambiar la zona, que es el caso
+      // que se repite: el dato está en la lista pero es el equivocado.
+      const v = preguntar(LISTA_ZONA, `Zona actual: «${apertura.zona || '—'}».`);
+      if (v === null || !v) return;
+      cambios.zona = v;
+    }
+    llamar('corregir', { method: 'PATCH', cuerpo: cambios });
+  }
+
   function aplicar() {
+    // Antes de aplicar, se resuelve lo que no está en el catálogo. Se pregunta
+    // una vez por campo, con la lista a la vista: obligar a abandonar y
+    // arreglar el archivo por una zona mal escrita sería peor que el error.
+    const correcciones = {};
+    for (const f of fueraDeCatalogo) {
+      const v = preguntar(
+        f,
+        `La apertura trae ${f.etiqueta} «${f.valor}», que no está en el catálogo. ` +
+          'Si la aplicas así, el servicio entra con un valor que la plataforma no reconoce.'
+      );
+      if (v === null) return;
+      if (v) correcciones[f.campo] = v;
+    }
+
     const aviso = [
       `Aplicar ${apertura.folio} — ${apertura.servicio}`,
       '',
@@ -59,7 +145,7 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
     ]
       .filter(Boolean)
       .join('\n');
-    if (confirm(aviso)) llamar('aplicar');
+    if (confirm(aviso)) llamar('aplicar', { cuerpo: correcciones });
   }
 
   function deshacer() {
@@ -113,6 +199,11 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
             <button
               type="button"
               onClick={aplicar}
+              title={
+                fueraDeCatalogo.length
+                  ? `Antes de aplicar hay que resolver: ${fueraDeCatalogo.map((f) => `${f.etiqueta} «${f.valor}»`).join(', ')}`
+                  : undefined
+              }
               disabled={!!ocupado}
               title="Crear el servicio en el estado de fuerza con los datos de esta apertura"
               className={`${boton} bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25`}
@@ -121,6 +212,23 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
             </button>
             <button
               type="button"
+              onClick={corregir}
+              disabled={!!ocupado}
+              title={
+                fueraDeCatalogo.length
+                  ? `Arreglar: ${fueraDeCatalogo.map((f) => `${f.etiqueta} «${f.valor}»`).join(', ')}`
+                  : 'Cambiar la zona u otro dato de catálogo antes de aplicarla'
+              }
+              className={`text-xs rounded-lg px-2.5 py-1.5 disabled:opacity-40 ${
+                fueraDeCatalogo.length
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                  : 'bg-slate-700/60 text-slate-300 hover:bg-slate-700'
+              }`}
+              type="button"
+            >
+              {ocupado === 'corregir' ? 'Corrigiendo…' : fueraDeCatalogo.length ? '⚠ Corregir' : 'Corregir'}
+            </button>
+            <button
               onClick={descartar}
               disabled={!!ocupado}
               title="No se va a aplicar: sale de la cola de pendientes"

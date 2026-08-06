@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { AUTORIZACIONES_APERTURA } from '@/lib/campos';
 import CampoCatalogo from '@/components/CampoCatalogo';
 import { MODALIDADES } from '@/lib/modalidades';
+import { EQUIPO } from '@/lib/equipo';
 import { hoyLocal } from '@/lib/utils';
 
 const input =
@@ -40,6 +41,8 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
     asesor: '',
     gerente: '',
     supervisor: '',
+    hora_apertura: '',
+    vehiculos_custodia: '',
     modalidad: 'FIJO',
     fecha_fin_prevista: '',
     fecha: hoyLocal(),
@@ -57,6 +60,7 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
     comentarios: '',
   });
   const [turnos, setTurnos] = useState({});
+  const [equipo, setEquipo] = useState({});
   const [aut, setAut] = useState({});
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
@@ -99,7 +103,7 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
       const res = await fetch('/api/aperturas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...f, tipo, turnos, guardias: total, aut }),
+        body: JSON.stringify({ ...f, tipo, turnos, guardias: total, aut, equipo }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -216,6 +220,12 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
           <div>
             <label className={label}>Fecha de apertura *</label>
             <input required type="date" value={f.fecha} onChange={(e) => set('fecha', e.target.value)} className={input} />
+          </div>
+
+          <div>
+            <label className={label}>Hora de apertura</label>
+            <input type="time" value={f.hora_apertura} onChange={(e) => set('hora_apertura', e.target.value)} className={input} />
+            <p className="text-xs text-slate-500 mt-1">Con esta se cita al personal el primer día.</p>
           </div>
 
           <div className="lg:col-span-2">
@@ -379,6 +389,51 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
               />
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+          <h2 className="text-base font-semibold text-white">Equipo que se le entrega</h2>
+          <span className="text-xs text-slate-500">
+            {Object.keys(equipo).length || 'ningún'} renglón{Object.keys(equipo).length === 1 ? '' : 'es'}
+          </span>
+        </div>
+        <p className="text-xs text-slate-500 mb-3 max-w-3xl">
+          Un chaleco blindado o una patrulla cambian el costo del servicio, y son lo que hay que tener listo antes del
+          primer turno. Deja en blanco lo que no lleve.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+          {EQUIPO.map((e) => (
+            <div key={e.clave}>
+              <label className="block text-[11px] text-slate-500 mb-0.5">{e.etiqueta}</label>
+              <input
+                type="number"
+                min="0"
+                value={equipo[e.clave] ?? ''}
+                onChange={(ev) =>
+                  setEquipo((prev) => {
+                    const n = Math.max(0, Number(ev.target.value) || 0);
+                    const sig = { ...prev };
+                    if (n > 0) sig[e.clave] = n;
+                    else delete sig[e.clave];
+                    return sig;
+                  })
+                }
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+          ))}
+          <div>
+            <label className="block text-[11px] text-slate-500 mb-0.5">Vehículos de custodia</label>
+            <input
+              type="number"
+              min="0"
+              value={f.vehiculos_custodia}
+              onChange={(e) => set('vehiculos_custodia', e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-cyan-500"
+            />
+          </div>
         </div>
       </section>
 
