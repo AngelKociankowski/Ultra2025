@@ -9,6 +9,7 @@ const label = 'block text-xs text-slate-400 mb-1';
 
 const ETIQUETAS = {
   servicio: 'Nombre',
+  razon_social: 'Razón social',
   total_guardias: 'Total de guardias',
   turnos: 'Turnos',
   estatus: 'Estatus',
@@ -16,17 +17,24 @@ const ETIQUETAS = {
 };
 
 /**
- * Corrección de captura. Solo la ve el admin.
+ * Corrección de captura.
  *
  * Va cerrada por omisión: no es una pantalla de trabajo diario, es la salida de
  * emergencia para cuando el dato nació mal. Lo normal —que a un servicio le
  * suban o le bajen guardias— se registra como movimiento, y el aviso de arriba
  * lo dice para que nadie use esto por comodidad.
+ *
+ * La ven dos roles y no ven lo mismo. El administrador arregla lo que describe
+ * el estado de fuerza; jurídico solo la razón social, que es el nombre legal
+ * del cliente. Enseñarle a jurídico los campos de plantilla en gris sería
+ * ofrecerle algo que el servidor le va a rechazar, así que ni se dibujan.
  */
-export default function CorreccionServicio({ servicio, correcciones, opciones }) {
+export default function CorreccionServicio({ servicio, correcciones, opciones, campos = [] }) {
+  const puede = (c) => campos.includes(c);
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState(servicio.servicio);
+  const [razonSocial, setRazonSocial] = useState(servicio.razon_social || '');
   const [totalGuardias, setTotalGuardias] = useState(String(servicio.total_guardias ?? ''));
   const [fechaAlta, setFechaAlta] = useState(servicio.fecha_alta || '');
   const [reactivar, setReactivar] = useState(false);
@@ -63,14 +71,17 @@ export default function CorreccionServicio({ servicio, correcciones, opciones })
     }
     setGuardando(true);
     try {
-      const cuerpo = {
-        motivo: motivo.trim(),
-        servicio: nombre,
-        total_guardias: totalFinal,
-        fecha_alta: fechaAlta,
-      };
-      if (conDesglose || sumaTurnos > 0) cuerpo.turnos = turnos;
-      if (reactivar && servicio.estatus === 'BAJA') cuerpo.estatus = 'ACTIVO';
+      // Solo se manda lo que el rol puede corregir. Mandar de más no es
+      // inofensivo: el servidor rechaza la corrección entera en lugar de
+      // ignorar el campo de más, que es lo correcto —callarlo haría creer que
+      // se guardó— pero desde aquí ni se intenta.
+      const cuerpo = { motivo: motivo.trim() };
+      if (puede('razon_social')) cuerpo.razon_social = razonSocial;
+      if (puede('servicio')) cuerpo.servicio = nombre;
+      if (puede('total_guardias')) cuerpo.total_guardias = totalFinal;
+      if (puede('fecha_alta')) cuerpo.fecha_alta = fechaAlta;
+      if (puede('turnos') && (conDesglose || sumaTurnos > 0)) cuerpo.turnos = turnos;
+      if (puede('estatus') && reactivar && servicio.estatus === 'BAJA') cuerpo.estatus = 'ACTIVO';
 
       const res = await fetch(`/api/servicios/${servicio.id}/correccion`, {
         method: 'POST',
@@ -105,6 +116,11 @@ export default function CorreccionServicio({ servicio, correcciones, opciones })
           <p className="text-xs text-slate-500 max-w-xl">
             Para arreglar un dato que se capturó mal. Si a este servicio de verdad le subieron o le bajaron guardias,
             eso es un movimiento, no una corrección.
+            {campos.length === 1 && campos[0] === 'razon_social' && (
+              <span className="block mt-1">
+                Tu rol corrige la razón social: el nombre legal del cliente, el que va en el contrato y en la factura.
+              </span>
+            )}
           </p>
         </div>
         <button
@@ -119,30 +135,50 @@ export default function CorreccionServicio({ servicio, correcciones, opciones })
       {abierto && (
         <form onSubmit={enviar} className="mt-4 space-y-4">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div className="sm:col-span-2">
-              <label className={label}>Nombre del servicio</label>
-              <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={input} />
-            </div>
-            <div>
-              <label className={label}>Fecha de alta</label>
-              <input type="date" value={fechaAlta} onChange={(e) => setFechaAlta(e.target.value)} className={input} />
-            </div>
-            <div>
-              <label className={label}>
-                Total de guardias {sumaTurnos > 0 && <span className="text-slate-600">(lo fija el desglose)</span>}
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={sumaTurnos > 0 ? sumaTurnos : totalGuardias}
-                onChange={(e) => setTotalGuardias(e.target.value)}
-                disabled={sumaTurnos > 0}
-                className={`${input} disabled:opacity-60`}
-              />
-            </div>
+            {puede('servicio') && (
+              <div className="sm:col-span-2">
+                <label className={label}>Nombre del servicio</label>
+                <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={input} />
+              </div>
+            )}
+            {puede('razon_social') && (
+              <div className={puede('servicio') ? 'sm:col-span-2' : 'sm:col-span-2 lg:col-span-3'}>
+                <label className={label}>
+                  Razón social{' '}
+                  <span className="text-slate-600">— el nombre legal, el del contrato y la factura</span>
+                </label>
+                <input
+                  value={razonSocial}
+                  onChange={(e) => setRazonSocial(e.target.value)}
+                  className={input}
+                  placeholder="Ej.: ADMINISTRADORA GRUPO ADCCO, A.C."
+                />
+              </div>
+            )}
+            {puede('fecha_alta') && (
+              <div>
+                <label className={label}>Fecha de alta</label>
+                <input type="date" value={fechaAlta} onChange={(e) => setFechaAlta(e.target.value)} className={input} />
+              </div>
+            )}
+            {puede('total_guardias') && (
+              <div>
+                <label className={label}>
+                  Total de guardias {sumaTurnos > 0 && <span className="text-slate-600">(lo fija el desglose)</span>}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={sumaTurnos > 0 ? sumaTurnos : totalGuardias}
+                  onChange={(e) => setTotalGuardias(e.target.value)}
+                  disabled={sumaTurnos > 0}
+                  className={`${input} disabled:opacity-60`}
+                />
+              </div>
+            )}
           </div>
 
-          {(conDesglose || Object.keys(turnos).length > 0) && (
+          {puede('turnos') && (conDesglose || Object.keys(turnos).length > 0) && (
             <div>
               <p className="text-xs text-slate-400 mb-1.5">Desglose por turno</p>
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
@@ -182,7 +218,7 @@ export default function CorreccionServicio({ servicio, correcciones, opciones })
             </div>
           )}
 
-          {servicio.estatus === 'BAJA' && (
+          {puede('estatus') && servicio.estatus === 'BAJA' && (
             <label className="flex items-start gap-2 text-sm text-slate-300 bg-slate-900/60 rounded-lg px-3 py-2">
               <input
                 type="checkbox"
