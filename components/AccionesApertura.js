@@ -70,7 +70,12 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
   const fueraDeCatalogo = Object.entries(LISTAS)
     .filter(([campo, [clave]]) => {
       const v = apertura[campo];
-      return v && opciones?.[clave]?.length && !opciones[clave].some((o) => plano(o) === plano(v));
+      // Contra TODO lo que el catálogo conoce, no solo contra lo que ofrece
+      // hoy. Un uniforme retirado —«Institucional», que sale en cuarenta y una
+      // aperturas— no se puede elegir pero tampoco es un desconocido: avisar de
+      // él sería llenar la lista de alarmas por cosas que están bien.
+      const lista = opciones?.conocidos?.[clave] || opciones?.[clave];
+      return v && lista?.length && !lista.some((o) => plano(o) === plano(v));
     })
     .map(([campo, [clave, etiqueta]]) => ({ campo, clave, etiqueta, valor: apertura[campo] }));
 

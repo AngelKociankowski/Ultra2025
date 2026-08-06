@@ -119,7 +119,7 @@ describe('los cinco campos que eran texto libre ahora salen de catálogo', () =>
       supervisor: 'SUPERVISOR DE PRUEBA',
       estado_geo: 'EDOMEX',
       tipo_repse: 'BÁSICO',
-      uniforme: 'INSTITUCIONAL',
+      uniforme: 'COMANDO',
     });
     assert.equal(r.status, 201, r.texto);
 
@@ -128,7 +128,7 @@ describe('los cinco campos que eran texto libre ahora salen de catálogo', () =>
     assert.equal(s.supervisor, 'SUPERVISOR DE PRUEBA');
     assert.equal(s.estado_geo, 'EDOMEX');
     assert.equal(s.tipo_repse, 'BÁSICO');
-    assert.equal(s.uniforme, 'INSTITUCIONAL');
+    assert.equal(s.uniforme, 'COMANDO');
   });
 
   test('el supervisor viaja también en el movimiento, no solo en el servicio', async () => {
@@ -558,11 +558,17 @@ describe('lo que la hoja capturaba y la plataforma no', () => {
   });
 
   test('los uniformes y el REPSE también', async () => {
-    const { uniformes, tiposRepse } = (await admin.pedir('/api/catalogos')).json;
-    assert.ok(uniformes.includes('INSTITUCIONAL') && uniformes.includes('TRAJE'));
+    const { uniformes, tiposRepse, conocidos } = (await admin.pedir('/api/catalogos')).json;
+    // Hoy se usan dos. Los demás siguen en el catálogo pero desactivados: no se
+    // ofrecen al capturar y sí explican los 41 movimientos que traen
+    // «Institucional». Borrarlos solo lograría que el catálogo dejara de
+    // explicar lo que hay en pantalla.
+    assert.deepEqual([...uniformes].sort(), ['COMANDO', 'TRAJE']);
+    assert.ok(conocidos.uniformes.includes('INSTITUCIONAL'), 'el retirado sigue conocido');
+    assert.ok(conocidos.uniformes.includes('CAMUFLAJE GRIS'));
     // Sin el prefijo «REPSE» delante de cada nivel: la etiqueta del campo ya
     // dice de qué se habla. Son los nombres internos, tal cual.
-    for (const t of ['BÁSICO', 'PLUS', 'PLUS +', 'SIN REPSE']) {
+    for (const t of ['BÁSICO', 'PLUS', 'PLUS +', 'NO REQUIERE REPSE']) {
       assert.ok(tiposRepse.includes(t), `falta el nivel ${t}`);
     }
     // Las listas inventadas del primer intento ya no están.
@@ -588,6 +594,20 @@ describe('los datos que venían mal en 2026', () => {
       aperturas.some((a) => a.zona === 'CENTRO' && String(a.periodo || '') < '2026-01'),
       'el CENTRO histórico debería seguir ahí'
     );
+  });
+
+  test('el REPSE quedó en cuatro niveles, no en quince formas', async () => {
+    // Eran quince: «Básico», «REPSE BÁSICO», «Repse Basico», «SI (BASICO)»,
+    // «si, basico», «SI BASICO»… todas el mismo nivel escrito mal. Uniformar la
+    // ortografía no reescribe ningún hecho; dejarla partida sí impide contar.
+    const valores = new Set(
+      (await admin.pedir('/api/aperturas')).json.aperturas.map((a) => a.tipo_repse).filter(Boolean)
+    );
+    const reconocidos = ['BÁSICO', 'PLUS', 'PLUS +', 'NO REQUIERE REPSE'];
+    const sobrantes = [...valores].filter((v) => !reconocidos.includes(v));
+    // «SI» y «0» se quedan: nadie puede saber hoy qué nivel quisieron decir, y
+    // ponerles uno sería inventarlo.
+    assert.ok(sobrantes.every((v) => ['SI', '0'].includes(v)), `quedaron formas raras: ${sobrantes.join(', ')}`);
   });
 
   test('el REPSE de 2026 quedó con el nombre interno, sin el prefijo', async () => {
