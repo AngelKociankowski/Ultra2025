@@ -185,7 +185,7 @@ describe('no toca nada, por ninguna puerta', () => {
     rechazado(
       await miron.pedir(`/api/servicios/${servicioId}/partidas`, {
         method: 'PUT',
-        body: JSON.stringify({ partidas: [{ puesto: 'GUARDIA', cantidad: 1, precio_unitario: 1 }] }),
+        body: JSON.stringify({ partidas: [{ puesto: 'GUARDIA BÁSICO', cantidad: 1, precio_unitario: 1 }] }),
       }),
       'guardar el desglose de precio'
     );

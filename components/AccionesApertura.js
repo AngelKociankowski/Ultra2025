@@ -20,7 +20,7 @@ import { useRouter } from 'next/navigation';
  * aperturas y en el reporte de motivos. Deshacer dice que la captura estuvo
  * mal, y eso no es un movimiento del negocio.
  */
-export default function AccionesApertura({ apertura, vieja, aplicada, descartada }) {
+export default function AccionesApertura({ apertura, vieja, aplicada, descartada, opciones }) {
   const router = useRouter();
   const [ocupado, setOcupado] = useState('');
   const [error, setError] = useState('');
@@ -44,7 +44,48 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
     }
   }
 
+  /**
+   * Los campos de catálogo que la apertura trae y ya no son opción.
+   *
+   * Tres aperturas de agosto de 2026 traen zona «Centro», que la operación
+   * dejó de usar en septiembre de 2024. Aplicarlas tal cual metía al estado de
+   * fuerza servicios con una zona que no existe, y nadie se enteraba hasta
+   * verla como huérfana en Catálogos.
+   */
+  const LISTAS = {
+    zona: ['zonas', 'zona'],
+    asesor: ['asesores', 'asesor'],
+    gerente: ['gerentes', 'gerente'],
+    supervisor: ['supervisores', 'supervisor'],
+    estado_geo: ['estados', 'estado'],
+    tipo_repse: ['tiposRepse', 'tipo de REPSE'],
+    uniforme: ['uniformes', 'uniforme'],
+  };
+  const fueraDeCatalogo = Object.entries(LISTAS)
+    .filter(([campo, [clave]]) => {
+      const v = apertura[campo];
+      return v && opciones?.[clave]?.length && !opciones[clave].includes(v);
+    })
+    .map(([campo, [clave, etiqueta]]) => ({ campo, clave, etiqueta, valor: apertura[campo] }));
+
   function aplicar() {
+    // Antes de aplicar, se resuelve lo que no está en el catálogo. Se pregunta
+    // una vez por campo, con la lista a la vista: obligar a abandonar y
+    // arreglar el archivo por una zona mal escrita sería peor que el error.
+    const correcciones = {};
+    for (const f of fueraDeCatalogo) {
+      const lista = opciones[f.clave];
+      const elegido = prompt(
+        `${apertura.servicio}\n\nLa apertura trae ${f.etiqueta} «${f.valor}», que no está en el catálogo. ` +
+          `Si la aplicas así, el servicio entra con un valor que la plataforma no reconoce.\n\n` +
+          `Escribe el número del bueno, o deja vacío para aplicarla tal como vino:\n\n` +
+          lista.map((v, i) => `${i + 1}. ${v}`).join('\n')
+      );
+      if (elegido === null) return;
+      const v = lista[Number(elegido) - 1];
+      if (v) correcciones[f.campo] = v;
+    }
+
     const aviso = [
       `Aplicar ${apertura.folio} — ${apertura.servicio}`,
       '',
@@ -59,7 +100,7 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
     ]
       .filter(Boolean)
       .join('\n');
-    if (confirm(aviso)) llamar('aplicar');
+    if (confirm(aviso)) llamar('aplicar', { cuerpo: correcciones });
   }
 
   function deshacer() {
@@ -113,6 +154,11 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
             <button
               type="button"
               onClick={aplicar}
+              title={
+                fueraDeCatalogo.length
+                  ? `Antes de aplicar hay que resolver: ${fueraDeCatalogo.map((f) => `${f.etiqueta} «${f.valor}»`).join(', ')}`
+                  : undefined
+              }
               disabled={!!ocupado}
               title="Crear el servicio en el estado de fuerza con los datos de esta apertura"
               className={`${boton} bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25`}

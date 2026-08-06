@@ -55,8 +55,8 @@ describe('el precio se captura por puesto', () => {
     const id = await servicio('PARTIDAS BASICAS', { '24 HRS': 3, '12X12 L-D': 2 });
     const r = await guardar(admin, id, [
       { puesto: 'JEFE DE SERVICIO', turno: '24 HRS', cantidad: 1, precio_unitario: 32000 },
-      { puesto: 'GUARDIA', turno: '24 HRS', cantidad: 2, precio_unitario: 21000 },
-      { puesto: 'GUARDIA', turno: '12X12 L-D', cantidad: 2, precio_unitario: 14500 },
+      { puesto: 'GUARDIA BÁSICO', turno: '24 HRS', cantidad: 2, precio_unitario: 21000 },
+      { puesto: 'GUARDIA BÁSICO', turno: '12X12 L-D', cantidad: 2, precio_unitario: 14500 },
     ]);
     assert.equal(r.status, 200, r.texto);
 
@@ -69,7 +69,7 @@ describe('el precio se captura por puesto', () => {
     assert.equal(p.cuadra, true, 'los 5 del desglose son los 5 de la plantilla');
 
     // El mismo puesto en dos turnos cuesta distinto, que es el punto de todo.
-    const guardias = p.partidas.filter((x) => x.puesto === 'GUARDIA');
+    const guardias = p.partidas.filter((x) => x.puesto === 'GUARDIA BÁSICO');
     assert.notEqual(guardias[0].precio_unitario, guardias[1].precio_unitario);
   });
 
@@ -80,7 +80,7 @@ describe('el precio se captura por puesto', () => {
       body: JSON.stringify({ importe_factura: 99999 }),
     });
 
-    await guardar(admin, id, [{ puesto: 'GUARDIA', turno: '24 HRS', cantidad: 2, precio_unitario: 20000 }]);
+    await guardar(admin, id, [{ puesto: 'GUARDIA BÁSICO', turno: '24 HRS', cantidad: 2, precio_unitario: 20000 }]);
 
     const s = await ficha(id);
     assert.equal(s.importe_sin_iva, 40000);
@@ -89,7 +89,7 @@ describe('el precio se captura por puesto', () => {
 
   test('el turno es opcional: hay clientes que cobran igual sin importar el horario', async () => {
     const id = await servicio('PARTIDAS SIN TURNO', { '24 HRS': 2 });
-    const r = await guardar(admin, id, [{ puesto: 'GUARDIA', cantidad: 2, precio_unitario: 18000 }]);
+    const r = await guardar(admin, id, [{ puesto: 'GUARDIA BÁSICO', cantidad: 2, precio_unitario: 18000 }]);
     assert.equal(r.status, 200, r.texto);
     const p = await partidas(id);
     assert.equal(p.partidas[0].turno, null);
@@ -98,7 +98,7 @@ describe('el precio se captura por puesto', () => {
 
   test('quitar el desglose deja el servicio como estaba, sin partidas', async () => {
     const id = await servicio('PARTIDAS SE QUITAN', { '24 HRS': 2 });
-    await guardar(admin, id, [{ puesto: 'GUARDIA', cantidad: 2, precio_unitario: 10000 }]);
+    await guardar(admin, id, [{ puesto: 'GUARDIA BÁSICO', cantidad: 2, precio_unitario: 10000 }]);
     assert.equal((await partidas(id)).partidas.length, 1);
 
     const r = await guardar(admin, id, []);
@@ -114,7 +114,7 @@ describe('el precio se captura por puesto', () => {
   test('los renglones vacíos que quedan al agregar no estorban', async () => {
     const id = await servicio('PARTIDAS CON VACIOS', { '24 HRS': 1 });
     const r = await guardar(admin, id, [
-      { puesto: 'GUARDIA', cantidad: 1, precio_unitario: 15000 },
+      { puesto: 'GUARDIA BÁSICO', cantidad: 1, precio_unitario: 15000 },
       { puesto: '', turno: '', cantidad: '', precio_unitario: '' },
     ]);
     assert.equal(r.status, 200, r.texto);
@@ -125,7 +125,7 @@ describe('el precio se captura por puesto', () => {
 describe('lo que el desglose no puede hacer', () => {
   test('no mueve el estado de fuerza: avisa del descuadre y no lo corrige', async () => {
     const id = await servicio('PARTIDAS DESCUADRE', { '24 HRS': 4 });
-    const r = await guardar(admin, id, [{ puesto: 'GUARDIA', turno: '24 HRS', cantidad: 7, precio_unitario: 10000 }]);
+    const r = await guardar(admin, id, [{ puesto: 'GUARDIA BÁSICO', turno: '24 HRS', cantidad: 7, precio_unitario: 10000 }]);
     assert.equal(r.status, 200, r.texto);
 
     const p = await partidas(id);
@@ -148,7 +148,7 @@ describe('lo que el desglose no puede hacer', () => {
   test('un turno que no está en el catálogo tampoco', async () => {
     const id = await servicio('PARTIDAS TURNO INVENTADO', { '24 HRS': 1 });
     const r = await guardar(admin, id, [
-      { puesto: 'GUARDIA', turno: '99 HRS', cantidad: 1, precio_unitario: 10000 },
+      { puesto: 'GUARDIA BÁSICO', turno: '99 HRS', cantidad: 1, precio_unitario: 10000 },
     ]);
     assert.equal(r.status, 400);
     assert.match(r.json.error, /catálogo/i);
@@ -157,8 +157,8 @@ describe('lo que el desglose no puede hacer', () => {
   test('el mismo puesto y turno dos veces se rechaza: es un solo concepto', async () => {
     const id = await servicio('PARTIDAS REPETIDAS', { '24 HRS': 4 });
     const r = await guardar(admin, id, [
-      { puesto: 'GUARDIA', turno: '24 HRS', cantidad: 2, precio_unitario: 10000 },
-      { puesto: 'GUARDIA', turno: '24 HRS', cantidad: 2, precio_unitario: 12000 },
+      { puesto: 'GUARDIA BÁSICO', turno: '24 HRS', cantidad: 2, precio_unitario: 10000 },
+      { puesto: 'GUARDIA BÁSICO', turno: '24 HRS', cantidad: 2, precio_unitario: 12000 },
     ]);
     assert.equal(r.status, 400);
     assert.match(r.json.error, /dos veces/i);
@@ -166,11 +166,11 @@ describe('lo que el desglose no puede hacer', () => {
 
   test('un renglón sin cantidad o sin precio se rechaza diciendo cuál', async () => {
     const id = await servicio('PARTIDAS INCOMPLETAS', { '24 HRS': 2 });
-    const sinCantidad = await guardar(admin, id, [{ puesto: 'GUARDIA', precio_unitario: 10000 }]);
+    const sinCantidad = await guardar(admin, id, [{ puesto: 'GUARDIA BÁSICO', precio_unitario: 10000 }]);
     assert.equal(sinCantidad.status, 400);
     assert.match(sinCantidad.json.error, /renglón 1/);
 
-    const sinPrecio = await guardar(admin, id, [{ puesto: 'GUARDIA', cantidad: 2 }]);
+    const sinPrecio = await guardar(admin, id, [{ puesto: 'GUARDIA BÁSICO', cantidad: 2 }]);
     assert.equal(sinPrecio.status, 400);
     assert.match(sinPrecio.json.error, /precio/i);
   });
@@ -181,7 +181,7 @@ describe('el aumento anual mueve también el desglose', () => {
     const id = await servicio('PARTIDAS CON AUMENTO', { '24 HRS': 3 });
     await guardar(admin, id, [
       { puesto: 'JEFE DE SERVICIO', turno: '24 HRS', cantidad: 1, precio_unitario: 30000 },
-      { puesto: 'GUARDIA', turno: '24 HRS', cantidad: 2, precio_unitario: 20000 },
+      { puesto: 'GUARDIA BÁSICO', turno: '24 HRS', cantidad: 2, precio_unitario: 20000 },
     ]);
     assert.equal((await partidas(id)).sinIva, 70000);
 
@@ -198,7 +198,7 @@ describe('el aumento anual mueve también el desglose', () => {
 
     const p = await partidas(id);
     assert.equal(p.partidas.find((x) => x.puesto === 'JEFE DE SERVICIO').precio_unitario, 33000);
-    assert.equal(p.partidas.find((x) => x.puesto === 'GUARDIA').precio_unitario, 22000);
+    assert.equal(p.partidas.find((x) => x.puesto === 'GUARDIA BÁSICO').precio_unitario, 22000);
     assert.equal(p.sinIva, 77000, 'el detalle y el total siguen diciendo lo mismo');
 
     const s = await ficha(id);
@@ -209,25 +209,25 @@ describe('el aumento anual mueve también el desglose', () => {
 describe('quién captura el precio', () => {
   test('ventas puede: es quien cotiza', async () => {
     const id = await servicio('PARTIDAS DE VENTAS', { '24 HRS': 1 });
-    const r = await guardar(ventas, id, [{ puesto: 'GUARDIA', cantidad: 1, precio_unitario: 17000 }]);
+    const r = await guardar(ventas, id, [{ puesto: 'GUARDIA BÁSICO', cantidad: 1, precio_unitario: 17000 }]);
     assert.equal(r.status, 200, r.texto);
   });
 
   test('finanzas también', async () => {
     const id = await servicio('PARTIDAS DE FINANZAS', { '24 HRS': 1 });
-    assert.equal((await guardar(finanzas, id, [{ puesto: 'GUARDIA', cantidad: 1, precio_unitario: 1 }])).status, 200);
+    assert.equal((await guardar(finanzas, id, [{ puesto: 'GUARDIA BÁSICO', cantidad: 1, precio_unitario: 1 }])).status, 200);
   });
 
   test('operaciones no: mueve guardias, no precios', async () => {
     const id = await servicio('PARTIDAS NO DE OPERACIONES', { '24 HRS': 1 });
-    const r = await guardar(operaciones, id, [{ puesto: 'GUARDIA', cantidad: 1, precio_unitario: 1 }]);
+    const r = await guardar(operaciones, id, [{ puesto: 'GUARDIA BÁSICO', cantidad: 1, precio_unitario: 1 }]);
     assert.equal(r.status, 403);
     assert.equal((await partidas(id)).partidas.length, 0);
   });
 
   test('verlo sí es de todos', async () => {
     const id = await servicio('PARTIDAS LAS VE OPERACIONES', { '24 HRS': 1 });
-    await guardar(admin, id, [{ puesto: 'GUARDIA', cantidad: 1, precio_unitario: 12345 }]);
+    await guardar(admin, id, [{ puesto: 'GUARDIA BÁSICO', cantidad: 1, precio_unitario: 12345 }]);
     const r = await operaciones.pedir(`/api/servicios/${id}/partidas`);
     assert.equal(r.status, 200);
     assert.equal(r.json.sinIva, 12345);
@@ -256,7 +256,7 @@ describe('la pantalla', () => {
     const id = await servicio('PARTIDAS EN PANTALLA', { '24 HRS': 2 });
     await guardar(admin, id, [
       { puesto: 'JEFE DE SERVICIO', turno: '24 HRS', cantidad: 1, precio_unitario: 30000 },
-      { puesto: 'GUARDIA', turno: '24 HRS', cantidad: 1, precio_unitario: 20000 },
+      { puesto: 'GUARDIA BÁSICO', turno: '24 HRS', cantidad: 1, precio_unitario: 20000 },
     ]);
 
     const html = comoSeLee((await admin.pedir(`/estado-fuerza/${id}`)).texto);

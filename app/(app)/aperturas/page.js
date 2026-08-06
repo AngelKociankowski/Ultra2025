@@ -8,6 +8,7 @@ import { mesActual } from '@/lib/fechas';
 import { calendarioDe, movimientosDe, aniosCon, netoDelPeriodo } from '@/lib/movimientos';
 import BarraMeses from '@/components/BarraMeses';
 import TablaMovimientos from '@/components/TablaMovimientos';
+import { opciones } from '@/lib/catalogos';
 import ResumenPeriodo from '@/components/ResumenPeriodo';
 
 export const dynamic = 'force-dynamic';
@@ -145,7 +146,7 @@ export default function Aperturas({ searchParams }) {
         }
       />
 
-      <TablaMovimientos clase="aperturas" movimientos={conAviso} puedeAplicar={puedeAplicar} />
+      <TablaMovimientos clase="aperturas" movimientos={conAviso} puedeAplicar={puedeAplicar} opciones={opciones()} />
 
       {resumen.sinMonto > 0 && (
         <p className="text-xs text-slate-500">

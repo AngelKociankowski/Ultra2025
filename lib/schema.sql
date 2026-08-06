@@ -172,6 +172,17 @@ CREATE TABLE IF NOT EXISTS aperturas (
   -- aplicada en tres semanas tiene que seguir sabiendo que era temporal.
   modalidad          TEXT,
   fecha_fin_prevista TEXT,
+  -- A qué hora arranca el servicio. Va en la hoja de aperturas y no se
+  -- capturaba en ningún lado: para operación es el dato con el que se cita al
+  -- personal el primer día.
+  hora_apertura      TEXT,
+  -- Los vehículos de custodia son su propia línea en la hoja: no son un turno
+  -- —no llevan guardias— pero sí cuestan y hay que asignarlos.
+  vehiculos_custodia INTEGER,
+  -- Lo que se le entrega al servicio: chaleco, radio, lámparas, botas… Son
+  -- dieciséis renglones en la hoja y se guardan como un objeto para no
+  -- convertir la tabla en dieciséis columnas que casi siempre van en cero.
+  equipo_json        TEXT NOT NULL DEFAULT '{}',
   comentarios        TEXT,
   aut_json           TEXT NOT NULL DEFAULT '{}',
   -- 1 = alta técnica de la carga inicial del Estado de Fuerza, no un movimiento

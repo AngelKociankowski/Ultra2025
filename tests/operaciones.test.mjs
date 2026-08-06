@@ -118,8 +118,8 @@ describe('los cinco campos que eran texto libre ahora salen de catálogo', () =>
       gerente: 'GERENTE DE PRUEBA',
       supervisor: 'SUPERVISOR DE PRUEBA',
       estado_geo: 'EDOMEX',
-      tipo_repse: 'VIGILANCIA',
-      uniforme: 'INDUSTRIAL',
+      tipo_repse: 'REPSE BÁSICO',
+      uniforme: 'INSTITUCIONAL',
     });
     assert.equal(r.status, 201, r.texto);
 
@@ -127,8 +127,8 @@ describe('los cinco campos que eran texto libre ahora salen de catálogo', () =>
     assert.equal(s.gerente, 'GERENTE DE PRUEBA');
     assert.equal(s.supervisor, 'SUPERVISOR DE PRUEBA');
     assert.equal(s.estado_geo, 'EDOMEX');
-    assert.equal(s.tipo_repse, 'VIGILANCIA');
-    assert.equal(s.uniforme, 'INDUSTRIAL');
+    assert.equal(s.tipo_repse, 'REPSE BÁSICO');
+    assert.equal(s.uniforme, 'INSTITUCIONAL');
   });
 
   test('el supervisor viaja también en el movimiento, no solo en el servicio', async () => {
@@ -480,6 +480,155 @@ describe('capturar dos veces la misma alta', () => {
 
     const b = await abrir({ tipo: 'APERTURA', servicio: 'OPS SE FUE Y VOLVIO', turnos: { '12 HRS': 2 } });
     assert.equal(b.status, 201, b.texto);
+  });
+});
+
+describe('lo que la hoja capturaba y la plataforma no', () => {
+  let id;
+
+  test('hora de apertura, vehículos de custodia y equipo entregado', async () => {
+    // Los tres venían en la hoja de aperturas y no vivían en ninguna parte. El
+    // equipo no es adorno del formato: un chaleco blindado o una patrulla
+    // cambian el costo, y son lo que hay que tener listo antes del primer turno.
+    const r = await abrir({
+      tipo: 'APERTURA',
+      servicio: 'OPS CON EQUIPO',
+      turnos: { '24X24': 2 },
+      hora_apertura: '09:00',
+      vehiculos_custodia: 1,
+      equipo: { chaleco_blindado: 2, lamparas: 4, botas_hule: 4, patrulla: 0 },
+    });
+    assert.equal(r.status, 201, r.texto);
+    id = r.json.aperturaId;
+
+    const ap = (await admin.pedir('/api/aperturas')).json.aperturas.find((a) => a.id === id);
+    assert.equal(ap.hora_apertura, '09:00');
+    assert.equal(ap.vehiculos_custodia, 1);
+
+    const equipo = JSON.parse(ap.equipo_json || '{}');
+    assert.equal(equipo.chaleco_blindado, 2);
+    assert.equal(equipo.lamparas, 4);
+    // Los ceros no se guardan: «no lleva patrulla» y «nadie capturó la
+    // patrulla» son lo mismo, y guardar dieciséis ceros por servicio llena la
+    // base de nada.
+    assert.ok(!('patrulla' in equipo), 'un cero no debería guardarse');
+  });
+
+  test('el equipo viaja a la pantalla de aperturas', async () => {
+    // El expediente se despliega en el navegador, así que sus etiquetas no
+    // están en el HTML del servidor. Lo que sí viaja son los datos, y sin ellos
+    // el renglón no podría pintarlo por más que se abra.
+    const html = (await admin.pedir('/aperturas?periodo=todo')).texto;
+    assert.match(html, /OPS CON EQUIPO/);
+    assert.match(html, /chaleco_blindado/);
+    assert.match(html, /vehiculos_custodia|hora_apertura/);
+  });
+
+  test('una hora mal escrita se ignora, no tumba la captura', async () => {
+    const r = await abrir({
+      tipo: 'APERTURA',
+      servicio: 'OPS HORA RARA',
+      turnos: { '12 HRS': 1 },
+      hora_apertura: 'a las nueve',
+    });
+    assert.equal(r.status, 201, r.texto);
+    const ap = (await admin.pedir('/api/aperturas')).json.aperturas.find((a) => a.id === r.json.aperturaId);
+    assert.equal(ap.hora_apertura, null);
+  });
+
+  test('un renglón de equipo inventado no se cuela', async () => {
+    const r = await abrir({
+      tipo: 'APERTURA',
+      servicio: 'OPS EQUIPO INVENTADO',
+      turnos: { '12 HRS': 1 },
+      equipo: { helicoptero: 3, lamparas: 1 },
+    });
+    assert.equal(r.status, 201, r.texto);
+    const ap = (await admin.pedir('/api/aperturas')).json.aperturas.find((a) => a.id === r.json.aperturaId);
+    const equipo = JSON.parse(ap.equipo_json || '{}');
+    assert.ok(!('helicoptero' in equipo));
+    assert.equal(equipo.lamparas, 1);
+  });
+
+  test('los puestos del catálogo son los de la hoja, no unos inventados', async () => {
+    const { puestos } = (await admin.pedir('/api/catalogos')).json;
+    for (const p of ['GUARDIA BÁSICO', 'GUARDIA ODS', 'GUARDIA BILINGÜE', 'JEFE DE TURNO', 'JEFE DE SERVICIO', 'MONITORISTA']) {
+      assert.ok(puestos.includes(p), `falta el puesto ${p}`);
+    }
+  });
+
+  test('los uniformes y el REPSE también', async () => {
+    const { uniformes, tiposRepse } = (await admin.pedir('/api/catalogos')).json;
+    assert.ok(uniformes.includes('INSTITUCIONAL') && uniformes.includes('TRAJE'));
+    assert.ok(tiposRepse.includes('REPSE BÁSICO') && tiposRepse.includes('REPSE PLUS'));
+    // Las listas inventadas del primer intento ya no están.
+    assert.ok(!uniformes.includes('TÁCTICO'));
+    assert.ok(!tiposRepse.includes('SEGURIDAD PRIVADA'));
+  });
+});
+
+describe('aplicar una pendiente con un valor que ya no existe', () => {
+  test('se puede corregir la zona en el momento de aplicar', async () => {
+    // El caso real: tres aperturas de agosto de 2026 traen zona «Centro», que
+    // la operación dejó de usar en septiembre de 2024. Aplicarlas tal cual
+    // metía al estado de fuerza servicios con una zona que no existe.
+    const a = await abrir({ tipo: 'APERTURA', servicio: 'OPS ZONA VIEJA', turnos: { '24X24': 2 }, zona: 'NORTE' });
+    assert.equal(a.status, 201, a.texto);
+
+    // Se deja pendiente y se le pone a mano la zona que ya no es opción, que es
+    // como llegan las del archivo.
+    await admin.pedir(`/api/aperturas/${a.json.aperturaId}/deshacer`, {
+      method: 'POST',
+      body: JSON.stringify({ motivo: 'para probar el arreglo al aplicar' }),
+    });
+    const zonaVieja = await admin.pedir('/api/catalogos', {
+      method: 'POST',
+      body: JSON.stringify({ tipo: 'zona', valor: 'ZONA QUE YA NO SE USA' }),
+    });
+    await admin.pedir('/api/catalogos', {
+      method: 'PATCH',
+      body: JSON.stringify({ id: zonaVieja.json.id, activo: false }),
+    });
+
+    // Al aplicar se manda la corrección, y el servicio entra con la buena.
+    const r = await admin.pedir(`/api/aperturas/${a.json.aperturaId}/aplicar`, {
+      method: 'POST',
+      body: JSON.stringify({ zona: 'SUR' }),
+    });
+    assert.equal(r.status, 200, r.texto);
+
+    const s = (await admin.pedir(`/api/servicios/${r.json.servicioId}`)).json.servicio;
+    assert.equal(s.zona, 'SUR');
+
+    // Y el movimiento también quedó corregido: dejarlo solo en el servicio
+    // partiría el dato en dos.
+    const ap = (await admin.pedir('/api/aperturas')).json.aperturas.find((x) => x.id === a.json.aperturaId);
+    assert.equal(ap.zona, 'SUR');
+  });
+
+  test('una corrección fuera del catálogo se rechaza', async () => {
+    const a = await abrir({ tipo: 'APERTURA', servicio: 'OPS CORRECCION MALA', turnos: { '12 HRS': 1 } });
+    await admin.pedir(`/api/aperturas/${a.json.aperturaId}/deshacer`, {
+      method: 'POST',
+      body: JSON.stringify({ motivo: 'para probar' }),
+    });
+    const r = await admin.pedir(`/api/aperturas/${a.json.aperturaId}/aplicar`, {
+      method: 'POST',
+      body: JSON.stringify({ zona: 'LA ZONA QUE YO QUIERA' }),
+    });
+    assert.equal(r.status, 400, r.texto);
+    assert.match(r.texto, /no está en el catálogo/);
+  });
+
+  test('sin correcciones se aplica tal como vino, como siempre', async () => {
+    const a = await abrir({ tipo: 'APERTURA', servicio: 'OPS TAL CUAL', turnos: { '12 HRS': 1 }, zona: 'NORTE' });
+    await admin.pedir(`/api/aperturas/${a.json.aperturaId}/deshacer`, {
+      method: 'POST',
+      body: JSON.stringify({ motivo: 'para probar' }),
+    });
+    const r = await admin.pedir(`/api/aperturas/${a.json.aperturaId}/aplicar`, { method: 'POST' });
+    assert.equal(r.status, 200, r.texto);
+    assert.equal((await admin.pedir(`/api/servicios/${r.json.servicioId}`)).json.servicio.zona, 'NORTE');
   });
 });
 
