@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { MODALIDADES } from '@/lib/modalidades';
 
 const clase =
   'bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
@@ -68,6 +69,25 @@ export default function Filtros({ valores, catalogos, periodos = [], vigente }) 
         placeholder="Buscar servicio, razón social o asesor…"
         className={`${clase} flex-1 min-w-[220px]`}
       />
+
+      {/* Los cortes cerrados no guardaron la modalidad: es un dato que nació
+          después que ellos, y ofrecerlo ahí devolvería siempre cero. */}
+      {!enCorte && (
+        <select
+          value={f.modalidad}
+          onChange={(e) => cambiar('modalidad', e.target.value)}
+          className={clase}
+          aria-label="Modalidad"
+        >
+          <option value="">Fijos y temporales</option>
+          {Object.entries(MODALIDADES).map(([k, m]) => (
+            <option key={k} value={k}>
+              {m.etiqueta}
+            </option>
+          ))}
+          <option value="VENCIDA">Temporales ya vencidos</option>
+        </select>
+      )}
 
       {/* Un corte cerrado solo guarda lo que operaba ese mes: no hay bajas que filtrar. */}
       {!enCorte && (

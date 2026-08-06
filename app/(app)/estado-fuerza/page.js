@@ -50,6 +50,7 @@ export default function EstadoFuerza({ searchParams }) {
     turno: searchParams?.turno || '',
     contrato: searchParams?.contrato || '',
     facturado: searchParams?.facturado || '',
+    modalidad: searchParams?.modalidad || '',
     q: searchParams?.q || '',
     periodo: esCorte ? pedido : '',
   };

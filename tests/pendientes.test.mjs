@@ -95,18 +95,17 @@ describe('aplicar una apertura pendiente', () => {
     const ap = (await pendientes())[0];
     assert.equal((await admin.pedir(`/api/aperturas/${ap.id}/aplicar`, { method: 'POST' })).status, 200);
 
-    // Otra apertura anotada para el mismo servicio —el archivo viejo las tiene—
-    // no puede volver a darlo de alta.
+    // Las dos puertas quedan cerradas, y hay que probar las dos: capturar una
+    // apertura nueva con ese nombre…
     const gemela = await admin.pedir('/api/aperturas', {
       method: 'POST',
       body: JSON.stringify({ tipo: 'APERTURA', servicio: ap.servicio, turnos: { '24 HRS': 1 } }),
     });
-    assert.equal(gemela.status, 201);
-    const db = await admin.pedir('/api/aperturas');
-    const anotada = db.json.aperturas.find((a) => a.id === gemela.json.aperturaId);
-    assert.ok(anotada.servicio_id, 'la apertura normal sí crea su servicio');
+    assert.equal(gemela.status, 400, gemela.texto);
+    assert.match(gemela.json.error, /ya está activo/i);
+    assert.match(gemela.json.error, /INCREMENTO/);
 
-    // La que se prueba es una pendiente con el mismo nombre: se rechaza.
+    // …y aplicar una pendiente vieja que traiga el mismo nombre.
     const otra = (await pendientes()).find((p) => p.servicio === ap.servicio);
     if (otra) {
       const r = await admin.pedir(`/api/aperturas/${otra.id}/aplicar`, { method: 'POST' });

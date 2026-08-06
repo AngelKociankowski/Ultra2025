@@ -44,6 +44,14 @@ export default function Catalogos() {
             </dd>
           </div>
           <div>
+            <dt className="text-slate-200">Fusionar</dt>
+            <dd className="text-slate-400 text-xs">
+              Para cuando dos opciones siempre fueron la misma escrita distinto —«JUAN JAIR TREJO» con 1 servicio y
+              «JUAN JAIR TREJO TREJO» con 26 son el mismo supervisor—. Pasa los servicios y los movimientos al
+              nombre bueno y borra la sobrante. Renombrar no sirve aquí: se niega cuando el destino ya existe.
+            </dd>
+          </div>
+          <div>
             <dt className="text-slate-200">Desactivar</dt>
             <dd className="text-slate-400 text-xs">
               Deja de ofrecerse en capturas nuevas y no le toca el dato a nadie. Es lo que corresponde cuando un

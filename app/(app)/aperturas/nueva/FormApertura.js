@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AUTORIZACIONES_APERTURA } from '@/lib/campos';
 import CampoCatalogo from '@/components/CampoCatalogo';
+import { MODALIDADES } from '@/lib/modalidades';
 import { hoyLocal } from '@/lib/utils';
 
 const input =
@@ -38,6 +39,9 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
     estado_geo: '',
     asesor: '',
     gerente: '',
+    supervisor: '',
+    modalidad: 'FIJO',
+    fecha_fin_prevista: '',
     fecha: hoyLocal(),
     precio_guardia: '',
     sueldo_base: '',
@@ -120,7 +124,14 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
             <button
               key={t}
               type="button"
-              onClick={() => setTipo(t)}
+              onClick={() => {
+                setTipo(t);
+                // Elegir TEMPORAL arriba ya dijo lo que hay que decir; repetirlo
+                // en el bloque de abajo sobra, y olvidarlo es lo que dejaba
+                // servicios de temporada viviendo años en el estado de fuerza.
+                if (t === 'TEMPORAL') set('modalidad', 'TEMPORAL');
+                if (t === 'APERTURA' && f.modalidad === 'TEMPORAL') set('modalidad', 'FIJO');
+              }}
               className={`text-sm px-3 py-1.5 rounded-lg ${
                 tipo === t ? 'bg-emerald-600 text-ultra-blanco' : 'bg-slate-800 text-slate-400 hover:text-white'
               }`}
@@ -134,6 +145,48 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
             ? 'Incremento: suma guardias a un servicio que ya está activo.'
             : 'Apertura / temporal: crea un servicio nuevo en el estado de fuerza.'}
         </p>
+
+        {!esIncremento && (
+          <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
+            <p className={label}>¿El servicio es fijo o termina?</p>
+            <div className="flex flex-wrap gap-2 mt-1">
+              {Object.entries(MODALIDADES).map(([clave, m]) => (
+                <button
+                  key={clave}
+                  type="button"
+                  onClick={() => {
+                    set('modalidad', clave);
+                    if (clave === 'FIJO') set('fecha_fin_prevista', '');
+                  }}
+                  className={`text-sm px-3 py-1.5 rounded-lg ${
+                    f.modalidad === clave
+                      ? 'bg-cyan-600 text-ultra-blanco'
+                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {m.etiqueta}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500 mt-2">{MODALIDADES[f.modalidad]?.descripcion}</p>
+
+            {MODALIDADES[f.modalidad]?.llevaFin && (
+              <div className="mt-3 max-w-xs">
+                <label className={label}>¿Hasta cuándo?</label>
+                <input
+                  type="date"
+                  value={f.fecha_fin_prevista}
+                  onChange={(e) => set('fecha_fin_prevista', e.target.value)}
+                  className={input}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Con la fecha, la plataforma avisa antes de que se pase. Sin ella, el servicio se queda en el
+                  estado de fuerza hasta que alguien se acuerde de sacarlo.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {esIncremento ? (
@@ -206,8 +259,33 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
           </div>
 
           <div>
-            <label className={label}>Gerente a cargo</label>
-            <input value={f.gerente} onChange={(e) => set('gerente', e.target.value)} className={input} />
+            <label className={label} htmlFor="gerente">
+              Gerente a cargo
+            </label>
+            <CampoCatalogo
+              id="gerente"
+              valor={f.gerente}
+              opciones={opciones.gerentes}
+              onChange={(v) => set('gerente', v)}
+              vacio="— Selecciona gerente —"
+              className={input}
+            />
+            {opciones.gerentes.length === 0 && <SinCatalogo que="gerentes" />}
+          </div>
+
+          <div>
+            <label className={label} htmlFor="supervisor">
+              Supervisor a cargo
+            </label>
+            <CampoCatalogo
+              id="supervisor"
+              valor={f.supervisor}
+              opciones={opciones.supervisores}
+              onChange={(v) => set('supervisor', v)}
+              vacio="— Selecciona supervisor —"
+              className={input}
+            />
+            {opciones.supervisores.length === 0 && <SinCatalogo que="supervisores" />}
           </div>
 
           <div>
@@ -226,13 +304,48 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
           </div>
 
           <div>
-            <label className={label}>Estado (geográfico)</label>
-            <input value={f.estado_geo} onChange={(e) => set('estado_geo', e.target.value)} className={input} />
+            <label className={label} htmlFor="estado_geo">
+              Estado
+            </label>
+            <CampoCatalogo
+              id="estado_geo"
+              valor={f.estado_geo}
+              opciones={opciones.estados}
+              onChange={(v) => set('estado_geo', v)}
+              vacio="— Selecciona estado —"
+              className={input}
+            />
+            {opciones.estados.length === 0 && <SinCatalogo que="estados" />}
           </div>
 
           <div>
-            <label className={label}>Tipo de REPSE</label>
-            <input value={f.tipo_repse} onChange={(e) => set('tipo_repse', e.target.value)} className={input} />
+            <label className={label} htmlFor="tipo_repse">
+              Tipo de REPSE
+            </label>
+            <CampoCatalogo
+              id="tipo_repse"
+              valor={f.tipo_repse}
+              opciones={opciones.tiposRepse}
+              onChange={(v) => set('tipo_repse', v)}
+              vacio="— Selecciona tipo —"
+              className={input}
+            />
+            {opciones.tiposRepse.length === 0 && <SinCatalogo que="tipos de REPSE" />}
+          </div>
+
+          <div>
+            <label className={label} htmlFor="uniforme">
+              Tipo de uniforme
+            </label>
+            <CampoCatalogo
+              id="uniforme"
+              valor={f.uniforme}
+              opciones={opciones.uniformes}
+              onChange={(v) => set('uniforme', v)}
+              vacio="— Selecciona uniforme —"
+              className={input}
+            />
+            {opciones.uniformes.length === 0 && <SinCatalogo que="uniformes" />}
           </div>
         </div>
       </section>
@@ -283,10 +396,6 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
           <div>
             <label className={label}>Bono</label>
             <input type="number" step="any" value={f.bono} onChange={(e) => set('bono', e.target.value)} className={input} />
-          </div>
-          <div>
-            <label className={label}>Tipo de uniforme</label>
-            <input value={f.uniforme} onChange={(e) => set('uniforme', e.target.value)} className={input} />
           </div>
         </div>
         <div className="mt-3">

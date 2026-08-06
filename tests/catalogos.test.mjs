@@ -147,9 +147,12 @@ describe('altas', () => {
   });
 
   test('un catálogo inventado se rechaza', async () => {
+    // Antes el ejemplo era «supervisor», que desde la revisión de operaciones ya
+    // es un catálogo de verdad. El que se usa aquí tiene que ser uno que no
+    // exista, o la prueba deja de probar nada.
     const r = await admin.pedir('/api/catalogos', {
       method: 'POST',
-      body: JSON.stringify({ tipo: 'supervisor', valor: 'QUIEN SEA' }),
+      body: JSON.stringify({ tipo: 'color_de_la_camioneta', valor: 'QUIEN SEA' }),
     });
     assert.equal(r.status, 400);
   });

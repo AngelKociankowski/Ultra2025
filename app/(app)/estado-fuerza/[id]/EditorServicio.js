@@ -115,6 +115,19 @@ export default function EditorServicio({ servicio, grupos, rol, opciones }) {
                   onChange={(v) => setValores((prev) => ({ ...prev, [c.nombre]: v }))}
                   className={input}
                 />
+              ) : c.tipo === 'opciones' ? (
+                <select
+                  id={c.nombre}
+                  value={valores[c.nombre] || ''}
+                  onChange={(e) => setValores((v) => ({ ...v, [c.nombre]: e.target.value }))}
+                  className={input}
+                >
+                  {c.opciones.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
               ) : c.tipo === 'textarea' ? (
                 <textarea
                   id={c.nombre}

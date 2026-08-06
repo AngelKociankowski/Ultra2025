@@ -223,22 +223,25 @@ describe('lo que no se puede hacer con un suspendido', () => {
     // Si se pudiera, quedarían dos servicios con el mismo nombre y el día que
     // se reactivara el primero la plantilla estaría contada dos veces.
     const nombre = 'SUSPENDER Y DUPLICAR';
-    const id = await servicio(nombre);
-    await suspender(admin, id);
 
-    // Una apertura anotada con ese mismo nombre, sin aplicar todavía.
+    // Primero se deja una apertura pendiente con ese nombre. El orden importa:
+    // capturar una apertura con el nombre de un servicio que ya opera —o que
+    // está suspendido— hoy se rechaza en la captura misma, así que la pendiente
+    // tiene que quedar anotada ANTES de que exista el servicio.
     const alta = await admin.pedir('/api/aperturas', {
       method: 'POST',
       body: JSON.stringify({ tipo: 'APERTURA', servicio: nombre, turnos: { '24 HRS': 1 } }),
     });
-    assert.equal(alta.status, 201);
-    // La apertura normal creó su propio servicio; se deshace para dejarla
-    // pendiente y poder probar el camino de «aplicar».
+    assert.equal(alta.status, 201, alta.texto);
     const deshecha = await admin.pedir(`/api/aperturas/${alta.json.aperturaId}/deshacer`, {
       method: 'POST',
       body: JSON.stringify({ motivo: 'Para probar el choque de nombres' }),
     });
     assert.equal(deshecha.status, 200, deshecha.texto);
+
+    // Ahora sí: el servicio vuelve a existir por otra vía y se suspende.
+    const id = await servicio(nombre);
+    await suspender(admin, id);
 
     const r = await admin.pedir(`/api/aperturas/${alta.json.aperturaId}/aplicar`, { method: 'POST' });
     assert.equal(r.status, 400);
