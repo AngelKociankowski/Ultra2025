@@ -118,7 +118,7 @@ describe('los cinco campos que eran texto libre ahora salen de catálogo', () =>
       gerente: 'GERENTE DE PRUEBA',
       supervisor: 'SUPERVISOR DE PRUEBA',
       estado_geo: 'EDOMEX',
-      tipo_repse: 'REPSE BÁSICO',
+      tipo_repse: 'BÁSICO',
       uniforme: 'INSTITUCIONAL',
     });
     assert.equal(r.status, 201, r.texto);
@@ -127,7 +127,7 @@ describe('los cinco campos que eran texto libre ahora salen de catálogo', () =>
     assert.equal(s.gerente, 'GERENTE DE PRUEBA');
     assert.equal(s.supervisor, 'SUPERVISOR DE PRUEBA');
     assert.equal(s.estado_geo, 'EDOMEX');
-    assert.equal(s.tipo_repse, 'REPSE BÁSICO');
+    assert.equal(s.tipo_repse, 'BÁSICO');
     assert.equal(s.uniforme, 'INSTITUCIONAL');
   });
 
@@ -560,10 +560,153 @@ describe('lo que la hoja capturaba y la plataforma no', () => {
   test('los uniformes y el REPSE también', async () => {
     const { uniformes, tiposRepse } = (await admin.pedir('/api/catalogos')).json;
     assert.ok(uniformes.includes('INSTITUCIONAL') && uniformes.includes('TRAJE'));
-    assert.ok(tiposRepse.includes('REPSE BÁSICO') && tiposRepse.includes('REPSE PLUS'));
+    // Sin el prefijo «REPSE» delante de cada nivel: la etiqueta del campo ya
+    // dice de qué se habla. Son los nombres internos, tal cual.
+    for (const t of ['BÁSICO', 'PLUS', 'PLUS +', 'SIN REPSE']) {
+      assert.ok(tiposRepse.includes(t), `falta el nivel ${t}`);
+    }
     // Las listas inventadas del primer intento ya no están.
     assert.ok(!uniformes.includes('TÁCTICO'));
     assert.ok(!tiposRepse.includes('SEGURIDAD PRIVADA'));
+  });
+});
+
+describe('los datos que venían mal en 2026', () => {
+  test('ninguna apertura de 2026 quedó con la zona que ya no existe', async () => {
+    // CENTRO se dejó de usar en septiembre de 2024. La hoja de agosto la trae
+    // en tres renglones; operación confirmó que son SUR.
+    const aperturas = (await admin.pedir('/api/aperturas')).json.aperturas;
+    const de2026 = aperturas.filter((a) => String(a.periodo || '') >= '2026-01');
+    assert.ok(de2026.length > 0, 'debería haber aperturas de 2026');
+    assert.deepEqual(de2026.filter((a) => a.zona === 'CENTRO'), []);
+  });
+
+  test('las de 2023 y 2024 sí la conservan: entonces existía', async () => {
+    // Reescribir el histórico para que se vea ordenado sería falsearlo.
+    const aperturas = (await admin.pedir('/api/aperturas')).json.aperturas;
+    assert.ok(
+      aperturas.some((a) => a.zona === 'CENTRO' && String(a.periodo || '') < '2026-01'),
+      'el CENTRO histórico debería seguir ahí'
+    );
+  });
+
+  test('el REPSE de 2026 quedó con el nombre interno, sin el prefijo', async () => {
+    const de2026 = (await admin.pedir('/api/aperturas')).json.aperturas
+      .filter((a) => String(a.periodo || '') >= '2026-01' && a.tipo_repse);
+    for (const a of de2026) {
+      assert.doesNotMatch(a.tipo_repse, /^REPSE /i, `${a.folio} conserva el prefijo: ${a.tipo_repse}`);
+    }
+    // Y sin dos formas del mismo término conviviendo.
+    const formas = new Set(de2026.map((a) => a.tipo_repse));
+    assert.ok(!(formas.has('BASICO') && formas.has('BÁSICO')), 'BASICO y BÁSICO no deberían convivir');
+  });
+
+  test('el uniforme de 2026 quedó en la caja del catálogo', async () => {
+    const de2026 = (await admin.pedir('/api/aperturas')).json.aperturas
+      .filter((a) => String(a.periodo || '') >= '2026-01' && a.uniforme);
+    for (const a of de2026) {
+      assert.equal(a.uniforme, a.uniforme.toUpperCase(), `${a.folio}: ${a.uniforme}`);
+    }
+  });
+});
+
+describe('corregir una apertura pendiente sin aplicarla', () => {
+  let id;
+
+  before(async () => {
+    await admin.pedir('/api/catalogos', { method: 'POST', body: JSON.stringify({ tipo: 'zona', valor: 'ZONA VIEJA 2024' }) });
+    const a = await abrir({ tipo: 'APERTURA', servicio: 'OPS ZONA MALA', turnos: { '24X24': 2 }, zona: 'ZONA VIEJA 2024' });
+    assert.equal(a.status, 201, a.texto);
+    id = a.json.aperturaId;
+    await admin.pedir(`/api/aperturas/${id}/deshacer`, {
+      method: 'POST',
+      body: JSON.stringify({ motivo: 'para dejarla pendiente' }),
+    });
+  });
+
+  test('la zona equivocada se cambia y se queda cambiada', async () => {
+    // Poder corregirla al aplicar no alcanzaba: mientras tanto la lista seguía
+    // enseñando el dato malo y el dato malo seguía guardado.
+    const r = await admin.pedir(`/api/aperturas/${id}/corregir`, {
+      method: 'PATCH',
+      body: JSON.stringify({ zona: 'SUR' }),
+    });
+    assert.equal(r.status, 200, r.texto);
+
+    const ap = (await admin.pedir('/api/aperturas')).json.aperturas.find((a) => a.id === id);
+    assert.equal(ap.zona, 'SUR');
+    assert.equal(ap.servicio_id, null, 'sigue pendiente: corregir no la aplica');
+  });
+
+  test('la lista ya no la enseña con la zona vieja', async () => {
+    const html = (await admin.pedir('/aperturas?periodo=todo')).texto;
+    const i = html.indexOf('OPS ZONA MALA');
+    assert.notEqual(i, -1);
+    assert.doesNotMatch(html.slice(i - 400, i + 400), /ZONA VIEJA 2024/);
+  });
+
+  test('queda en la bitácora con el antes y el después', async () => {
+    const html = comoSeLee((await admin.pedir('/bitacora')).texto);
+    assert.match(html, /OPS ZONA MALA/);
+    assert.match(html, /ZONA VIEJA 2024/);
+  });
+
+  test('y al aplicarla, el servicio nace con la zona buena', async () => {
+    const r = await admin.pedir(`/api/aperturas/${id}/aplicar`, { method: 'POST' });
+    assert.equal(r.status, 200, r.texto);
+    assert.equal((await admin.pedir(`/api/servicios/${r.json.servicioId}`)).json.servicio.zona, 'SUR');
+  });
+
+  test('una apertura ya aplicada no se corrige por aquí', async () => {
+    // Su servicio existe: cambiarle el dato al movimiento sin cambiárselo al
+    // servicio partiría los dos.
+    const r = await admin.pedir(`/api/aperturas/${id}/corregir`, {
+      method: 'PATCH',
+      body: JSON.stringify({ zona: 'NORTE' }),
+    });
+    assert.equal(r.status, 400, r.texto);
+    assert.match(r.json.error, /ya está aplicada/);
+  });
+
+  test('no se puede corregir a un valor fuera del catálogo', async () => {
+    const a = await abrir({ tipo: 'APERTURA', servicio: 'OPS OTRA MAS', turnos: { '12 HRS': 1 } });
+    await admin.pedir(`/api/aperturas/${a.json.aperturaId}/deshacer`, {
+      method: 'POST',
+      body: JSON.stringify({ motivo: 'para probar' }),
+    });
+    const r = await admin.pedir(`/api/aperturas/${a.json.aperturaId}/corregir`, {
+      method: 'PATCH',
+      body: JSON.stringify({ zona: 'LA QUE YO INVENTE' }),
+    });
+    assert.equal(r.status, 400, r.texto);
+    assert.match(r.json.error, /no está en el catálogo/);
+  });
+
+  test('corregir no toca guardias, turnos ni nombre', async () => {
+    // Eso es lo que el movimiento afirma que pasó; cambiarlo sería reescribir
+    // el hecho, no corregir cómo se clasificó.
+    const a = await abrir({ tipo: 'APERTURA', servicio: 'OPS INTACTA', turnos: { '12 HRS': 3 } });
+    await admin.pedir(`/api/aperturas/${a.json.aperturaId}/deshacer`, {
+      method: 'POST',
+      body: JSON.stringify({ motivo: 'para probar' }),
+    });
+    await admin.pedir(`/api/aperturas/${a.json.aperturaId}/corregir`, {
+      method: 'PATCH',
+      body: JSON.stringify({ zona: 'SUR', servicio: 'OTRO NOMBRE', guardias: 99, turnos: { '24 HRS': 9 } }),
+    });
+    const ap = (await admin.pedir('/api/aperturas')).json.aperturas.find((x) => x.id === a.json.aperturaId);
+    assert.equal(ap.servicio, 'OPS INTACTA');
+    assert.equal(ap.guardias, 3);
+    assert.equal(ap.zona, 'SUR');
+  });
+
+  test('quien no captura aperturas no corrige', async () => {
+    const juridico = await app.entrarYAsentar(ROLES.juridico);
+    const r = await juridico.pedir(`/api/aperturas/${id}/corregir`, {
+      method: 'PATCH',
+      body: JSON.stringify({ zona: 'NORTE' }),
+    });
+    assert.equal(r.status, 403);
   });
 });
 
@@ -618,6 +761,26 @@ describe('aplicar una pendiente con un valor que ya no existe', () => {
     });
     assert.equal(r.status, 400, r.texto);
     assert.match(r.texto, /no está en el catálogo/);
+  });
+
+  test('un valor escrito distinto se guarda como lo escribe el catálogo', async () => {
+    // Las hojas traen «Traje» donde la lista dice «TRAJE». Es el mismo valor, y
+    // dejar las dos formas conviviendo es como se llega a tener seis
+    // supervisores partidos en doce renglones.
+    const a = await abrir({ tipo: 'APERTURA', servicio: 'OPS MAYUSCULAS', turnos: { '12 HRS': 1 }, uniforme: 'TRAJE' });
+    await admin.pedir(`/api/aperturas/${a.json.aperturaId}/deshacer`, {
+      method: 'POST',
+      body: JSON.stringify({ motivo: 'para probar' }),
+    });
+    // Se le pone a mano la variante con otra caja, como llega del archivo.
+    await admin.pedir(`/api/aperturas/${a.json.aperturaId}/corregir`, {
+      method: 'PATCH',
+      body: JSON.stringify({ uniforme: 'TRAJE' }),
+    });
+
+    const r = await admin.pedir(`/api/aperturas/${a.json.aperturaId}/aplicar`, { method: 'POST' });
+    assert.equal(r.status, 200, r.texto);
+    assert.equal((await admin.pedir(`/api/servicios/${r.json.servicioId}`)).json.servicio.uniforme, 'TRAJE');
   });
 
   test('sin correcciones se aplica tal como vino, como siempre', async () => {

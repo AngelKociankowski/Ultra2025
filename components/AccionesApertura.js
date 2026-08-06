@@ -61,12 +61,55 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
     tipo_repse: ['tiposRepse', 'tipo de REPSE'],
     uniforme: ['uniformes', 'uniforme'],
   };
+  const LISTA_ZONA = { campo: 'zona', clave: 'zonas', etiqueta: 'zona', valor: apertura.zona };
+  // La comparación ignora mayúsculas y acentos: «Traje» y «TRAJE» son el mismo
+  // valor escrito distinto, y avisar de eso llenaría la lista de advertencias
+  // que no son errores. «Centro», en cambio, no se parece a ninguna zona viva.
+  const plano = (v) =>
+    String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
   const fueraDeCatalogo = Object.entries(LISTAS)
     .filter(([campo, [clave]]) => {
       const v = apertura[campo];
-      return v && opciones?.[clave]?.length && !opciones[clave].includes(v);
+      return v && opciones?.[clave]?.length && !opciones[clave].some((o) => plano(o) === plano(v));
     })
     .map(([campo, [clave, etiqueta]]) => ({ campo, clave, etiqueta, valor: apertura[campo] }));
+
+  /** Pregunta por un campo y devuelve el valor elegido, o null si se canceló. */
+  function preguntar(f, encabezado) {
+    const lista = opciones[f.clave];
+    const elegido = prompt(
+      `${apertura.servicio}\n\n${encabezado}\n\n` +
+        `Escribe el número del bueno, o déjalo vacío para no cambiarlo:\n\n` +
+        lista.map((v, i) => `${i + 1}. ${v}`).join('\n')
+    );
+    if (elegido === null) return null;
+    return lista[Number(elegido) - 1] || undefined;
+  }
+
+  /**
+   * Arreglar la apertura sin aplicarla.
+   *
+   * Es lo que faltaba: poder corregir al aplicar no alcanzaba, porque mientras
+   * tanto la lista seguía enseñando el dato malo y el dato malo seguía
+   * guardado. Las tres aperturas de agosto con zona «Centro» se arreglan aquí,
+   * y se quedan arregladas.
+   */
+  async function corregir() {
+    const cambios = {};
+    for (const f of fueraDeCatalogo) {
+      const v = preguntar(f, `Trae ${f.etiqueta} «${f.valor}», que no está en el catálogo.`);
+      if (v === null) return;
+      if (v) cambios[f.campo] = v;
+    }
+    if (!Object.keys(cambios).length) {
+      // Sin nada fuera de catálogo, se ofrece cambiar la zona, que es el caso
+      // que se repite: el dato está en la lista pero es el equivocado.
+      const v = preguntar(LISTA_ZONA, `Zona actual: «${apertura.zona || '—'}».`);
+      if (v === null || !v) return;
+      cambios.zona = v;
+    }
+    llamar('corregir', { method: 'PATCH', cuerpo: cambios });
+  }
 
   function aplicar() {
     // Antes de aplicar, se resuelve lo que no está en el catálogo. Se pregunta
@@ -74,15 +117,12 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
     // arreglar el archivo por una zona mal escrita sería peor que el error.
     const correcciones = {};
     for (const f of fueraDeCatalogo) {
-      const lista = opciones[f.clave];
-      const elegido = prompt(
-        `${apertura.servicio}\n\nLa apertura trae ${f.etiqueta} «${f.valor}», que no está en el catálogo. ` +
-          `Si la aplicas así, el servicio entra con un valor que la plataforma no reconoce.\n\n` +
-          `Escribe el número del bueno, o deja vacío para aplicarla tal como vino:\n\n` +
-          lista.map((v, i) => `${i + 1}. ${v}`).join('\n')
+      const v = preguntar(
+        f,
+        `La apertura trae ${f.etiqueta} «${f.valor}», que no está en el catálogo. ` +
+          'Si la aplicas así, el servicio entra con un valor que la plataforma no reconoce.'
       );
-      if (elegido === null) return;
-      const v = lista[Number(elegido) - 1];
+      if (v === null) return;
       if (v) correcciones[f.campo] = v;
     }
 
@@ -167,6 +207,23 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
             </button>
             <button
               type="button"
+              onClick={corregir}
+              disabled={!!ocupado}
+              title={
+                fueraDeCatalogo.length
+                  ? `Arreglar: ${fueraDeCatalogo.map((f) => `${f.etiqueta} «${f.valor}»`).join(', ')}`
+                  : 'Cambiar la zona u otro dato de catálogo antes de aplicarla'
+              }
+              className={`text-xs rounded-lg px-2.5 py-1.5 disabled:opacity-40 ${
+                fueraDeCatalogo.length
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                  : 'bg-slate-700/60 text-slate-300 hover:bg-slate-700'
+              }`}
+              type="button"
+            >
+              {ocupado === 'corregir' ? 'Corrigiendo…' : fueraDeCatalogo.length ? '⚠ Corregir' : 'Corregir'}
+            </button>
+            <button
               onClick={descartar}
               disabled={!!ocupado}
               title="No se va a aplicar: sale de la cola de pendientes"
