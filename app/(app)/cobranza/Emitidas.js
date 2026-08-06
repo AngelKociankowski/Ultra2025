@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import NombreServicio from '@/components/NombreServicio';
 import { formatCurrency } from '@/lib/utils';
 import ArchivoFactura from '@/components/ArchivoFactura';
 
@@ -54,9 +55,7 @@ export default function Emitidas({ periodo, facturas, puedeSubir }) {
             {facturas.map((f) => (
               <tr key={f.id} className="border-t border-slate-800/70">
                 <td className="px-4 py-2">
-                  <Link href={`/estado-fuerza/${f.servicio_id}`} className="text-slate-200 hover:text-cyan-400">
-                    {f.servicio}
-                  </Link>
+                  <NombreServicio id={f.servicio_id} servicio={f.servicio} razonSocial={f.razon_social} />
                   <span className="block text-[11px] text-slate-500">
                     {[f.zona, f.asesor].filter(Boolean).join(' · ') || '—'}
                   </span>

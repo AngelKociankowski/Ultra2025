@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { usuarioActual } from '@/lib/auth';
 import { obtenerServicio } from '@/lib/servicios';
-import { gruposEditables, puede } from '@/lib/rbac';
+import { gruposEditables, puede, camposCorregibles } from '@/lib/rbac';
 import { CAMPOS } from '@/lib/campos';
 import { opciones } from '@/lib/catalogos';
 import { mesActual, hoy } from '@/lib/fechas';
@@ -343,7 +343,12 @@ export default function DetalleServicio({ params }) {
         <EditorServicio servicio={s} grupos={grupos} rol={usuario.rol} opciones={cat} />
       )}
       {puede(usuario.rol, 'corregir') && (
-        <CorreccionServicio servicio={s} correcciones={s.correcciones} opciones={cat} />
+        <CorreccionServicio
+          servicio={s}
+          correcciones={s.correcciones}
+          opciones={cat}
+          campos={camposCorregibles(usuario.rol)}
+        />
       )}
 
       {grupos.length === 0 && (

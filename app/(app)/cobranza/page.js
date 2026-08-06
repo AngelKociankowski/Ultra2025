@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import NombreServicio from '@/components/NombreServicio';
 import { usuarioActual } from '@/lib/auth';
 import { puede } from '@/lib/rbac';
 import {
@@ -125,10 +126,7 @@ export default function CobranzaGeneral({ searchParams }) {
               {vencidas.map((f) => (
                 <tr key={f.id} className="border-t border-slate-800/70">
                   <td className="px-4 py-2">
-                    <Link href={`/estado-fuerza/${f.servicio_id}`} className="text-slate-200 hover:text-cyan-400">
-                      {f.servicio}
-                    </Link>
-                    <span className="block text-[11px] text-slate-500">{f.razon_social || '—'}</span>
+                    <NombreServicio id={f.servicio_id} servicio={f.servicio} razonSocial={f.razon_social} />
                   </td>
                   <td className="px-3 py-2 text-slate-400">{f.zona || '—'}</td>
                   <td className="px-3 py-2 text-slate-400">{f.asesor || '—'}</td>
