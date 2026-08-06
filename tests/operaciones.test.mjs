@@ -587,6 +587,17 @@ describe('los datos que venían mal en 2026', () => {
     assert.deepEqual(de2026.filter((a) => a.zona === 'CENTRO'), []);
   });
 
+  test('ningún servicio vivo quedó con esa zona tampoco', async () => {
+    // El arreglo anterior solo tocaba las aperturas PENDIENTES y falló por
+    // donde tenía que fallar: en cuanto se aplicaron, el servicio nació con
+    // «Centro» y ahí se quedó. Un arreglo que solo alcanza al dato mientras
+    // nadie lo usa no es un arreglo.
+    const r = await admin.pedir('/api/servicios?estatus=ACTIVO');
+    assert.equal(r.status, 200);
+    const conCentro = r.json.servicios.filter((s) => s.zona === 'CENTRO');
+    assert.deepEqual(conCentro.map((s) => s.servicio), []);
+  });
+
   test('las de 2023 y 2024 sí la conservan: entonces existía', async () => {
     // Reescribir el histórico para que se vea ordenado sería falsearlo.
     const aperturas = (await admin.pedir('/api/aperturas')).json.aperturas;
