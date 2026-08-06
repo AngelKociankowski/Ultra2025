@@ -7,6 +7,7 @@ import {
   facturasVencidas,
   pendientesDeFacturar,
   facturasDelPeriodo,
+  conciliacionDelPeriodo,
   calendarioFacturacion,
 } from '@/lib/facturacion';
 import { formatCurrency, formatNumber } from '@/lib/utils';
@@ -14,6 +15,7 @@ import { mesActual } from '@/lib/fechas';
 import PorFacturar from './PorFacturar';
 import CalendarioMeses from './CalendarioMeses';
 import Emitidas from './Emitidas';
+import Conciliacion from './Conciliacion';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +61,7 @@ export default function CobranzaGeneral({ searchParams }) {
   const pendientes = pendientesDeFacturar(periodo);
   const calendario = calendarioFacturacion(periodo.slice(0, 4));
   const emitidas = facturasDelPeriodo(periodo);
+  const conciliacion = conciliacionDelPeriodo(periodo);
 
   return (
     <div className="space-y-5">
@@ -99,6 +102,8 @@ export default function CobranzaGeneral({ searchParams }) {
         sinCondiciones={pendientes.sinCondiciones}
         facturados={pendientes.facturados}
       />
+
+      <Conciliacion datos={conciliacion} periodo={periodo} />
 
       <Emitidas periodo={periodo} facturas={emitidas} puedeSubir={puede(usuario.rol, 'editar_finanzas')} />
 
