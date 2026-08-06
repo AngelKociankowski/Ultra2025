@@ -430,6 +430,59 @@ describe('el reparto por turno dice cuándo no cuadra', () => {
   });
 });
 
+describe('capturar dos veces la misma alta', () => {
+  test('el segundo intento se rechaza y manda a incrementar', async () => {
+    // Pasó de verdad: la misma alta capturada en tres días distintos dejó tres
+    // servicios idénticos en el estado de fuerza, con la plantilla contada tres
+    // veces y sin nada que lo explicara. `aplicarApertura` ya lo impedía;
+    // registrar directamente, no.
+    const primera = await abrir({ tipo: 'APERTURA', servicio: 'OPS ALTA REPETIDA', turnos: { '24X24': 6 } });
+    assert.equal(primera.status, 201, primera.texto);
+
+    const segunda = await abrir({ tipo: 'APERTURA', servicio: 'OPS ALTA REPETIDA', turnos: { '24X24': 6 } });
+    assert.equal(segunda.status, 400, segunda.texto);
+    assert.match(segunda.json.error, /ya está activo con 6 guardias/);
+    assert.match(segunda.json.error, /INCREMENTO/);
+
+    // Y el estado de fuerza quedó con uno solo, no con dos.
+    const html = comoSeLee((await admin.pedir('/estado-fuerza?q=OPS ALTA REPETIDA')).texto);
+    assert.equal(html.split('OPS ALTA REPETIDA').length - 1 >= 1, true);
+    const api = (await admin.pedir('/api/servicios?estatus=ACTIVO')).json.servicios
+      .filter((s) => s.servicio === 'OPS ALTA REPETIDA');
+    assert.equal(api.length, 1, 'debería haber un solo servicio con ese nombre');
+    assert.equal(api[0].total_guardias, 6, 'y con su plantilla, no con el doble');
+  });
+
+  test('un incremento sí suma sobre el que ya existe', async () => {
+    const r = await abrir({
+      tipo: 'INCREMENTO',
+      servicio_id: (await admin.pedir('/api/servicios?estatus=ACTIVO')).json.servicios
+        .find((s) => s.servicio === 'OPS ALTA REPETIDA').id,
+      turnos: { '24X24': 2 },
+    });
+    assert.equal(r.status, 201, r.texto);
+    const api = (await admin.pedir('/api/servicios?estatus=ACTIVO')).json.servicios
+      .filter((s) => s.servicio === 'OPS ALTA REPETIDA');
+    assert.equal(api.length, 1);
+    assert.equal(api[0].total_guardias, 8);
+  });
+
+  test('un nombre que solo está de baja sí se puede volver a abrir', async () => {
+    // Una baja se fue de verdad. Si el cliente vuelve, lo que corresponde es una
+    // apertura nueva, y bloquearla sería impedir que regrese.
+    const a = await abrir({ tipo: 'APERTURA', servicio: 'OPS SE FUE Y VOLVIO', turnos: { '12 HRS': 2 } });
+    const id = a.json.servicioId;
+    const c = await admin.pedir('/api/cancelaciones', {
+      method: 'POST',
+      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: id, motivo: 'cerró temporalmente' }),
+    });
+    assert.equal(c.status, 201, c.texto);
+
+    const b = await abrir({ tipo: 'APERTURA', servicio: 'OPS SE FUE Y VOLVIO', turnos: { '12 HRS': 2 } });
+    assert.equal(b.status, 201, b.texto);
+  });
+});
+
 describe('adoptar un valor huérfano', () => {
   test('no se adopta lo que no está capturado en ningún servicio', async () => {
     const r = await admin.pedir('/api/catalogos', {
