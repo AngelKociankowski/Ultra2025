@@ -815,6 +815,100 @@ describe('aplicar una pendiente con un valor que ya no existe', () => {
   });
 });
 
+describe('el REPSE lo puede capturar quien lo sabe', () => {
+  let id;
+
+  before(async () => {
+    const r = await abrir({ tipo: 'APERTURA', servicio: 'OPS SIN REPSE AUN', turnos: { '24 HRS': 2 } });
+    id = r.json.servicioId;
+  });
+
+  test('está vacío y la tabla lo dice, no lo esconde', async () => {
+    // Cero de 217 servicios lo traen. Una columna que no se ve es una columna
+    // que nadie llena.
+    const s = (await admin.pedir(`/api/servicios/${id}`)).json.servicio;
+    assert.equal(s.tipo_repse, null);
+    const html = comoSeLee((await admin.pedir('/estado-fuerza?q=OPS SIN REPSE AUN')).texto);
+    assert.match(html, /REPSE/);
+    assert.match(html, /falta/);
+  });
+
+  for (const rol of ['ventas', 'operaciones', 'finanzas']) {
+    test(`${rol} lo captura`, async () => {
+      const sesion = await app.entrarYAsentar(ROLES[rol]);
+      const r = await sesion.pedir(`/api/servicios/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tipo_repse: 'PLUS' }),
+      });
+      assert.equal(r.status, 200, r.texto);
+      assert.equal((await admin.pedir(`/api/servicios/${id}`)).json.servicio.tipo_repse, 'PLUS');
+      // Se deja como estaba para que el siguiente rol también vea un cambio.
+      await admin.pedir(`/api/servicios/${id}`, { method: 'PATCH', body: JSON.stringify({ tipo_repse: 'BÁSICO' }) });
+    });
+  }
+
+  test('pero solo eso: no se les abrió el bloque operativo', async () => {
+    const ventas = await app.entrarYAsentar(ROLES.ventas);
+    const r = await ventas.pedir(`/api/servicios/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ precio_guardia: 99999, sueldo_base: 1 }),
+    });
+    assert.equal(r.status, 403, r.texto);
+    assert.equal((await admin.pedir(`/api/servicios/${id}`)).json.servicio.precio_guardia, null);
+  });
+
+  test('sigue saliendo de catálogo: no vuelve a ser texto libre', async () => {
+    const ventas = await app.entrarYAsentar(ROLES.ventas);
+    const r = await ventas.pedir(`/api/servicios/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ tipo_repse: 'EL QUE YO QUIERA' }),
+    });
+    assert.equal(r.status, 400, r.texto);
+    assert.match(r.texto, /no está en el catálogo/);
+  });
+
+  test('jurídico y el espectador no lo tocan', async () => {
+    const juridico = await app.entrarYAsentar(ROLES.juridico);
+    const r = await juridico.pedir(`/api/servicios/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ tipo_repse: 'PLUS' }),
+    });
+    assert.equal(r.status, 403, r.texto);
+  });
+});
+
+describe('la tabla del estado de fuerza trae lo importante', () => {
+  test('zona, tipo, supervisor, turnos con cantidad y la venta del mes', async () => {
+    const html = comoSeLee((await admin.pedir('/estado-fuerza')).texto);
+    for (const encabezado of ['Zona · tipo', 'Quién lo lleva', 'Guardias y turnos', 'Venta al mes', 'Nómina y resultado', 'Contrato']) {
+      assert.match(html, new RegExp(encabezado.replace(/[·]/g, '.')), `falta la columna «${encabezado}»`);
+    }
+    // Y el detalle de un servicio real: su tipo y su supervisor, que antes no
+    // salían en ninguna columna.
+    assert.match(html, /ALPURA|INDUSTRIA|SERVICIOS|CONDOMINIOS/);
+  });
+
+  test('una utilidad sin nómina detrás no se presenta como utilidad', async () => {
+    // 25 servicios traen 100% porque el archivo calculó (venta − 0) ÷ venta.
+    // Pintarlo en verde sería repetir la mentira.
+    const html = comoSeLee((await admin.pedir('/estado-fuerza')).texto);
+    assert.match(html, /utilidad sin sustento/);
+  });
+
+  test('lo que falta se ve que falta, no se disimula con un guion', async () => {
+    // La nómina está en 128 de 217 y el REPSE en 0. Un «—» no distingue «no
+    // aplica» de «nadie lo ha capturado», y lo segundo es lo que hay que ir a
+    // llenar.
+    const html = comoSeLee((await admin.pedir('/estado-fuerza')).texto);
+    assert.match(html, /sin IVA: falta|utilidad: falta|REPSE.*falta/s);
+  });
+
+  test('el desglose por turno viene con su cantidad, no solo el total', async () => {
+    const html = comoSeLee((await admin.pedir('/estado-fuerza')).texto);
+    assert.match(html, /12X36|24 HRS|12 HRS/);
+  });
+});
+
 describe('adoptar un valor huérfano', () => {
   test('no se adopta lo que no está capturado en ningún servicio', async () => {
     const r = await admin.pedir('/api/catalogos', {
