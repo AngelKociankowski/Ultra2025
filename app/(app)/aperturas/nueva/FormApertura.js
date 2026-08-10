@@ -330,17 +330,17 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
 
           <div>
             <label className={label} htmlFor="tipo_repse">
-              Tipo de REPSE
+              ¿Tiene REPSE?
             </label>
             <CampoCatalogo
               id="tipo_repse"
               valor={f.tipo_repse}
               opciones={opciones.tiposRepse}
               onChange={(v) => set('tipo_repse', v)}
-              vacio="— Selecciona tipo —"
+              vacio="— Sí o no —"
               className={input}
             />
-            {opciones.tiposRepse.length === 0 && <SinCatalogo que="tipos de REPSE" />}
+            {opciones.tiposRepse.length === 0 && <SinCatalogo que="valores de REPSE" />}
           </div>
 
           <div>

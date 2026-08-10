@@ -29,6 +29,25 @@ const nombreMes = (p) => {
 const delta = (n, fmt = formatNumber) =>
   n === 0 ? '=' : `${n > 0 ? '+' : '−'}${fmt(Math.abs(n))}`;
 
+/**
+ * El REPSE del renglón, en tres estados.
+ *
+ * «Sin capturar» no es lo mismo que «no tiene», y por eso son tres y no dos: en
+ * ámbar va lo que nadie ha revisado —hoy los 217—, y decir «sin REPSE» de un
+ * servicio que nadie miró sería dar por respondida una pregunta que no se hizo.
+ *
+ * El último caso es para un valor que no es ninguno de los dos. No debería
+ * pasar —la captura solo ofrece sí y no—, pero en el histórico quedó un «0» que
+ * nadie supo interpretar, y enseñarlo tal cual es mejor que esconderlo detrás
+ * de un «falta» que haría creer que el renglón está vacío.
+ */
+function Repse({ valor }) {
+  if (valor === 'SÍ') return <span className="text-slate-400">con REPSE</span>;
+  if (valor === 'NO') return <span>sin REPSE</span>;
+  if (valor) return <span className="text-amber-300/60">REPSE «{valor}»</span>;
+  return <span className="text-amber-300/60">REPSE falta</span>;
+}
+
 export default function EstadoFuerza({ searchParams }) {
   const usuario = usuarioActual();
   const vigente = periodoVigente();
@@ -256,12 +275,7 @@ export default function EstadoFuerza({ searchParams }) {
                         una columna que no se ve es una columna que nadie llena,
                         y es requisito de la autoridad para poder cobrar. */}
                     <span className="block text-[11px] text-slate-500">
-                      {s.tipo || '—'} · REPSE{' '}
-                      {s.tipo_repse ? (
-                        s.tipo_repse
-                      ) : (
-                        <span className="text-amber-300/60">falta</span>
-                      )}
+                      {s.tipo || '—'} · <Repse valor={s.tipo_repse} />
                     </span>
                   </td>
                   <td className="px-3 py-2 text-slate-400 max-w-[170px]">

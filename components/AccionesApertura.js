@@ -58,7 +58,7 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
     gerente: ['gerentes', 'gerente'],
     supervisor: ['supervisores', 'supervisor'],
     estado_geo: ['estados', 'estado'],
-    tipo_repse: ['tiposRepse', 'tipo de REPSE'],
+    tipo_repse: ['tiposRepse', 'REPSE'],
     uniforme: ['uniformes', 'uniforme'],
   };
   const LISTA_ZONA = { campo: 'zona', clave: 'zonas', etiqueta: 'zona', valor: apertura.zona };
