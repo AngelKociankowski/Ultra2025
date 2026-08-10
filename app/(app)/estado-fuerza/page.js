@@ -53,7 +53,7 @@ function Repse({ valor, esCorte }) {
   if (valor === 'SÍ') return <span className="text-slate-200 font-medium">Sí</span>;
   if (valor === 'NO') return <span className="text-slate-500">No</span>;
   if (valor) return <span className="text-amber-300/70" title="Valor que no es sí ni no">«{valor}»</span>;
-  return <span className="text-amber-300/60 text-xs">falta</span>;
+  return <span className="text-amber-300/70 text-[11px] whitespace-nowrap">Dato faltante</span>;
 }
 
 export default function EstadoFuerza({ searchParams }) {

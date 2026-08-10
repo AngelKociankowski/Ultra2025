@@ -211,7 +211,7 @@ export const GUIAS = [
           'Busca el bloque <b>REPSE</b> y escoge <b>Sí</b> o <b>No</b>, según si ese cliente nos lo pide.',
           'Da clic en guardar.',
         ],
-        nota: 'Déjalo vacío si no lo sabes, no pongas «No» por salir del paso. En la tabla del estado de fuerza hay una columna <b>REPSE</b>: lo que está vacío dice «falta» en amarillo, y así se ve de un vistazo qué queda por revisar. Un «No» puesto a la ligera se ve igual que uno revisado.',
+        nota: 'Déjalo vacío si no lo sabes, no pongas «No» por salir del paso. En la tabla del estado de fuerza hay una columna <b>REPSE</b>: lo que está vacío dice «Dato faltante» en amarillo, y así se ve de un vistazo qué queda por revisar. Un «No» puesto a la ligera se ve igual que uno revisado.',
       },
       {
         titulo: 'Cambiar el supervisor o el gerente a cargo',

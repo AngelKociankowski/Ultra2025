@@ -918,7 +918,7 @@ describe('la tabla del estado de fuerza trae lo importante', () => {
     // aplica» de «nadie lo ha capturado», y lo segundo es lo que hay que ir a
     // llenar.
     const html = comoSeLee((await admin.pedir('/estado-fuerza')).texto);
-    assert.match(html, /sin IVA: falta|utilidad: falta|REPSE.*falta/s);
+    assert.match(html, /sin IVA: falta|utilidad: falta|Dato faltante/s);
   });
 
   test('el desglose por turno viene con su cantidad, no solo el total', async () => {
@@ -979,7 +979,7 @@ describe('el REPSE se ve en la tabla y en la ficha', () => {
     const html = comoSeLee(r.texto);
     assert.match(html, /corte de junio 2026 . cerrado/, 'debería estar viendo el corte');
     assert.match(html, /El corte de ese mes no guarda este dato/, 'debería decir por qué va vacío');
-    assert.doesNotMatch(html, /REPSE[\s\S]{0,200}>falta</, 'no debería acusar de falta de captura');
+    assert.doesNotMatch(html, /Dato faltante/, 'no debería acusar de falta de captura');
   });
 });
 
