@@ -118,7 +118,7 @@ describe('los cinco campos que eran texto libre ahora salen de catálogo', () =>
       gerente: 'GERENTE DE PRUEBA',
       supervisor: 'SUPERVISOR DE PRUEBA',
       estado_geo: 'EDOMEX',
-      tipo_repse: 'BÁSICO',
+      tipo_repse: 'SÍ',
       uniforme: 'COMANDO',
     });
     assert.equal(r.status, 201, r.texto);
@@ -127,7 +127,7 @@ describe('los cinco campos que eran texto libre ahora salen de catálogo', () =>
     assert.equal(s.gerente, 'GERENTE DE PRUEBA');
     assert.equal(s.supervisor, 'SUPERVISOR DE PRUEBA');
     assert.equal(s.estado_geo, 'EDOMEX');
-    assert.equal(s.tipo_repse, 'BÁSICO');
+    assert.equal(s.tipo_repse, 'SÍ');
     assert.equal(s.uniforme, 'COMANDO');
   });
 
@@ -566,10 +566,13 @@ describe('lo que la hoja capturaba y la plataforma no', () => {
     assert.deepEqual([...uniformes].sort(), ['COMANDO', 'TRAJE']);
     assert.ok(conocidos.uniformes.includes('INSTITUCIONAL'), 'el retirado sigue conocido');
     assert.ok(conocidos.uniformes.includes('CAMUFLAJE GRIS'));
-    // Sin el prefijo «REPSE» delante de cada nivel: la etiqueta del campo ya
-    // dice de qué se habla. Son los nombres internos, tal cual.
+    // El REPSE se pregunta con dos respuestas y nada más. Arrancó pidiendo el
+    // nivel —básico, plus, plus +, no requiere—, que es como viene en la hoja,
+    // y se simplificó a la pregunta que de verdad se usa. Los cuatro niveles
+    // siguen conocidos, igual que los uniformes retirados.
+    assert.deepEqual([...tiposRepse].sort(), ['NO', 'SÍ']);
     for (const t of ['BÁSICO', 'PLUS', 'PLUS +', 'NO REQUIERE REPSE']) {
-      assert.ok(tiposRepse.includes(t), `falta el nivel ${t}`);
+      assert.ok(conocidos.tiposRepse.includes(t), `el nivel ${t} debería seguir conocido`);
     }
     // Las listas inventadas del primer intento ya no están.
     assert.ok(!uniformes.includes('TÁCTICO'));
@@ -607,29 +610,33 @@ describe('los datos que venían mal en 2026', () => {
     );
   });
 
-  test('el REPSE quedó en cuatro niveles, no en quince formas', async () => {
+  test('el REPSE quedó en sí o no, no en quince formas', async () => {
     // Eran quince: «Básico», «REPSE BÁSICO», «Repse Basico», «SI (BASICO)»,
-    // «si, basico», «SI BASICO»… todas el mismo nivel escrito mal. Uniformar la
-    // ortografía no reescribe ningún hecho; dejarla partida sí impide contar.
+    // «si, basico», «SI BASICO», «Sin REPSE», «NO»… El campo pedía el nivel y
+    // ahora pide si lo tiene o no, así que los cuatro niveles se doblan en «SÍ»
+    // y las tres maneras de negarlo en «NO».
     const valores = new Set(
       (await admin.pedir('/api/aperturas')).json.aperturas.map((a) => a.tipo_repse).filter(Boolean)
     );
-    const reconocidos = ['BÁSICO', 'PLUS', 'PLUS +', 'NO REQUIERE REPSE'];
-    const sobrantes = [...valores].filter((v) => !reconocidos.includes(v));
-    // «SI» y «0» se quedan: nadie puede saber hoy qué nivel quisieron decir, y
-    // ponerles uno sería inventarlo.
-    assert.ok(sobrantes.every((v) => ['SI', '0'].includes(v)), `quedaron formas raras: ${sobrantes.join(', ')}`);
+    const sobrantes = [...valores].filter((v) => !['SÍ', 'NO'].includes(v));
+    // «0» se queda: no se sabe si quiso decir «no» o si es basura de una columna
+    // corrida, y elegir por él sería inventarlo. La plataforma lo marca.
+    assert.ok(sobrantes.every((v) => v === '0'), `quedaron formas raras: ${sobrantes.join(', ')}`);
+    assert.ok(valores.has('SÍ') && valores.has('NO'), 'las dos respuestas deberían aparecer');
   });
 
-  test('el REPSE de 2026 quedó con el nombre interno, sin el prefijo', async () => {
-    const de2026 = (await admin.pedir('/api/aperturas')).json.aperturas
-      .filter((a) => String(a.periodo || '') >= '2026-01' && a.tipo_repse);
-    for (const a of de2026) {
-      assert.doesNotMatch(a.tipo_repse, /^REPSE /i, `${a.folio} conserva el prefijo: ${a.tipo_repse}`);
-    }
-    // Y sin dos formas del mismo término conviviendo.
-    const formas = new Set(de2026.map((a) => a.tipo_repse));
-    assert.ok(!(formas.has('BASICO') && formas.has('BÁSICO')), 'BASICO y BÁSICO no deberían convivir');
+  test('el nivel que traía la hoja se dobló en sí, no se perdió en vacío', async () => {
+    // Diecinueve aperturas decían «REPSE PLUS» y otras tantas «Básico». Todas
+    // son servicios CON REPSE: convertirlas en nulo habría cambiado «sí tiene»
+    // por «nadie lo ha revisado», que es justo lo que la tabla pinta en ámbar.
+    //
+    // Los números son pisos, no totales: la API devuelve los 500 movimientos más
+    // recientes y en la base hay 516, así que unos cuantos de los viejos quedan
+    // fuera de la ventana. Lo que se vigila es que no se vacíen, no cuántos son.
+    const conDato = (await admin.pedir('/api/aperturas')).json.aperturas.filter((a) => a.tipo_repse);
+    const si = conDato.filter((a) => a.tipo_repse === 'SÍ').length;
+    assert.ok(conDato.length >= 88, `solo ${conDato.length} conservan el dato`);
+    assert.ok(si >= 75, `solo ${si} de ${conDato.length} quedaron con REPSE`);
   });
 
   test('el uniforme de 2026 quedó en la caja del catálogo', async () => {
@@ -849,12 +856,12 @@ describe('el REPSE lo puede capturar quien lo sabe', () => {
       const sesion = await app.entrarYAsentar(ROLES[rol]);
       const r = await sesion.pedir(`/api/servicios/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ tipo_repse: 'PLUS' }),
+        body: JSON.stringify({ tipo_repse: 'SÍ' }),
       });
       assert.equal(r.status, 200, r.texto);
-      assert.equal((await admin.pedir(`/api/servicios/${id}`)).json.servicio.tipo_repse, 'PLUS');
+      assert.equal((await admin.pedir(`/api/servicios/${id}`)).json.servicio.tipo_repse, 'SÍ');
       // Se deja como estaba para que el siguiente rol también vea un cambio.
-      await admin.pedir(`/api/servicios/${id}`, { method: 'PATCH', body: JSON.stringify({ tipo_repse: 'BÁSICO' }) });
+      await admin.pedir(`/api/servicios/${id}`, { method: 'PATCH', body: JSON.stringify({ tipo_repse: 'NO' }) });
     });
   }
 
@@ -882,7 +889,7 @@ describe('el REPSE lo puede capturar quien lo sabe', () => {
     const juridico = await app.entrarYAsentar(ROLES.juridico);
     const r = await juridico.pedir(`/api/servicios/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ tipo_repse: 'PLUS' }),
+      body: JSON.stringify({ tipo_repse: 'SÍ' }),
     });
     assert.equal(r.status, 403, r.texto);
   });

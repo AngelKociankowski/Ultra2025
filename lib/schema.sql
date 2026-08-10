@@ -360,6 +360,11 @@ CREATE TABLE IF NOT EXISTS facturas (
   dias_credito      INTEGER NOT NULL DEFAULT 0,
   fecha_vencimiento TEXT NOT NULL,
   importe           REAL NOT NULL,
+  -- Cuántos guardias cubre esta factura. Es el dato que permite contrastar lo
+  -- que se cobró contra lo que está en la calle: una factura por 8 guardias en
+  -- un servicio de 10 son dos elementos que se están poniendo y no se cobran, y
+  -- eso no se ve en ningún total —los dos números cuadran consigo mismos—.
+  guardias          INTEGER,
   importe_pagado    REAL NOT NULL DEFAULT 0,
   fecha_pago        TEXT,                       -- la del último pago recibido
   forma_pago        TEXT,

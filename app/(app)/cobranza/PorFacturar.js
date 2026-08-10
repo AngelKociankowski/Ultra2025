@@ -56,6 +56,10 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
       // la de hoy: es un punto de partida, no una suposición sobre el negocio.
       fecha_factura: f.fecha || hoyLocal(),
       importe: f.importe ? String(f.importe) : '',
+      // Se propone la plantilla del servicio. Es lo que está en la calle: si se
+      // factura otra cosa, que sea porque alguien la cambió a propósito y no
+      // porque el campo llegó vacío.
+      guardias: f.plantilla ? String(f.plantilla) : '',
       folio: '',
     });
   }
@@ -180,7 +184,7 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
                   </span>
 
                   {abierta === clave(f) && (
-                    <form onSubmit={(e) => emitir(e, f)} className="mt-3 grid sm:grid-cols-4 gap-2 items-end">
+                    <form onSubmit={(e) => emitir(e, f)} className="mt-3 grid sm:grid-cols-4 gap-2 items-start">
                       <div>
                         <label className="block text-[11px] text-slate-500 mb-0.5">Fecha</label>
                         <input
@@ -202,6 +206,31 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
                           onChange={(e) => setDatos({ ...datos, importe: e.target.value })}
                           className={campo}
                         />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-500 mb-0.5">
+                          Guardias facturados
+                          {f.plantilla > 0 && <span className="text-slate-600"> · en la calle: {f.plantilla}</span>}
+                        </label>
+                        <input
+                          required
+                          type="number"
+                          min="0"
+                          value={datos.guardias}
+                          onChange={(e) => setDatos({ ...datos, guardias: e.target.value })}
+                          className={`${campo} ${
+                            f.plantilla > 0 && Number(datos.guardias) !== f.plantilla
+                              ? 'border-amber-500/60'
+                              : ''
+                          }`}
+                        />
+                        {f.plantilla > 0 && datos.guardias !== '' && Number(datos.guardias) !== f.plantilla && (
+                          <p className="text-[11px] text-amber-300/80 mt-0.5">
+                            {Number(datos.guardias) < f.plantilla
+                              ? `${f.plantilla - Number(datos.guardias)} sin cobrar`
+                              : `${Number(datos.guardias) - f.plantilla} de más`}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-[11px] text-slate-500 mb-0.5">Folio fiscal</label>
