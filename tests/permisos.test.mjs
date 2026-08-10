@@ -136,8 +136,7 @@ describe('permisos por campo', () => {
     }
   });
 
-  test('el admin edita los tres bloques a la vez', async () => {
-    // Desde la revisión de operaciones el supervisor sale de catálogo. Se da de
+  test('el admin edita los tres bloques a la vez', async () => {    // Desde la revisión de operaciones el supervisor sale de catálogo. Se da de
     // alta uno propio de la prueba para que el cambio sea real: si se usara uno
     // que el servicio ya trae, no contaría como modificación y la prueba pasaría
     // a medir otra cosa.
@@ -157,6 +156,89 @@ describe('permisos por campo', () => {
     assert.equal(r.status, 200);
     assert.equal(Object.keys(r.json.cambios).length, 3);
     assert.deepEqual(r.json.rechazados, []);
+  });
+});
+
+/**
+ * Quién lleva el servicio lo decide operaciones.
+ *
+ * Es la asignación del día a día —vacaciones, reparto de zona, un supervisor
+ * nuevo— y hasta ahora solo la movía el administrador. El costo de eso no era
+ * el trámite: era que mientras el cambio se pedía por fuera, la ficha seguía
+ * enseñando al supervisor anterior, que es justo el dato que se busca cuando
+ * hay una incidencia y hay que llamarle a alguien.
+ */
+describe('operaciones reasigna supervisor y gerente', () => {
+  before(async () => {
+    // Nombres propios de la prueba: usar uno que el servicio ya trae no contaría
+    // como cambio y la prueba pasaría midiendo otra cosa.
+    for (const [tipo, valor] of [
+      ['supervisor', 'SUPERVISOR REASIGNADO'],
+      ['gerente', 'GERENTE REASIGNADO'],
+    ]) {
+      await s.admin.pedir('/api/catalogos', { method: 'POST', body: JSON.stringify({ tipo, valor }) });
+    }
+  });
+
+  test('los cambia y quedan guardados', async () => {
+    const r = await s.operaciones.pedir('/api/servicios/5', {
+      method: 'PATCH',
+      body: JSON.stringify({ supervisor: 'SUPERVISOR REASIGNADO', gerente: 'GERENTE REASIGNADO' }),
+    });
+    assert.equal(r.status, 200, r.texto);
+    assert.deepEqual(r.json.rechazados, []);
+
+    const ficha = (await s.admin.pedir('/api/servicios/5')).json.servicio;
+    assert.equal(ficha.supervisor, 'SUPERVISOR REASIGNADO');
+    assert.equal(ficha.gerente, 'GERENTE REASIGNADO');
+  });
+
+  test('un supervisor que no está en el catálogo se rechaza', async () => {
+    // Sin esto, cada quien escribiría el mismo nombre a su manera y volverían
+    // los seis supervisores partidos en doce renglones.
+    const r = await s.operaciones.pedir('/api/servicios/5', {
+      method: 'PATCH',
+      body: JSON.stringify({ supervisor: 'ALGUIEN QUE NO EXISTE' }),
+    });
+    assert.equal(r.status, 400, r.texto);
+    assert.match(r.json.error, /no está en el catálogo/);
+  });
+
+  test('el asesor sigue sin ser suyo: ese es de ventas', async () => {
+    const r = await s.operaciones.pedir('/api/servicios/5', {
+      method: 'PATCH',
+      body: JSON.stringify({ asesor: 'QUIEN SEA' }),
+    });
+    assert.equal(r.status, 403, r.texto);
+  });
+
+  test('reasignar no abre el resto de los datos operativos', async () => {
+    // El riesgo de abrir el bloque entero en vez de un grupo propio: precios,
+    // sueldos y bonos viajan en ese mismo formulario.
+    const r = await s.operaciones.pedir('/api/servicios/5', {
+      method: 'PATCH',
+      body: JSON.stringify({ supervisor: 'SUPERVISOR REASIGNADO', precio_guardia: 1, sueldo_base: 1 }),
+    });
+    assert.equal(r.json.rechazados?.sort().join(','), 'precio_guardia,sueldo_base', r.texto);
+    const ficha = (await s.admin.pedir('/api/servicios/5')).json.servicio;
+    assert.notEqual(ficha.precio_guardia, 1, 'el precio no se guardó');
+  });
+
+  test('ni ventas ni jurídico ni finanzas reasignan', async () => {
+    for (const rol of ['ventas', 'juridico', 'finanzas']) {
+      const r = await s[rol].pedir('/api/servicios/5', {
+        method: 'PATCH',
+        body: JSON.stringify({ supervisor: 'SUPERVISOR REASIGNADO' }),
+      });
+      assert.equal(r.status, 403, `${rol} no debería reasignar`);
+    }
+  });
+
+  test('el cambio queda con nombre y apellido en la bitácora', async () => {
+    // Reasignar es una decisión, no un ajuste de captura: si mañana hay que
+    // preguntar por qué cambió el supervisor, tiene que constar quién lo movió.
+    const pagina = await s.admin.pedir('/bitacora');
+    assert.match(pagina.texto, /SUPERVISOR REASIGNADO/);
   });
 });
 
