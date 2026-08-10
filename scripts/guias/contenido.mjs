@@ -75,7 +75,7 @@ export const GUIAS = [
           'Arriba salen tres botones: <b>APERTURA</b>, <b>INCREMENTO</b> y <b>TEMPORAL</b>. Deja APERTURA si es un cliente nuevo.',
           'Abajo te pregunta <b>«¿El servicio es fijo o termina?»</b>. Si el cliente lo contrató sin fecha de fin, deja <b>Fijo</b>. Si es por unos meses, escoge <b>Temporal</b> y pon hasta cuándo.',
           'Llena el nombre del servicio y la fecha de apertura. Esos dos son obligatorios.',
-          'Llena lo demás con las listas: zona, asesor, gerente, supervisor, estado, REPSE, uniforme. <b>Son listas, no se escribe</b> — escoges de las opciones.',
+          'Llena lo demás con las listas: zona, asesor, gerente, supervisor, estado, si el cliente pide REPSE, uniforme. <b>Son listas, no se escribe</b> — escoges de las opciones.',
           'En <b>Desglose de turnos</b> pon cuántos guardias van en cada horario. El total se suma solo.',
           'En <b>Equipo que se le entrega</b> pon cuántos chalecos, lámparas, radios, etc. Deja en blanco lo que no lleve.',
           'En <b>Comercial</b> pon el precio, el sueldo base y el bono.',
@@ -205,13 +205,13 @@ export const GUIAS = [
         nota: 'Si el botón dice <b>«⚠ Corregir»</b> en amarillo, es que esa apertura trae un dato que ya no existe en las listas (por ejemplo una zona que se dejó de usar). Da clic ahí primero y escoge el bueno.',
       },
       {
-        titulo: 'Decir si el servicio tiene REPSE',
+        titulo: 'Decir si el cliente pide REPSE',
         pasos: [
           'Busca el servicio y abre su ficha.',
-          'Busca el bloque <b>REPSE</b> y escoge <b>Sí</b> o <b>No</b>. Nada más: no hay que decir de qué nivel es.',
+          'Busca el bloque <b>REPSE</b> y escoge <b>Sí</b> o <b>No</b>, según si ese cliente nos lo pide.',
           'Da clic en guardar.',
         ],
-        nota: 'Déjalo vacío si no lo sabes, no pongas «No» por salir del paso. En la tabla del estado de fuerza, lo que está vacío dice «REPSE falta» en amarillo, y así se ve de un vistazo qué falta por revisar. Un «No» puesto a la ligera se ve igual que uno revisado.',
+        nota: 'Déjalo vacío si no lo sabes, no pongas «No» por salir del paso. En la tabla del estado de fuerza hay una columna <b>REPSE</b>: lo que está vacío dice «falta» en amarillo, y así se ve de un vistazo qué queda por revisar. Un «No» puesto a la ligera se ve igual que uno revisado.',
       },
       {
         titulo: 'Cambiar el supervisor o el gerente a cargo',

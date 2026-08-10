@@ -130,6 +130,10 @@ export default function DetalleServicio({ params }) {
             <Dato etiqueta="Tipo" valor={s.tipo} />
             <Dato etiqueta="Cluster" valor={s.cluster} />
             <Dato etiqueta="Estado" valor={s.estado_geo} />
+            {/* Si ESTE cliente nos pide REPSE. No es si ya se entregó el del
+                mes: es un requisito del cliente, y por eso vive en la ficha del
+                servicio y no en un pendiente que cambie de un mes a otro. */}
+            <Dato etiqueta="¿El cliente pide REPSE?" valor={s.tipo_repse} />
             <Dato etiqueta="Supervisor" valor={s.supervisor} />
             <Dato etiqueta="Asesor" valor={s.asesor} />
             <Dato etiqueta="Gerente" valor={s.gerente} />

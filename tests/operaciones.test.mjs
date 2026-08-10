@@ -898,7 +898,7 @@ describe('el REPSE lo puede capturar quien lo sabe', () => {
 describe('la tabla del estado de fuerza trae lo importante', () => {
   test('zona, tipo, supervisor, turnos con cantidad y la venta del mes', async () => {
     const html = comoSeLee((await admin.pedir('/estado-fuerza')).texto);
-    for (const encabezado of ['Zona · tipo', 'Quién lo lleva', 'Guardias y turnos', 'Venta al mes', 'Nómina y resultado', 'Contrato']) {
+    for (const encabezado of ['Zona · tipo', 'REPSE', 'Quién lo lleva', 'Guardias y turnos', 'Venta al mes', 'Nómina y resultado', 'Contrato']) {
       assert.match(html, new RegExp(encabezado.replace(/[·]/g, '.')), `falta la columna «${encabezado}»`);
     }
     // Y el detalle de un servicio real: su tipo y su supervisor, que antes no
@@ -924,6 +924,62 @@ describe('la tabla del estado de fuerza trae lo importante', () => {
   test('el desglose por turno viene con su cantidad, no solo el total', async () => {
     const html = comoSeLee((await admin.pedir('/estado-fuerza')).texto);
     assert.match(html, /12X36|24 HRS|12 HRS/);
+  });
+});
+
+/**
+ * El REPSE, donde se consulta.
+ *
+ * Dice si ESE cliente nos lo pide, no si ya se entregó el del mes. Por eso es
+ * un dato del servicio, vive en su ficha, y se recorre de arriba abajo en su
+ * propia columna —«¿a cuáles nos lo piden?» es la pregunta que se hace—.
+ * Colgado como subtítulo de la zona no se podía leer en vertical.
+ */
+describe('el REPSE se ve en la tabla y en la ficha', () => {
+  let conRepse;
+  let sinRepse;
+
+  before(async () => {
+    conRepse = (await abrir({
+      tipo: 'APERTURA', servicio: 'REPSE VISIBLE SI', turnos: { '24 HRS': 2 }, tipo_repse: 'SÍ',
+    })).json.servicioId;
+    sinRepse = (await abrir({
+      tipo: 'APERTURA', servicio: 'REPSE VISIBLE NO', turnos: { '24 HRS': 1 }, tipo_repse: 'NO',
+    })).json.servicioId;
+  });
+
+  test('la tabla trae una columna REPSE, no un subtítulo de la zona', async () => {
+    const html = comoSeLee((await admin.pedir('/estado-fuerza')).texto);
+    assert.match(html, /<th[^>]*>REPSE<\/th>/, 'debería ser un encabezado de columna');
+  });
+
+  test('cada servicio dice sí o no en su renglón', async () => {
+    const html = comoSeLee((await admin.pedir('/estado-fuerza?q=REPSE VISIBLE')).texto);
+    const si = html.indexOf('REPSE VISIBLE SI');
+    const no = html.indexOf('REPSE VISIBLE NO');
+    assert.ok(si !== -1 && no !== -1, 'los dos servicios deberían salir');
+    // Cada renglón lleva su respuesta: se busca dentro del pedazo que va del
+    // nombre del servicio al del siguiente, no en toda la página.
+    const primero = html.slice(Math.min(si, no), Math.max(si, no));
+    assert.match(primero, />(Sí|No)</);
+  });
+
+  test('la ficha del servicio lo trae entre sus datos', async () => {
+    // No estaba en ninguna parte de la ficha: se capturaba y no se podía leer.
+    const html = comoSeLee((await admin.pedir(`/estado-fuerza/${conRepse}`)).texto);
+    assert.match(html, /El cliente pide REPSE/);
+  });
+
+  test('en un corte cerrado no se acusa de una omisión que nadie cometió', async () => {
+    // La foto mensual se guardó antes de que el campo existiera y no lo trae.
+    // Pintar «falta» en ámbar en cada renglón de cada mes viejo sería reclamar
+    // una captura que en ese momento no se pedía.
+    const r = await admin.pedir('/estado-fuerza?periodo=2026-06');
+    assert.equal(r.status, 200);
+    const html = comoSeLee(r.texto);
+    assert.match(html, /corte de junio 2026 . cerrado/, 'debería estar viendo el corte');
+    assert.match(html, /El corte de ese mes no guarda este dato/, 'debería decir por qué va vacío');
+    assert.doesNotMatch(html, /REPSE[\s\S]{0,200}>falta</, 'no debería acusar de falta de captura');
   });
 });
 

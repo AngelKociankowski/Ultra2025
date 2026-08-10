@@ -330,7 +330,7 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
 
           <div>
             <label className={label} htmlFor="tipo_repse">
-              ¿Tiene REPSE?
+              ¿El cliente pide REPSE?
             </label>
             <CampoCatalogo
               id="tipo_repse"
