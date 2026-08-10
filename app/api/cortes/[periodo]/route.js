@@ -47,6 +47,16 @@ const COLUMNAS = [
  * va con punto y coma. El BOM al inicio es lo que hace que abra los acentos
  * bien sin pedir nada al usuario.
  */
+/**
+ * El REPSE solo en la plantilla viva.
+ *
+ * Los cortes cerrados no lo guardan: la foto mensual se diseñó antes de que el
+ * campo existiera. Sacarlo igual dejaría una columna vacía en cada exportación
+ * histórica, que se lee como «a ninguno se lo piden» en vez de «el corte no
+ * guarda ese dato».
+ */
+const COLUMNAS_ACTUAL = [['tipo_repse', '¿El cliente pide REPSE?']];
+
 const SEPARADOR = ';';
 const BOM = '﻿';
 
@@ -79,10 +89,11 @@ export async function GET(request, { params }) {
       filas = serviciosDeCorte(periodo);
     }
 
+    const columnas = esActual ? [...COLUMNAS, ...COLUMNAS_ACTUAL] : COLUMNAS;
     const lineas = [
-      COLUMNAS.map(([, et]) => celda(et)).join(SEPARADOR),
+      columnas.map(([, et]) => celda(et)).join(SEPARADOR),
       ...filas.map((f) =>
-        COLUMNAS.map(([c]) => {
+        columnas.map(([c]) => {
           if (c === 'tiene_contrato') return f[c] ? 'SI' : 'NO';
           return celda(f[c]);
         }).join(SEPARADOR)

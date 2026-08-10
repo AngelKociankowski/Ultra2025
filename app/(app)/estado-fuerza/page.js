@@ -30,22 +30,30 @@ const delta = (n, fmt = formatNumber) =>
   n === 0 ? '=' : `${n > 0 ? '+' : '−'}${fmt(Math.abs(n))}`;
 
 /**
- * El REPSE del renglón, en tres estados.
+ * Si el cliente nos pide REPSE, en tres estados.
  *
- * «Sin capturar» no es lo mismo que «no tiene», y por eso son tres y no dos: en
- * ámbar va lo que nadie ha revisado —hoy los 217—, y decir «sin REPSE» de un
+ * Dice si ESE cliente lo exige, no si ya se entregó el del mes. Por eso es un
+ * dato del servicio y no un pendiente que cambie de un mes a otro.
+ *
+ * «Sin capturar» no es lo mismo que «no lo pide», y por eso son tres y no dos:
+ * en ámbar va lo que nadie ha revisado —hoy los 217—, y poner «No» a un
  * servicio que nadie miró sería dar por respondida una pregunta que no se hizo.
  *
- * El último caso es para un valor que no es ninguno de los dos. No debería
+ * El cuarto caso es para un valor que no es ninguno de los dos. No debería
  * pasar —la captura solo ofrece sí y no—, pero en el histórico quedó un «0» que
  * nadie supo interpretar, y enseñarlo tal cual es mejor que esconderlo detrás
  * de un «falta» que haría creer que el renglón está vacío.
+ *
+ * Y en un corte cerrado no se dice nada: la foto mensual se guardó antes de que
+ * el campo existiera y no lo trae. Pintar «falta» en ámbar en cada renglón de
+ * cada mes viejo acusaría de una omisión que nadie cometió.
  */
-function Repse({ valor }) {
-  if (valor === 'SÍ') return <span className="text-slate-400">con REPSE</span>;
-  if (valor === 'NO') return <span>sin REPSE</span>;
-  if (valor) return <span className="text-amber-300/60">REPSE «{valor}»</span>;
-  return <span className="text-amber-300/60">REPSE falta</span>;
+function Repse({ valor, esCorte }) {
+  if (esCorte) return <span className="text-slate-600" title="El corte de ese mes no guarda este dato">—</span>;
+  if (valor === 'SÍ') return <span className="text-slate-200 font-medium">Sí</span>;
+  if (valor === 'NO') return <span className="text-slate-500">No</span>;
+  if (valor) return <span className="text-amber-300/70" title="Valor que no es sí ni no">«{valor}»</span>;
+  return <span className="text-amber-300/60 text-xs">falta</span>;
 }
 
 export default function EstadoFuerza({ searchParams }) {
@@ -216,7 +224,7 @@ export default function EstadoFuerza({ searchParams }) {
 
       <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[1320px]">
+          <table className="w-full text-sm min-w-[1400px]">
             <thead className="bg-slate-900/60">
               <tr className="text-slate-400 text-xs">
                 {/* Cada columna junta lo que se lee junto. El nombre del
@@ -227,6 +235,12 @@ export default function EstadoFuerza({ searchParams }) {
                     sin caber. */}
                 <th className="text-left px-4 py-3">Servicio</th>
                 <th className="text-left px-3 py-3">Zona · tipo</th>
+                {/* El REPSE va en columna propia y no de subtítulo de la zona.
+                    No es un matiz de dónde está el servicio: es un requisito que
+                    el cliente pone o no pone, y se consulta por sí solo —«¿a
+                    cuáles nos lo piden?»—, así que tiene que poderse recorrer la
+                    columna de arriba abajo. */}
+                <th className="text-center px-3 py-3">REPSE</th>
                 <th className="text-left px-3 py-3">Quién lo lleva</th>
                 <th className="text-right px-3 py-3">Guardias y turnos</th>
                 <th className="text-right px-3 py-3">Venta al mes</th>
@@ -270,13 +284,13 @@ export default function EstadoFuerza({ searchParams }) {
                   </td>
                   <td className="px-3 py-2 text-slate-400 whitespace-nowrap">
                     {s.zona || '—'}
-                    {/* El REPSE se enseña siempre, aunque esté vacío. Está en
-                        cero de 217 porque nunca hubo dónde ponerlo a la vista:
-                        una columna que no se ve es una columna que nadie llena,
-                        y es requisito de la autoridad para poder cobrar. */}
-                    <span className="block text-[11px] text-slate-500">
-                      {s.tipo || '—'} · <Repse valor={s.tipo_repse} />
-                    </span>
+                    <span className="block text-[11px] text-slate-500">{s.tipo || '—'}</span>
+                  </td>
+                  {/* Se enseña siempre, aunque esté vacío. Está en cero de 217
+                      porque nunca hubo dónde ponerlo a la vista: una columna que
+                      no se ve es una columna que nadie llena. */}
+                  <td className="px-3 py-2 text-center whitespace-nowrap">
+                    <Repse valor={s.tipo_repse} esCorte={esCorte} />
                   </td>
                   <td className="px-3 py-2 text-slate-400 max-w-[170px]">
                     <span className="block truncate" title={s.asesor || ''}>{s.asesor || '—'}</span>
@@ -396,7 +410,7 @@ export default function EstadoFuerza({ searchParams }) {
               ))}
               {servicios.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
                     Ningún servicio coincide con los filtros.
                   </td>
                 </tr>
