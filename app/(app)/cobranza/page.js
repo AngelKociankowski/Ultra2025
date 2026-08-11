@@ -101,6 +101,7 @@ export default function CobranzaGeneral({ searchParams }) {
         porFacturar={pendientes.porFacturar}
         sinCondiciones={pendientes.sinCondiciones}
         facturados={pendientes.facturados}
+        yaFacturados={pendientes.yaFacturados}
       />
 
       <Conciliacion datos={conciliacion} periodo={periodo} />

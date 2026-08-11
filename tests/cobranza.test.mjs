@@ -391,12 +391,21 @@ describe('la lista de lo que falta facturar', () => {
     assert.ok([404, 405].includes(r.status), `debería no existir; contestó ${r.status}`);
   });
 
-  test('no se factura dos veces el mismo tramo del mismo mes', async () => {
+  test('la misma factura dos veces sigue frenada', async () => {
+    // Lo que se frena es la captura repetida, no la segunda factura. Un cliente
+    // al que se le factura por sede recibe varias del mismo mes; volver a
+    // teclear la misma —mismo concepto, misma fecha, mismo importe— es un
+    // accidente. Antes lo impedía una restricción de la tabla, que no sabía
+    // distinguir un caso del otro y bloqueaba los dos.
     const id = await abrir('COBRANZA DUPLICADA', { dias_credito: 10 });
     await facturar(id, { periodo: '2026-07', fecha_factura: '2026-07-01', importe: 5000 });
-    const r = await facturar(id, { periodo: '2026-07', fecha_factura: '2026-07-02', importe: 5000 });
-    assert.equal(r.status, 400);
-    assert.match(r.json.error, /Ya hay una factura/);
+    const igual = await facturar(id, { periodo: '2026-07', fecha_factura: '2026-07-01', importe: 5000 });
+    assert.equal(igual.status, 400, igual.texto);
+    assert.match(igual.json.error, /idéntica/);
+
+    // Y otra de verdad sí entra: otra fecha y otro importe son otra factura.
+    const otra = await facturar(id, { periodo: '2026-07', fecha_factura: '2026-07-02', importe: 3200 });
+    assert.equal(otra.status, 201, otra.texto);
   });
 });
 
