@@ -264,3 +264,130 @@ describe('la nómina la captura también operaciones', () => {
     }
   });
 });
+
+/**
+ * Un cliente con varias facturas del mismo mes.
+ *
+ * Lo reportó cobranza desde la operación real: hay clientes que reciben dos,
+ * tres y hasta cuatro facturas por un mismo mes de servicio, porque se les
+ * factura por sede o por centro de costos. La plataforma solo dejaba capturar
+ * una —la comprobación de duplicados era «servicio + periodo + concepto», y el
+ * concepto de un servicio a mes vencido es siempre el mismo— y a partir de ahí
+ * el servicio desaparecía de la pantalla, sin dejar por dónde registrar las
+ * demás.
+ *
+ * El daño no era la molestia: la única factura que entraba quedaba enfrentada
+ * al importe completo del servicio, así que un mes cobrado al 100% en cuatro
+ * papeles se veía como un mes cobrado de menos.
+ */
+describe('un servicio puede llevar varias facturas del mismo mes', () => {
+  test('cuatro facturas del mismo mes entran, y la suma es la que cuenta', async () => {
+    const id = await servicio('CONC CUATRO PAPELES', 12, 120000);
+    for (const [i, importe] of [30000, 30000, 30000, 30000].entries()) {
+      const r = await admin.pedir('/api/facturas', {
+        method: 'POST',
+        body: JSON.stringify({
+          servicio_id: id,
+          periodo: PERIODO,
+          concepto: `Sede ${i + 1}`,
+          fecha_factura: `${PERIODO}-05`,
+          importe,
+          guardias: 3,
+        }),
+      });
+      assert.equal(r.status, 201, `la factura ${i + 1}: ${r.texto}`);
+    }
+
+    const facturas = (await admin.pedir(`/api/facturas?servicio_id=${id}`)).json.facturas;
+    assert.equal(facturas.length, 4);
+
+    // Y cuadra: 4 × 30,000 son los 120,000 del servicio, 4 × 3 son sus 12
+    // guardias. Con una sola factura permitida, esto salía como un faltante.
+    const html = comoSeLee((await admin.pedir(`/cobranza?periodo=${PERIODO}`)).texto);
+    assert.doesNotMatch(soloHallazgos(html), /CONC CUATRO PAPELES/);
+  });
+
+  test('el mismo concepto dos veces se acepta si es otra factura', async () => {
+    // El concepto no es el identificador de una factura. Dos sedes que se
+    // llaman igual con importes distintos son dos facturas.
+    const id = await servicio('CONC MISMO CONCEPTO', 4, 40000);
+    const a = await facturar(id, { importe: 20000, guardias: 2 });
+    assert.equal(a.status, 201, a.texto);
+    const b = await admin.pedir('/api/facturas', {
+      method: 'POST',
+      body: JSON.stringify({
+        servicio_id: id, periodo: PERIODO, fecha_factura: `${PERIODO}-20`, importe: 20000, guardias: 2,
+      }),
+    });
+    assert.equal(b.status, 201, b.texto);
+  });
+});
+
+describe('pero la misma factura dos veces sigue frenada', () => {
+  test('el mismo folio fiscal no se registra dos veces', async () => {
+    // El folio es el identificador real: si ya está, es la misma factura.
+    const id = await servicio('CONC FOLIO REPETIDO', 5, 50000);
+    const a = await admin.pedir('/api/facturas', {
+      method: 'POST',
+      body: JSON.stringify({
+        servicio_id: id, periodo: PERIODO, fecha_factura: `${PERIODO}-05`, importe: 25000, guardias: 2, folio: 'AAA-111',
+      }),
+    });
+    assert.equal(a.status, 201, a.texto);
+    const b = await admin.pedir('/api/facturas', {
+      method: 'POST',
+      body: JSON.stringify({
+        servicio_id: id, periodo: PERIODO, concepto: 'Otra cosa', fecha_factura: `${PERIODO}-06`, importe: 25000, guardias: 3, folio: 'AAA-111',
+      }),
+    });
+    assert.equal(b.status, 400, b.texto);
+    assert.match(b.json.error, /ya está registrada/);
+  });
+
+  test('sin folio, se frena la captura idéntica: es el doble clic', async () => {
+    const id = await servicio('CONC DOBLE CLIC', 6, 60000);
+    const a = await facturar(id, { importe: 60000, guardias: 6 });
+    assert.equal(a.status, 201, a.texto);
+    const b = await facturar(id, { importe: 60000, guardias: 6 });
+    assert.equal(b.status, 400, b.texto);
+    assert.match(b.json.error, /idéntica/);
+  });
+
+  test('mismo concepto y fecha con otro importe sí pasa: son dos facturas', async () => {
+    const id = await servicio('CONC MISMA FECHA', 8, 80000);
+    const a = await facturar(id, { importe: 50000, guardias: 5 });
+    assert.equal(a.status, 201, a.texto);
+    const b = await facturar(id, { importe: 30000, guardias: 3 });
+    assert.equal(b.status, 201, b.texto);
+  });
+});
+
+describe('el servicio ya facturado sigue alcanzable', () => {
+  test('sus datos y lo que le falta viajan a la pantalla', async () => {
+    // Antes desaparecía de la pantalla con su primera factura, y con él la
+    // única puerta para registrarle otra.
+    //
+    // El bloque de «ya tienen factura» se pinta al buscar, así que su encabezado
+    // no está en el HTML del servidor y comprobarlo ahí no diría nada. Lo que sí
+    // se puede comprobar —y es lo que hace falta— es que el renglón viaje con la
+    // página: sin eso, buscarlo no lo encontraría.
+    const id = await servicio('CONC BUSCAME', 10, 100000);
+    await facturar(id, { importe: 40000, guardias: 4 });
+
+    const r = await admin.pedir(`/api/facturas?pendientes=1&periodo=${PERIODO}`);
+    assert.equal(r.status, 200, r.texto);
+    const ya = (r.json.yaFacturados || []).find((s) => s.servicio === 'CONC BUSCAME');
+    assert.ok(ya, 'debería salir entre los ya facturados');
+    assert.equal(ya.sumaImporte, 40000);
+    assert.equal(ya.contratado, 100000);
+    assert.equal(ya.faltaImporte, 60000, 'lo que falta para el importe del servicio');
+    assert.equal(ya.facturas.length, 1);
+  });
+
+  test('la pantalla explica que hay que buscarlo para agregarle otra', async () => {
+    // Si no se dice, nadie descubre que la puerta existe: el servicio
+    // simplemente no está en la lista de pendientes y parece que ya no se puede.
+    const html = comoSeLee((await admin.pedir(`/cobranza?periodo=${PERIODO}`)).texto);
+    assert.match(html, /varias facturas del mismo mes/);
+  });
+});

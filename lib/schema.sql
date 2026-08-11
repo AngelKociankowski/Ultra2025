@@ -393,11 +393,20 @@ CREATE TABLE IF NOT EXISTS facturas (
   archivo_bytes     INTEGER,
 
   creado_por        INTEGER REFERENCES usuarios(id),
-  creado_en         TEXT NOT NULL DEFAULT (datetime('now')),
+  creado_en         TEXT NOT NULL DEFAULT (datetime('now'))
 
-  -- Evita facturar dos veces el mismo tramo del mismo mes, que es justo lo que
-  -- pasaría si alguien vuelve a pulsar «generar la facturación del mes».
-  UNIQUE (servicio_id, periodo, concepto)
+  -- Sin UNIQUE(servicio_id, periodo, concepto) a propósito, y la razón es un
+  -- caso real: hay clientes a los que se les factura por sede o por centro de
+  -- costos, y reciben dos, tres y hasta cuatro facturas por el mismo mes de
+  -- servicio. Con la restricción puesta, la primera cerraba el mes y las demás
+  -- no tenían dónde entrar; peor todavía, esa única factura quedaba enfrentada
+  -- al importe completo del servicio y el mes se veía cobrado de menos cuando
+  -- estaba completo en cuatro papeles.
+  --
+  -- Registrar dos veces la MISMA factura sigue frenado, pero en
+  -- `registrarFactura`, donde se puede distinguir un duplicado de verdad —mismo
+  -- folio fiscal, o mismo concepto, fecha e importe— de dos facturas distintas
+  -- que casualmente comparten concepto.
 );
 
 CREATE INDEX IF NOT EXISTS idx_facturas_servicio ON facturas(servicio_id, fecha_factura DESC);

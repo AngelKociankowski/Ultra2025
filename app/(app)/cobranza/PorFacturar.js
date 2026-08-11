@@ -4,10 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import NombreServicio from '@/components/NombreServicio';
 import { useRouter } from 'next/navigation';
-import { formatCurrency, hoyLocal } from '@/lib/utils';
-
-const campo =
-  'w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-cyan-500';
+import { formatCurrency } from '@/lib/utils';
+import FormFactura from './FormFactura';
 
 /**
  * Lo que falta facturar del mes, servicio por servicio.
@@ -19,16 +17,17 @@ const campo =
  * media quincena— y emitir en bloque daría por bueno el mismo número para
  * todos.
  *
- * Lo que sí hace la lista es que no se olvide nadie entre doscientos servicios.
+ * Debajo va la otra mitad: los que ya tienen su factura. Están a la vista y no
+ * escondidos porque tener una factura no quiere decir estar cobrado completo —a
+ * varios clientes se les factura por sede y reciben dos, tres o cuatro papeles
+ * del mismo mes—, y hasta ahora el servicio desaparecía de la pantalla con la
+ * primera, sin dejar por dónde registrar las demás.
  */
-export default function PorFacturar({ periodo, porFacturar, sinCondiciones, facturados }) {
+export default function PorFacturar({ periodo, porFacturar, sinCondiciones, facturados, yaFacturados }) {
   const router = useRouter();
   const [abierta, setAbierta] = useState(null);
-  const [datos, setDatos] = useState({ fecha_factura: '', importe: '', folio: '' });
-  const [archivo, setArchivo] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [mensaje, setMensaje] = useState(null);
-  const [ocupado, setOcupado] = useState(false);
 
   const clave = (f) => `${f.servicio_id}·${f.concepto}`;
 
@@ -41,73 +40,20 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
       .replace(/[\u0300-\u036f]/g, '');
 
   const termino = plano(busqueda.trim());
-  const visibles = termino
-    ? porFacturar.filter((f) =>
-        [f.servicio, f.razon_social, f.zona, f.asesor].some((c) => plano(c).includes(termino))
-      )
-    : porFacturar;
+  const coincide = (f) =>
+    !termino || [f.servicio, f.razon_social, f.zona, f.asesor].some((c) => plano(c).includes(termino));
 
-  function abrir(f) {
-    if (abierta === clave(f)) return setAbierta(null);
-    setAbierta(clave(f));
-    setMensaje(null);
-    setDatos({
-      // Sin condiciones capturadas no hay fecha que proponer, así que se ofrece
-      // la de hoy: es un punto de partida, no una suposición sobre el negocio.
-      fecha_factura: f.fecha || hoyLocal(),
-      importe: f.importe ? String(f.importe) : '',
-      // Se propone la plantilla del servicio. Es lo que está en la calle: si se
-      // factura otra cosa, que sea porque alguien la cambió a propósito y no
-      // porque el campo llegó vacío.
-      guardias: f.plantilla ? String(f.plantilla) : '',
-      folio: '',
-    });
-  }
+  const visibles = porFacturar.filter(coincide);
+  // Los ya facturados solo salen cuando se busca uno. Al día 1 del mes son
+  // doscientos renglones que no hay que tocar, y ponerlos siempre convertiría
+  // la pantalla de «lo que falta» en una lista de todo.
+  const yaVisibles = termino ? yaFacturados.filter(coincide) : [];
 
-  async function emitir(e, f) {
-    e.preventDefault();
-    setOcupado(true);
-    setMensaje(null);
-    try {
-      const res = await fetch('/api/facturas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          servicio_id: f.servicio_id,
-          periodo,
-          concepto: f.concepto,
-          ...datos,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setMensaje({ tipo: 'error', texto: data.error || 'No se pudo registrar la factura.' });
-        return;
-      }
-
-      // El PDF va en una segunda llamada, ya con la factura creada. Si falla,
-      // la factura no se pierde: se avisa y se puede adjuntar después desde la
-      // lista de abajo.
-      let aviso = `${f.servicio}: factura registrada, vence el ${data.fecha_vencimiento}.`;
-      if (archivo) {
-        const cuerpo = new FormData();
-        cuerpo.append('archivo', archivo);
-        const sub = await fetch(`/api/facturas/${data.id}/archivo`, { method: 'POST', body: cuerpo });
-        if (sub.ok) aviso += ` Se adjuntó ${archivo.name}.`;
-        else {
-          const err = await sub.json().catch(() => ({}));
-          aviso += ` La factura quedó guardada, pero el archivo no: ${err.error || 'no se pudo subir'}.`;
-        }
-      }
-
-      setMensaje({ tipo: 'ok', texto: aviso });
+  function terminar(r) {
+    setMensaje({ tipo: r.tipo, texto: r.texto });
+    if (r.exito) {
       setAbierta(null);
-      setArchivo(null);
       router.refresh();
-    } catch {
-      setMensaje({ tipo: 'error', texto: 'Error de red.' });
-    } finally {
-      setOcupado(false);
     }
   }
 
@@ -118,7 +64,8 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
           <h2 className="text-base font-semibold text-white">Por facturar — {periodo}</h2>
           <p className="text-xs text-slate-500 max-w-2xl">
             Cada factura se registra por separado. La fecha y el importe vienen propuestos según cómo se le cobra a
-            ese cliente; revísalos antes de guardar.
+            ese cliente; revísalos antes de guardar. Si a un cliente le mandas varias facturas del mismo mes,
+            búscalo por nombre y agrégaselas una por una.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -139,6 +86,7 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
             {termino ? (
               <>
                 {visibles.length} de {porFacturar.length} pendientes
+                {yaVisibles.length > 0 && ` · ${yaVisibles.length} ya con factura`}
               </>
             ) : (
               <>
@@ -184,81 +132,25 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
                   </span>
 
                   {abierta === clave(f) && (
-                    <form onSubmit={(e) => emitir(e, f)} className="mt-3 grid sm:grid-cols-4 gap-2 items-start">
-                      <div>
-                        <label className="block text-[11px] text-slate-500 mb-0.5">Fecha</label>
-                        <input
-                          required
-                          type="date"
-                          value={datos.fecha_factura}
-                          onChange={(e) => setDatos({ ...datos, fecha_factura: e.target.value })}
-                          className={campo}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-slate-500 mb-0.5">Importe</label>
-                        <input
-                          required
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={datos.importe}
-                          onChange={(e) => setDatos({ ...datos, importe: e.target.value })}
-                          className={campo}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-slate-500 mb-0.5">
-                          Guardias facturados
-                          {f.plantilla > 0 && <span className="text-slate-600"> · en la calle: {f.plantilla}</span>}
-                        </label>
-                        <input
-                          required
-                          type="number"
-                          min="0"
-                          value={datos.guardias}
-                          onChange={(e) => setDatos({ ...datos, guardias: e.target.value })}
-                          className={`${campo} ${
-                            f.plantilla > 0 && Number(datos.guardias) !== f.plantilla
-                              ? 'border-amber-500/60'
-                              : ''
-                          }`}
-                        />
-                        {f.plantilla > 0 && datos.guardias !== '' && Number(datos.guardias) !== f.plantilla && (
-                          <p className="text-[11px] text-amber-300/80 mt-0.5">
-                            {Number(datos.guardias) < f.plantilla
-                              ? `${f.plantilla - Number(datos.guardias)} sin cobrar`
-                              : `${Number(datos.guardias) - f.plantilla} de más`}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-slate-500 mb-0.5">Folio fiscal</label>
-                        <input
-                          value={datos.folio}
-                          onChange={(e) => setDatos({ ...datos, folio: e.target.value })}
-                          className={campo}
-                        />
-                      </div>
-                      <div className="sm:col-span-3">
-                        <label className="block text-[11px] text-slate-500 mb-0.5">
-                          Factura en PDF o XML <span className="text-slate-600">(opcional, se puede subir después)</span>
-                        </label>
-                        <input
-                          type="file"
-                          accept=".pdf,.xml,application/pdf,application/xml,text/xml"
-                          onChange={(e) => setArchivo(e.target.files?.[0] || null)}
-                          className="text-xs text-slate-400 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-700 file:px-2.5 file:py-1 file:text-white hover:file:bg-slate-600"
-                        />
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={ocupado}
-                        className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-ultra-blanco text-sm rounded-lg px-3 py-1.5"
-                      >
-                        {ocupado ? 'Guardando…' : 'Guardar factura'}
-                      </button>
-                    </form>
+                    <FormFactura
+                      servicioId={f.servicio_id}
+                      periodo={periodo}
+                      plantilla={f.plantilla}
+                      inicial={{
+                        // Sin condiciones capturadas no hay fecha que proponer:
+                        // el formulario ofrece la de hoy, que es un punto de
+                        // partida y no una suposición sobre el negocio.
+                        fecha: f.fecha,
+                        importe: f.importe,
+                        // Se propone la plantilla del servicio. Es lo que está
+                        // en la calle: si se factura otra cosa, que sea porque
+                        // alguien la cambió a propósito y no porque el campo
+                        // llegó vacío.
+                        guardias: f.plantilla,
+                        concepto: f.concepto,
+                      }}
+                      onListo={terminar}
+                    />
                   )}
                 </td>
                 <td className="px-3 py-2 text-slate-400">{f.concepto}</td>
@@ -280,7 +172,10 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
                 </td>
                 <td className="px-4 py-2 text-right whitespace-nowrap">
                   <button
-                    onClick={() => abrir(f)}
+                    onClick={() => {
+                      setMensaje(null);
+                      setAbierta(abierta === clave(f) ? null : clave(f));
+                    }}
                     className="text-xs bg-emerald-600/80 hover:bg-emerald-500 text-ultra-blanco rounded-lg px-3 py-1.5"
                   >
                     {abierta === clave(f) ? 'Cerrar' : '🧾 Facturar'}
@@ -293,7 +188,9 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                   {termino
-                    ? `Ningún pendiente de ${periodo} coincide con «${busqueda.trim()}».`
+                    ? yaVisibles.length > 0
+                      ? `«${busqueda.trim()}» ya tiene su factura de ${periodo}. Está abajo, por si le falta alguna.`
+                      : `Ningún pendiente de ${periodo} coincide con «${busqueda.trim()}».`
                     : `Ya se facturó todo lo que tocaba de ${periodo}.`}
                 </td>
               </tr>
@@ -301,6 +198,113 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
           </tbody>
         </table>
       </div>
+
+      {yaVisibles.length > 0 && (
+        <div className="border-t border-slate-700/50">
+          <div className="px-5 py-3 bg-slate-900/30">
+            <h3 className="text-sm font-semibold text-white">Ya tienen factura de {periodo}</h3>
+            <p className="text-xs text-slate-500 max-w-2xl">
+              Tener una factura no quiere decir estar cobrado completo. Aquí ves cuánto llevas registrado contra el
+              importe del servicio, y puedes agregarle las que falten.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[820px]">
+              <thead className="bg-slate-900/60">
+                <tr className="text-slate-400 text-xs">
+                  <th className="text-left px-4 py-3">Servicio</th>
+                  <th className="text-left px-3 py-3">Facturas registradas</th>
+                  <th className="text-right px-3 py-3">Llevas</th>
+                  <th className="text-right px-3 py-3">Del servicio</th>
+                  <th className="text-right px-4 py-3">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {yaVisibles.map((f) => {
+                  const id = `otra·${f.servicio_id}`;
+                  const falta = f.faltaImporte;
+                  return (
+                    <tr key={id} className="border-t border-slate-800/70 align-top">
+                      <td className="px-4 py-2">
+                        <NombreServicio id={f.servicio_id} servicio={f.servicio} razonSocial={f.razon_social} />
+                        <span className="block text-[11px] text-slate-500">
+                          {[f.zona, f.asesor].filter(Boolean).join(' · ') || '—'}
+                        </span>
+                        {abierta === id && (
+                          <FormFactura
+                            servicioId={f.servicio_id}
+                            periodo={periodo}
+                            plantilla={f.plantilla}
+                            conConcepto
+                            inicial={{
+                              // Se propone lo que falta para llegar al importe
+                              // del servicio, que es la cifra que cobranza está
+                              // sacando con la calculadora.
+                              importe: falta > 0 ? falta : '',
+                              restante: falta > 0 ? falta : 0,
+                              guardias:
+                                f.sumaGuardias !== null && f.plantilla > f.sumaGuardias
+                                  ? f.plantilla - f.sumaGuardias
+                                  : '',
+                              concepto: `Factura ${f.facturas.length + 1}`,
+                            }}
+                            onListo={terminar}
+                          />
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-slate-400">
+                        {f.facturas.map((x, i) => (
+                          <span key={i} className="block text-[11px]">
+                            {x.concepto} · {formatCurrency(x.importe)}
+                            {x.guardias !== null && ` · ${x.guardias} guardias`}
+                          </span>
+                        ))}
+                      </td>
+                      <td className="px-3 py-2 text-right text-slate-300 tabular-nums whitespace-nowrap">
+                        {formatCurrency(f.sumaImporte)}
+                        <span className="block text-[11px] text-slate-500">
+                          {f.facturas.length} factura{f.facturas.length === 1 ? '' : 's'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
+                        {f.contratado > 0 ? (
+                          <>
+                            <span className="text-slate-400">{formatCurrency(f.contratado)}</span>
+                            <span
+                              className={`block text-[11px] ${
+                                falta > 1 ? 'text-amber-300/80' : falta < -1 ? 'text-amber-300/80' : 'text-emerald-400/80'
+                              }`}
+                            >
+                              {falta > 1
+                                ? `faltan ${formatCurrency(falta)}`
+                                : falta < -1
+                                  ? `${formatCurrency(-falta)} de más`
+                                  : 'cuadra'}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-slate-600 text-xs">sin importe en la ficha</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => {
+                            setMensaje(null);
+                            setAbierta(abierta === id ? null : id);
+                          }}
+                          className="text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-1.5"
+                        >
+                          {abierta === id ? 'Cerrar' : '➕ Otra factura'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {sinCondiciones.length > 0 && (
         <p className="px-5 py-3 border-t border-slate-700/50 text-xs text-slate-500 max-w-3xl">
