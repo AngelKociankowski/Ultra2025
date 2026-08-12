@@ -206,20 +206,18 @@ export default function EstadoFuerza({ searchParams }) {
 
       <Filtros valores={filtros} catalogos={cat} periodos={periodos} vigente={vigente} />
 
+      {/* En banda de una línea y no en tarjetas. Ocupaba cuatrocientos píxeles
+          antes de que empezara la tabla, así que se entraba a la pantalla del
+          estado de fuerza y lo primero que había que hacer era desplazarse para
+          ver el estado de fuerza. En el tablero sigue en tarjetas: ahí el panel
+          sí es el contenido y no la antesala de otra cosa. */}
       {reparto.turnos.length > 0 && (
         <RepartoTurnos
           reparto={reparto}
           base={baseTurnos}
           filtroActivo={filtros.turno}
-          tira
+          compacto
           titulo={filtros.turno ? `Viendo solo ${filtros.turno}` : 'Guardias por turno'}
-          ayuda={
-            filtros.turno
-              ? `${servicios.length} servicio(s) tienen guardias en ${filtros.turno}. La tabla ya está filtrada; toca el turno otra vez para verlos todos.`
-              : `Cada renglón de la tabla muestra, debajo del total, en qué horario está cada guardia. La modalidad más numerosa es ${reparto.turnos[0].turno} con ${formatNumber(
-                  reparto.turnos[0].guardias
-                )} guardias (${reparto.turnos[0].pct}%). Toca un turno para ver solo esos servicios.`
-          }
         />
       )}
 

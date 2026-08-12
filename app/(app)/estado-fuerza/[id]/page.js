@@ -228,6 +228,16 @@ export default function DetalleServicio({ params }) {
             <Dato etiqueta="Vencimiento" valor={s.fecha_vencimiento_contrato} />
             <Dato etiqueta="Condiciones" valor={s.condiciones_comerciales} />
           </dl>
+          {/* La misma contradicción que la tabla señala con «…pero vence». Aquí
+              salía plana —un «No» arriba y una fecha de vencimiento debajo— y
+              quien abre la ficha para arreglarla es justo quien tiene que
+              verla. Son treinta servicios. */}
+          {!s.tiene_contrato && s.fecha_vencimiento_contrato && (
+            <p className="text-xs text-amber-300/90 mt-3 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+              Dice que no cuenta con contrato y trae fecha de vencimiento ({s.fecha_vencimiento_contrato}). Una de las
+              dos cosas está mal capturada: o sí hay contrato, o esa fecha sobra.
+            </p>
+          )}
           {s.comentarios_contrato && (
             <p className="text-xs text-slate-400 mt-3 bg-slate-900/50 rounded-lg p-2">{s.comentarios_contrato}</p>
           )}

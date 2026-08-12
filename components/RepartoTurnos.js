@@ -20,21 +20,90 @@ export default function RepartoTurnos({
   // En una columna estrecha las barras se leen mejor en lista; a lo ancho, en
   // rejilla, porque si no queda medio renglón vacío al lado.
   tira = false,
+  /**
+   * La versión de una sola banda, para cuando este panel no es la pantalla
+   * sino la antesala de otra.
+   *
+   * En el estado de fuerza el reparto ocupaba cuatrocientos píxeles antes de
+   * que empezara la tabla: ocho tarjetas con su barra, su porcentaje y su
+   * conteo de servicios. La tabla —que es a lo que se entra— quedaba debajo del
+   * pliegue, así que cada visita empezaba con un desplazamiento.
+   *
+   * Aquí va la misma información en chips: el turno, sus guardias y su
+   * porcentaje, con una línea fina debajo que conserva la comparación de un
+   * turno contra otro. Se pierden los conteos de servicios por turno, que
+   * siguen a un clic de distancia porque cada chip filtra la tabla.
+   */
+  compacto = false,
 }) {
   const mayor = reparto.turnos[0]?.guardias || 1;
 
   return (
-    <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
-        <h2 className="text-lg font-semibold text-white">{titulo}</h2>
-        <p className="text-xs text-slate-500 tabular-nums">
-          {formatNumber(reparto.total)} guardias en {reparto.turnos.length} modalidades
-        </p>
-      </div>
-      <p className="text-slate-400 text-sm mb-4 max-w-3xl">
-        {ayuda || (base ? 'Toca un turno para ver solo esos servicios.' : 'Cómo está repartida la operación.')}
-      </p>
+    <section className={`bg-slate-800/30 border border-slate-700/50 rounded-2xl ${compacto ? 'p-3' : 'p-5'}`}>
+      {compacto ? (
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 mb-2">
+          <h2 className="text-sm font-semibold text-white">{titulo}</h2>
+          <p className="text-xs text-slate-500 tabular-nums">
+            {formatNumber(reparto.total)} guardias en {reparto.turnos.length} modalidades ·{' '}
+            {base ? 'toca uno para ver solo esos servicios' : 'cómo está repartida la operación'}
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+            <h2 className="text-lg font-semibold text-white">{titulo}</h2>
+            <p className="text-xs text-slate-500 tabular-nums">
+              {formatNumber(reparto.total)} guardias en {reparto.turnos.length} modalidades
+            </p>
+          </div>
+          <p className="text-slate-400 text-sm mb-4 max-w-3xl">
+            {ayuda || (base ? 'Toca un turno para ver solo esos servicios.' : 'Cómo está repartida la operación.')}
+          </p>
+        </>
+      )}
 
+      {compacto ? (
+        <div className="flex flex-wrap gap-1.5">
+          {reparto.turnos.map((t) => {
+            const activo = filtroActivo === t.turno;
+            const chip = (
+              <>
+                <span className="flex items-baseline gap-1.5">
+                  <span className={activo ? 'text-cyan-300 font-medium' : 'text-slate-300'}>{t.turno}</span>
+                  <span className="tabular-nums text-slate-400">{formatNumber(t.guardias)}</span>
+                  <span className="tabular-nums text-slate-600 text-[11px]">{t.pct}%</span>
+                </span>
+                <span className="block h-0.5 rounded-full bg-slate-700/70 mt-1 overflow-hidden">
+                  <span
+                    className={`block h-full rounded-full ${activo ? 'bg-cyan-400' : 'bg-cyan-500/50'}`}
+                    style={{ width: `${Math.max(4, (t.guardias / mayor) * 100)}%` }}
+                  />
+                </span>
+              </>
+            );
+            const estilo = `rounded-lg border px-2.5 py-1.5 text-sm transition-colors ${
+              activo
+                ? 'border-cyan-500/60 bg-cyan-500/10'
+                : 'border-slate-700/60 hover:border-slate-500 hover:bg-slate-800/50'
+            }`;
+            return base ? (
+              <Link
+                key={t.turno}
+                href={activo ? base : `${base}${base.includes('?') ? '&' : '?'}turno=${encodeURIComponent(t.turno)}`}
+                aria-current={activo ? 'true' : undefined}
+                title={`${formatNumber(t.servicios)} servicio${t.servicios === 1 ? '' : 's'}`}
+                className={estilo}
+              >
+                {chip}
+              </Link>
+            ) : (
+              <span key={t.turno} className={estilo}>
+                {chip}
+              </span>
+            );
+          })}
+        </div>
+      ) : (
       <div className={tira ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2' : 'space-y-2'}>
         {reparto.turnos.map((t) => {
           const activo = filtroActivo === t.turno;
@@ -83,6 +152,7 @@ export default function RepartoTurnos({
           );
         })}
       </div>
+      )}
 
       {reparto.sinDesglose > 0 && (
         <p className="text-xs text-amber-300/80 mt-3 border-t border-slate-700/50 pt-3">
