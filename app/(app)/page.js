@@ -18,10 +18,23 @@ import { formatCurrency, formatNumber } from '@/lib/utils';
 import MovimientosChart from '@/components/MovimientosChart';
 import RepartoTurnos from '@/components/RepartoTurnos';
 import Modalidades from '@/components/Modalidades';
+import Icono from '@/components/Icono';
 
 export const dynamic = 'force-dynamic';
 
-function Kpi({ titulo, valor, sub, icono, tono = 'slate' }) {
+/**
+ * Una cifra del tablero.
+ *
+ * Sin icono a propósito. Seis tarjetas en fila, cada una con su rótulo y su
+ * número: el dibujo no añadía nada que el rótulo no dijera ya, y seis dibujos
+ * distintos compitiendo por la mirada hacen más lento leer los seis números,
+ * que es para lo que existe la fila.
+ *
+ * El color tampoco es adorno. En gris van las cifras que solo informan
+ * —servicios, guardias, facturación— y en ámbar o rojo las que piden ir a
+ * hacer algo. Pintar de colores las seis es como subrayar un texto entero.
+ */
+function Kpi({ titulo, valor, sub, tono = 'slate' }) {
   const tonos = {
     slate: 'text-white',
     emerald: 'text-emerald-400',
@@ -37,7 +50,6 @@ function Kpi({ titulo, valor, sub, icono, tono = 'slate' }) {
           <p className={`text-2xl font-bold mt-1 ${tonos[tono]}`}>{valor}</p>
           {sub && <p className="text-slate-500 text-xs mt-1">{sub}</p>}
         </div>
-        {icono && <span className="text-2xl opacity-70">{icono}</span>}
       </div>
     </div>
   );
@@ -77,7 +89,7 @@ export default function Tablero() {
               href="/aperturas/nueva"
               className="bg-emerald-600 hover:bg-emerald-500 text-ultra-blanco text-sm rounded-lg px-3 py-2"
             >
-              ➕ Nueva apertura
+              <Icono nombre="alta" className="mr-1.5 -mt-0.5" />Nueva apertura
             </Link>
           )}
           {puede(usuario.rol, 'cancelacion') && (
@@ -85,7 +97,7 @@ export default function Tablero() {
               href="/cancelaciones/nueva"
               className="bg-red-600 hover:bg-red-500 text-ultra-blanco text-sm rounded-lg px-3 py-2"
             >
-              ➖ Nueva cancelación
+              <Icono nombre="baja" className="mr-1.5 -mt-0.5" />Nueva cancelación
             </Link>
           )}
         </div>
@@ -110,11 +122,11 @@ export default function Tablero() {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-        <Kpi titulo="Servicios activos" valor={formatNumber(k.servicios)} icono="🏢" />
-        <Kpi titulo="Guardias en operación" valor={formatNumber(k.guardias)} sub={`${k.promGuardias} por servicio`} icono="👮" tono="cyan" />
-        <Kpi titulo="Facturación mensual" valor={formatCurrency(k.facturacion)} icono="💰" tono="emerald" />
-        <Kpi titulo="Sin contrato" valor={formatNumber(k.sinContrato)} sub={`${k.conContrato} con contrato`} icono="📄" tono={k.sinContrato ? 'amber' : 'emerald'} />
-        <Kpi titulo="Sin facturar" valor={formatNumber(k.sinFacturar)} sub={`${k.facturados} facturados`} icono="🧾" tono={k.sinFacturar ? 'amber' : 'emerald'} />
+        <Kpi titulo="Servicios activos" valor={formatNumber(k.servicios)} />
+        <Kpi titulo="Guardias en operación" valor={formatNumber(k.guardias)} sub={`${k.promGuardias} por servicio`} />
+        <Kpi titulo="Facturación mensual" valor={formatCurrency(k.facturacion)} />
+        <Kpi titulo="Sin contrato" valor={formatNumber(k.sinContrato)} sub={`${k.conContrato} con contrato`} tono={k.sinContrato ? 'amber' : 'slate'} />
+        <Kpi titulo="Sin facturar" valor={formatNumber(k.sinFacturar)} sub={`${k.facturados} facturados`} tono={k.sinFacturar ? 'amber' : 'slate'} />
         {/* Vencido y por vencer van separados a propósito: los dos son dinero
             sin cobrar, pero solo el primero es adeudo. Al segundo todavía le
             corre el plazo de crédito que se le concedió al cliente. */}
@@ -122,7 +134,6 @@ export default function Tablero() {
           titulo="Saldo vencido"
           valor={formatCurrency(cobranza.vencido)}
           sub={`${formatCurrency(cobranza.porVencer)} por vencer`}
-          icono="⚠️"
           tono={cobranza.vencido > 0 ? 'red' : 'slate'}
         />
       </div>

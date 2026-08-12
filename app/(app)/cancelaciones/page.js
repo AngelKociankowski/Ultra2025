@@ -7,6 +7,7 @@ import { calendarioDe, movimientosDe, aniosCon, netoDelPeriodo } from '@/lib/mov
 import BarraMeses from '@/components/BarraMeses';
 import TablaMovimientos from '@/components/TablaMovimientos';
 import ResumenPeriodo from '@/components/ResumenPeriodo';
+import Icono from '@/components/Icono';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,7 +48,7 @@ export default function Cancelaciones({ searchParams }) {
             href="/cancelaciones/nueva"
             className="bg-red-600 hover:bg-red-500 text-ultra-blanco text-sm rounded-lg px-3 py-2"
           >
-            ⇅ Movimiento de guardias
+            <Icono nombre="movimiento" className="mr-1.5 -mt-0.5" />Movimiento de guardias
           </Link>
         )}
       </div>

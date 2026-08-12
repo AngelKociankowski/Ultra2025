@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency, hoyLocal } from '@/lib/utils';
 import ArchivoFactura from '@/components/ArchivoFactura';
+import Icono from '@/components/Icono';
 
 const input =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
@@ -133,7 +134,7 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
             onClick={() => setAbierto(abierto === 'factura' ? null : 'factura')}
             className="text-xs bg-emerald-600/80 hover:bg-emerald-500 text-ultra-blanco rounded-lg px-3 py-1.5"
           >
-            {abierto === 'factura' ? 'Cerrar' : '🧾 Registrar factura'}
+            {abierto === 'factura' ? 'Cerrar' : <><Icono nombre="factura" className="mr-1.5 -mt-0.5" />Registrar factura</>}
           </button>
         )}
       </div>

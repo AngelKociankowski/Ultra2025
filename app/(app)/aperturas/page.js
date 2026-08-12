@@ -10,6 +10,7 @@ import BarraMeses from '@/components/BarraMeses';
 import TablaMovimientos from '@/components/TablaMovimientos';
 import { opciones } from '@/lib/catalogos';
 import ResumenPeriodo from '@/components/ResumenPeriodo';
+import Icono from '@/components/Icono';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,7 +70,7 @@ export default function Aperturas({ searchParams }) {
             href="/aperturas/nueva"
             className="bg-emerald-600 hover:bg-emerald-500 text-ultra-blanco text-sm rounded-lg px-3 py-2"
           >
-            ➕ Nueva apertura
+            <Icono nombre="alta" className="mr-1.5 -mt-0.5" />Nueva apertura
           </Link>
         )}
       </div>

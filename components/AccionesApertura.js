@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Icono from '@/components/Icono';
 
 /**
  * Lo que se puede hacer con una apertura desde la lista.
@@ -182,7 +183,7 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
             title="Quitarlo del estado de fuerza sin registrar una cancelación"
             className={`${boton} bg-slate-700/60 text-slate-300 border-slate-600/60 hover:bg-slate-700`}
           >
-            {ocupado === 'deshacer' ? 'Deshaciendo…' : '↩ Deshacer'}
+            {ocupado === 'deshacer' ? 'Deshaciendo…' : 'Deshacer'}
           </button>
         ) : descartada ? (
           <button
@@ -226,7 +227,7 @@ export default function AccionesApertura({ apertura, vieja, aplicada, descartada
               }`}
               type="button"
             >
-              {ocupado === 'corregir' ? 'Corrigiendo…' : fueraDeCatalogo.length ? '⚠ Corregir' : 'Corregir'}
+              {ocupado === 'corregir' ? 'Corrigiendo…' : fueraDeCatalogo.length ? <><Icono nombre="alerta" className="mr-1 -mt-0.5" />Corregir</> : 'Corregir'}
             </button>
             <button
               onClick={descartar}

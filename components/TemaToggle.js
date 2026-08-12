@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Icono from './Icono';
 
 /**
  * Conmutador día / noche.
@@ -39,7 +40,7 @@ export default function TemaToggle() {
       aria-label={esNoche ? 'Cambiar a modo día' : 'Cambiar a modo noche'}
       className="w-8 h-8 grid place-items-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/40 transition-colors"
     >
-      {esNoche ? '☀️' : '🌙'}
+      <Icono nombre={esNoche ? 'sol' : 'luna'} tamano={18} />
     </button>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency, formatNumber } from '@/lib/utils';
+import Icono from '@/components/Icono';
 
 const IVA = 0.16;
 const redondear = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -98,7 +99,7 @@ export default function Partidas({ servicio, resumen, puestos, turnos, puedeEdit
             }}
             className="text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-2 whitespace-nowrap"
           >
-            {resumen.hay ? '✎ Editar el desglose' : '➕ Capturar el desglose'}
+            {resumen.hay ? <><Icono nombre="editar" className="mr-1.5 -mt-0.5" />Editar el desglose</> : <><Icono nombre="alta" className="mr-1.5 -mt-0.5" />Capturar el desglose</>}
           </button>
         )}
       </div>
@@ -213,7 +214,7 @@ export default function Partidas({ servicio, resumen, puestos, turnos, puedeEdit
                         title="Quitar el renglón"
                         className="text-slate-500 hover:text-red-400"
                       >
-                        ✕
+                        <Icono nombre="cerrar" tamano={14} />
                       </button>
                     </td>
                   </tr>

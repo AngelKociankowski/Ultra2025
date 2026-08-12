@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Icono from '@/components/Icono';
 
 const campo =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500 disabled:opacity-60';
@@ -167,7 +168,7 @@ export default function EditorContrato({ servicio: s, puedeEditar, onGuardado })
         {s.contrato_archivo ? (
           <span className="text-xs text-slate-400">
             <a href={`/api/servicios/${s.id}/contrato`} className="text-emerald-300 hover:underline">
-              📄 {s.contrato_archivo_nombre || 'contrato.pdf'}
+              <Icono nombre="documento" className="mr-1.5 -mt-0.5" />{s.contrato_archivo_nombre || 'contrato.pdf'}
             </a>
             {s.contrato_archivo_bytes ? ` · ${MB(s.contrato_archivo_bytes)}` : ''} ·{' '}
             <label className="text-cyan-400 hover:underline cursor-pointer">
@@ -177,7 +178,7 @@ export default function EditorContrato({ servicio: s, puedeEditar, onGuardado })
           </span>
         ) : (
           <label className="text-xs text-cyan-400 hover:underline cursor-pointer">
-            ⬆ Subir el PDF del contrato
+            <Icono nombre="subir" className="mr-1.5 -mt-0.5" />Subir el PDF del contrato
             <input type="file" accept="application/pdf,.pdf" onChange={subirPdf} className="hidden" disabled={enviando} />
           </label>
         )}

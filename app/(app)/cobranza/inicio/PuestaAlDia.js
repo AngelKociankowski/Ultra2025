@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
 import CampoCatalogo from '@/components/CampoCatalogo';
+import Icono from '@/components/Icono';
 
 const campo =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
@@ -203,7 +204,7 @@ export default function PuestaAlDia({ esquemas, formasPago, sinCondiciones, tota
               href={`/api/facturas/carga?periodo=${periodo}`}
               className="bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg px-3 py-1.5"
             >
-              ⬇ Descargar la plantilla de {periodo}
+              <Icono nombre="descargar" className="mr-1.5 -mt-0.5" />Descargar la plantilla de {periodo}
             </a>
             <span className="text-xs text-slate-500">
               Trae un renglón por servicio, con la fecha y el importe ya propuestos.

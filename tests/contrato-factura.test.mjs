@@ -61,7 +61,11 @@ describe('el contrato deja de ser una palomita', () => {
   test('sin contrato, la lista lo dice con todas sus letras', async () => {
     await servicioNuevo('CONTRATO NO TIENE');
     const html = comoSeLee((await admin.pedir('/estado-fuerza?q=CONTRATO NO TIENE')).texto);
-    assert.match(html, /No cuenta con contrato/);
+    // «Sin contrato» y no «No cuenta con contrato»: es el mismo texto que usan
+    // el tablero y la pestaña de jurídico, y en una columna estrecha dos
+    // leyendas que empiezan igual —«Cuenta» y «No cuenta»— se confunden de un
+    // vistazo, que es justo como se lee una tabla de doscientos renglones.
+    assert.match(html, /Sin contrato/);
   });
 
   test('con contrato pero sin PDF, avisa que falta subirlo', async () => {
@@ -73,7 +77,7 @@ describe('el contrato deja de ser una palomita', () => {
     assert.equal(r.status, 200, r.texto);
 
     const html = comoSeLee((await admin.pedir('/estado-fuerza?q=CONTRATO SIN PDF')).texto);
-    assert.match(html, /Cuenta con contrato/);
+    assert.match(html, /Con contrato/);
     assert.match(html, /falta subir el PDF/);
   });
 

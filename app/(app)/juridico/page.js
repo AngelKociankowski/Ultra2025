@@ -15,6 +15,7 @@ import Filtros from './Filtros';
 import Agenda from './Agenda';
 import Fila from './Fila';
 import Inconsistencias from './Inconsistencias';
+import Icono from '@/components/Icono';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,7 +94,7 @@ export default function Juridico({ searchParams }) {
           href={`/api/juridico/export${consulta ? `?${consulta}` : ''}`}
           className="text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-2 whitespace-nowrap"
         >
-          ⬇ Bajar a Excel
+          <Icono nombre="descargar" className="mr-1.5 -mt-0.5" />Bajar a Excel
         </a>
       </div>
 

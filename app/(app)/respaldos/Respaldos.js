@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Icono from '@/components/Icono';
 
 const MB = (b) => `${(b / 1024 / 1024).toFixed(1)} MB`;
 
@@ -139,14 +140,14 @@ export default function Respaldos({ inicial, estadoInicial }) {
               disabled={!!ocupado}
               className="text-sm bg-emerald-600 hover:bg-emerald-500 text-ultra-blanco rounded-lg px-3 py-2 disabled:opacity-50 whitespace-nowrap"
             >
-              {ocupado === 'crear' ? 'Haciendo…' : '💾 Hacer un respaldo ahora'}
+              {ocupado === 'crear' ? 'Haciendo…' : <><Icono nombre="respaldo" className="mr-1.5 -mt-0.5" />Hacer un respaldo ahora</>}
             </button>
             {(e.ultimoCompleto || e.ultimo) && (
               <a
                 href={`/api/respaldos/${(e.ultimoCompleto || e.ultimo).nombre}`}
                 className="text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-2 whitespace-nowrap"
               >
-                ⬇ Bajar el último completo
+                <Icono nombre="descargar" className="mr-1.5 -mt-0.5" />Bajar el último completo
               </a>
             )}
           </div>

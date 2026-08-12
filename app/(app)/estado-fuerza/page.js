@@ -17,6 +17,7 @@ import Filtros from './Filtros';
 import RepartoTurnos from '@/components/RepartoTurnos';
 import CeldaFactura from '@/components/CeldaFactura';
 import CeldaContrato from '@/components/CeldaContrato';
+import Icono from '@/components/Icono';
 
 export const dynamic = 'force-dynamic';
 
@@ -175,7 +176,7 @@ export default function EstadoFuerza({ searchParams }) {
             download
             className="shrink-0 text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-1.5"
           >
-            ⬇ Descargar CSV
+            <Icono nombre="descargar" className="mr-1.5 -mt-0.5" />Descargar CSV
           </a>
         </div>
       </div>
@@ -223,17 +224,25 @@ export default function EstadoFuerza({ searchParams }) {
       )}
 
       <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl overflow-hidden">
+        {/* La tabla es más ancha que la pantalla y por eso se desplaza de lado.
+              Sin más, al empujarla a la derecha se pierde de qué servicio es el
+              renglón que se está leyendo: por eso la primera columna se queda
+              pegada, con una sombra que avisa de que hay algo debajo. El
+              encabezado se queda pegado arriba por lo mismo, doscientos
+              renglones más abajo ya nadie recuerda qué columna era cuál. */}
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[1400px]">
-            <thead className="bg-slate-900/60">
-              <tr className="text-slate-400 text-xs">
+          <table className="w-full text-sm min-w-[1400px] border-separate border-spacing-0">
+            <thead>
+              <tr className="text-slate-400 text-xs [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:bg-slate-900 [&>th]:border-b [&>th]:border-slate-700/60">
                 {/* Cada columna junta lo que se lee junto. El nombre del
                     servicio y su razón social son el mismo dato visto de dos
                     maneras; la zona y el tipo describen dónde y de qué es; el
                     asesor y el supervisor son quién lo lleva. Repartirlos en
                     ocho columnas dejaba media pantalla en blanco y el renglón
                     sin caber. */}
-                <th className="text-left px-4 py-3">Servicio</th>
+                <th className="text-left px-4 py-3 !z-20 !sticky left-0 shadow-[1px_0_0_0_rgb(var(--s-700)/0.5)]">
+                  Servicio
+                </th>
                 <th className="text-left px-3 py-3">Zona · tipo</th>
                 {/* El REPSE va en columna propia y no de subtítulo de la zona.
                     No es un matiz de dónde está el servicio: es un requisito que
@@ -254,8 +263,8 @@ export default function EstadoFuerza({ searchParams }) {
             </thead>
             <tbody>
               {servicios.map((s) => (
-                <tr key={s.id} className="border-t border-slate-800/70 hover:bg-slate-800/40">
-                  <td className="px-4 py-2 max-w-[280px]">
+                <tr key={s.id} className="group hover:bg-slate-800/40 [&>td]:border-t [&>td]:border-slate-800/70">
+                  <td className="px-4 py-2 max-w-[280px] sticky left-0 z-[1] bg-[var(--tarjeta)] group-hover:bg-[var(--tarjeta-señalada)] shadow-[1px_0_0_0_rgb(var(--s-700)/0.5)]">
                     <div className="flex items-baseline gap-1.5">
                       {esCorte ? (
                         <span className="text-white font-medium">{s.servicio}</span>
@@ -272,7 +281,7 @@ export default function EstadoFuerza({ searchParams }) {
                           title={`${notas.get(s.id)} comentario(s)`}
                           className="text-[10px] bg-slate-700/60 text-slate-300 rounded-full px-1.5 shrink-0 hover:text-cyan-400"
                         >
-                          💬{notas.get(s.id)}
+                          <Icono nombre="comentario" tamano={11} className="mr-0.5" />{notas.get(s.id)}
                         </Link>
                       )}
                     </div>
@@ -284,7 +293,14 @@ export default function EstadoFuerza({ searchParams }) {
                   </td>
                   <td className="px-3 py-2 text-slate-400 whitespace-nowrap">
                     {s.zona || '—'}
-                    <span className="block text-[11px] text-slate-500">{s.tipo || '—'}</span>
+                    {/* El tipo solo cuando dice algo distinto de la zona. En los
+                        servicios de Alpura los dos campos traen «ALPURA», y
+                        repetir la misma palabra debajo de sí misma en cien
+                        renglones no informa: hace ruido y de paso hace dudar de
+                        si son de verdad dos datos. */}
+                    {s.tipo && s.tipo !== s.zona && (
+                      <span className="block text-[11px] text-slate-500">{s.tipo}</span>
+                    )}
                   </td>
                   {/* Se enseña siempre, aunque esté vacío. Está en cero de 217
                       porque nunca hubo dónde ponerlo a la vista: una columna que

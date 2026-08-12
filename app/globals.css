@@ -70,6 +70,13 @@
   --barra-hover: rgba(0, 0, 0, 0.28);
   --rejilla: #e2e4e7;
   --eje: #5c626a;
+
+  /* El color ya resuelto de una tarjeta sobre el fondo, y el del renglón
+     señalado. Hace falta opaco —no translúcido— para las celdas que se quedan
+     pegadas al desplazar una tabla de lado: si dejaran pasar la luz, por debajo
+     se vería correr el resto del renglón. */
+  --tarjeta: #f8f9fb;
+  --tarjeta-señalada: #eef0f4;
 }
 
 [data-tema='noche'] {
@@ -120,12 +127,73 @@
   --barra-hover: rgba(255, 255, 255, 0.28);
   --rejilla: #24314a;
   --eje: #94a3b8;
+
+  --tarjeta: #151d31;
+  --tarjeta-señalada: #1b2540;
 }
 
 * {
   box-sizing: border-box;
   padding: 0;
   margin: 0;
+}
+
+/*
+ * Tipografía
+ * ---------------------------------------------------------------------------
+ * La pila es la del sistema, sin cargar ninguna fuente. No es una renuncia: es
+ * la única letra que ya está en la máquina, así que no hay parpadeo mientras
+ * baja ni un renglón que se recoloca cuando llega, y en una pantalla que se
+ * abre cuarenta veces al día eso pesa más que la personalidad de una tipografía.
+ *
+ * Lo que sí se pide es `tabular-nums`: los dígitos salen todos del mismo ancho.
+ * Sin eso, en una columna de importes el 1 ocupa menos que el 8 y las cifras
+ * quedan dentadas, que es justo lo que impide comparar dos renglones de un
+ * vistazo —y comparar renglones es para lo que existe una tabla—.
+ */
+html {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, 'Noto Sans', sans-serif;
+  font-feature-settings: 'kern';
+  text-rendering: optimizeLegibility;
+}
+
+table,
+input[type='number'],
+input[type='date'],
+.tabular-nums {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/*
+ * El foco tiene que verse.
+ * ---------------------------------------------------------------------------
+ * Los campos traen `focus:outline-none` con un cambio de borde detrás. Un borde
+ * de 1 px no basta para saber dónde está uno cuando se llena un formulario con
+ * el tabulador, que es como se captura rápido. Este anillo lo repone para todo
+ * —campos, botones, enlaces— y solo cuando el navegador considera que el foco
+ * viene del teclado, así que no aparece al hacer clic con el ratón.
+ */
+:focus-visible {
+  outline: 2px solid rgb(var(--c-500));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/*
+ * Quien pidió menos movimiento en su sistema no lo pidió por gusto: para
+ * algunas personas una animación provoca mareo. Se respeta.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 html,

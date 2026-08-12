@@ -19,6 +19,7 @@ import ArchivoContrato from './ArchivoContrato';
 import Partidas from './Partidas';
 import Suspension from './Suspension';
 import Cobranza from './Cobranza';
+import Icono from '@/components/Icono';
 
 export const dynamic = 'force-dynamic';
 
@@ -278,7 +279,7 @@ export default function DetalleServicio({ params }) {
               href={`/precios?q=${encodeURIComponent(s.servicio)}`}
               className="text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-2 whitespace-nowrap"
             >
-              🏷️ Cambiar el precio
+              <Icono nombre="etiqueta" className="mr-1.5 -mt-0.5" />Cambiar el precio
             </Link>
           )}
         </div>
@@ -411,7 +412,7 @@ export default function DetalleServicio({ params }) {
                     href={`/cancelaciones/nueva?servicio_id=${s.id}&modo=CANCELACION`}
                     className="text-sm bg-red-600/80 hover:bg-red-500 text-ultra-blanco rounded-lg px-3 py-1.5"
                   >
-                    ✕ Cancelar
+                    Cancelar
                   </Link>
                 </>
               )}
