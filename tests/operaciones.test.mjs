@@ -993,3 +993,51 @@ describe('adoptar un valor huérfano', () => {
     assert.match(r.texto, /no está capturado/);
   });
 });
+
+/**
+ * Lo que la revisión de interfaz no debe perder.
+ *
+ * Un rediseño se juzga por lo que sigue funcionando, no por lo que se ve. Estas
+ * comprueban las tres cosas que la pantalla dejó de decir o empezó a decir, y
+ * que se romperían sin ruido si alguien vuelve a tocar el diseño.
+ */
+describe('la pantalla dice lo que tiene que decir', () => {
+  test('un filtro puesto se anuncia, y se puede quitar', async () => {
+    // Nueve desplegables iguales y uno apretado: la tabla enseña treinta
+    // renglones donde hay doscientos diecisiete y nada explica por qué.
+    const html = comoSeLee((await admin.pedir('/estado-fuerza?zona=SUR&contrato=no')).texto);
+    assert.match(html, /Estás viendo una parte/);
+    assert.match(html, /Quitar los 2 filtros/);
+  });
+
+  test('sin filtros no se anuncia nada: no hay nada que quitar', async () => {
+    const html = comoSeLee((await admin.pedir('/estado-fuerza')).texto);
+    assert.doesNotMatch(html, /Estás viendo una parte/);
+  });
+
+  test('la ficha señala el contrato que se contradice a sí mismo', async () => {
+    // Treinta servicios dicen que no tienen contrato y traen fecha de
+    // vencimiento. La tabla ya lo señalaba; la ficha —donde se arregla— no.
+    const r = await abrir({ tipo: 'APERTURA', servicio: 'UI CONTRATO RARO', turnos: { '24 HRS': 1 } });
+    const id = r.json.servicioId;
+    await admin.pedir(`/api/servicios/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ tiene_contrato: false, fecha_vencimiento_contrato: '2027-03-01' }),
+    });
+    const html = comoSeLee((await admin.pedir(`/estado-fuerza/${id}`)).texto);
+    assert.match(html, /Una de las dos cosas está mal capturada/);
+  });
+
+  test('no quedó ni un emoji en la interfaz', async () => {
+    // Los dibuja el sistema operativo, no la aplicación: el mismo carácter sale
+    // distinto en cada máquina y no hereda el color del texto. Se cambiaron por
+    // un juego de SVG. Sin esta prueba, el primero que vuelva a colarse no lo
+    // nota nadie hasta que alguien abre la plataforma en otro sistema.
+    const PICTOGRAMAS = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+    for (const ruta of ['/', '/estado-fuerza', '/aperturas', '/cobranza', '/juridico']) {
+      const html = (await admin.pedir(ruta)).texto;
+      const halla = PICTOGRAMAS.exec(html);
+      assert.equal(halla, null, `${ruta} trae «${halla?.[0]}»`);
+    }
+  });
+});
