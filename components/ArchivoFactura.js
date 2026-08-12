@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Icono from '@/components/Icono';
 
 /**
  * El PDF de una factura: descargarlo si ya está, subirlo si no.
@@ -50,7 +51,7 @@ export default function ArchivoFactura({ factura, puedeSubir }) {
           className="text-xs text-cyan-400 hover:underline"
           title={`${factura.archivo_nombre}${kb ? ` · ${kb} KB` : ''}`}
         >
-          📎 {factura.archivo_tipo === 'application/pdf' ? 'PDF' : 'XML'}
+          <Icono nombre="adjunto" className="mr-1 -mt-0.5" />{factura.archivo_tipo === 'application/pdf' ? 'PDF' : 'XML'}
         </a>
       ) : (
         <span className="text-xs text-slate-600">—</span>

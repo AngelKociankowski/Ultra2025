@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Icono from '@/components/Icono';
 
 /**
  * El número de factura de ESE mes, y el papel detrás si lo hay.
@@ -32,7 +33,7 @@ export default function CeldaFactura({ servicioId, factura, historico, periodo }
         title={`Abrir ${factura.archivo_nombre || 'la factura'}`}
         className={`${base} bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25`}
       >
-        📄 {factura.folio || 'Ver factura'}
+        <Icono nombre="factura" className="mr-1 -mt-0.5" />{factura.folio || 'Ver factura'}
       </a>
     );
   }

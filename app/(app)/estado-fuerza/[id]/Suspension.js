@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatNumber } from '@/lib/utils';
+import Icono from '@/components/Icono';
 
 /**
  * Poner el servicio en pausa, o devolverlo a la operación.
@@ -102,7 +103,7 @@ export default function Suspension({ servicio, puedeMover }) {
                 : 'bg-slate-700 hover:bg-slate-600 text-white'
             }`}
           >
-            {enviando ? 'Un momento…' : suspendido ? '▶ Reactivar el servicio' : '⏸ Suspender'}
+            {enviando ? 'Un momento…' : suspendido ? <><Icono nombre="reanudar" className="mr-1.5 -mt-0.5" />Reactivar el servicio</> : <><Icono nombre="pausa" className="mr-1.5 -mt-0.5" />Suspender</>}
           </button>
         )}
       </div>

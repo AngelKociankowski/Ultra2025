@@ -56,7 +56,9 @@ export default function Usuarios() {
             <tbody>
               {Object.entries(ROLES).map(([clave, r]) => {
                 const p = PERMISOS[clave] || [];
-                const si = (x) => (p.includes(x) ? '✅' : '—');
+                // Un «sí» y un «no» se leen; un tache y una palomita hay que descifrarlos, y
+  // en una tabla de seis roles por doce permisos eso son setenta y dos acertijos.
+  const si = (x) => (p.includes(x) ? 'Sí' : '—');
                 return (
                   <tr key={clave} className="border-b border-slate-800/60">
                     <td className="py-2 pr-3">

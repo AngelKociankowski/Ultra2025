@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Icono from '@/components/Icono';
 
 const MB = (b) => `${(Number(b) / 1024 / 1024).toFixed(1)} MB`;
 
@@ -63,7 +64,7 @@ export default function ArchivoContrato({ servicioId, archivo, nombre, bytes, su
             href={`/api/servicios/${servicioId}/contrato`}
             className="text-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 rounded-lg px-3 py-2"
           >
-            📄 Ver el contrato
+            <Icono nombre="documento" className="mr-1.5 -mt-0.5" />Ver el contrato
           </a>
           <span className="text-xs text-slate-500">
             {nombre}
@@ -89,7 +90,7 @@ export default function ArchivoContrato({ servicioId, archivo, nombre, bytes, su
         </div>
       ) : puedeEditar ? (
         <label className="inline-flex items-center gap-2 text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-2 cursor-pointer">
-          {enviando ? 'Subiendo…' : '⬆ Subir el PDF del contrato'}
+          {enviando ? 'Subiendo…' : <><Icono nombre="subir" className="mr-1.5 -mt-0.5" />Subir el PDF del contrato</>}
           <input type="file" accept=".pdf,application/pdf" onChange={subir} disabled={enviando} className="hidden" />
         </label>
       ) : (

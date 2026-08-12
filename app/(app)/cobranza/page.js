@@ -16,11 +16,17 @@ import PorFacturar from './PorFacturar';
 import CalendarioMeses from './CalendarioMeses';
 import Emitidas from './Emitidas';
 import Conciliacion from './Conciliacion';
+import Icono from '@/components/Icono';
 
 export const dynamic = 'force-dynamic';
 
 const plural = (n, singular) => `${formatNumber(n)} ${singular}${n === 1 ? '' : 's'}`;
 
+/**
+ * Una cifra de cobranza. El color solo cuando dice algo: en cero, «cobrado» no
+ * es un logro ni «por vencer» una advertencia, y pintarlos igual que cuando
+ * traen dinero enseña a no mirarlos.
+ */
 function Kpi({ titulo, valor, sub, tono = 'slate' }) {
   const color = {
     slate: 'text-slate-200',
@@ -77,14 +83,19 @@ export default function CobranzaGeneral({ searchParams }) {
           href="/cobranza/inicio"
           className="text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-2 whitespace-nowrap"
         >
-          ⚙ Puesta al día
+          <Icono nombre="engrane" className="mr-1.5 -mt-0.5" />Puesta al día
         </Link>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Kpi titulo="Facturado" valor={formatCurrency(k.emitido)} sub={plural(k.facturas, 'factura')} />
-        <Kpi titulo="Cobrado" valor={formatCurrency(k.cobrado)} tono="emerald" />
-        <Kpi titulo="Por vencer" valor={formatCurrency(k.porVencer)} sub="dentro del plazo" tono="cyan" />
+        <Kpi titulo="Cobrado" valor={formatCurrency(k.cobrado)} tono={k.cobrado > 0 ? 'emerald' : 'slate'} />
+        <Kpi
+          titulo="Por vencer"
+          valor={formatCurrency(k.porVencer)}
+          sub="dentro del plazo"
+          tono={k.porVencer > 0 ? 'cyan' : 'slate'}
+        />
         <Kpi
           titulo="Vencido"
           valor={formatCurrency(k.vencido)}

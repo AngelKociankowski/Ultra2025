@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Icono from './Icono';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { LogoConNombre } from './Logo';
@@ -73,7 +74,7 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
                     no en xl: con la pestaña de jurídico, en 1280 los iconos y el
                     nombre de la cuenta volvían los dos a la vez y la barra se
                     pasaba 65 px. */}
-                <span className="mr-1.5 hidden 2xl:inline">{i.icono}</span>
+                <Icono nombre={i.icono} className="mr-1.5 hidden 2xl:inline -mt-0.5" />
                 {i.etiqueta}
               </Link>
             ))}
@@ -91,7 +92,7 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
                       : 'text-slate-400 hover:text-white hover:bg-slate-700/40'
                   }`}
                 >
-                  <span className="mr-1.5 hidden 2xl:inline">⚙</span>
+                  <Icono nombre="engrane" className="mr-1.5 hidden 2xl:inline -mt-0.5" />
                   Administrar
                   <span className="ml-1 text-[10px]">▾</span>
                 </button>
@@ -111,7 +112,7 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
                         activo(i.href) ? 'bg-slate-700/70 text-white' : 'text-slate-300 hover:bg-slate-700/40'
                       }`}
                     >
-                      <span className="mr-2">{i.icono}</span>
+                      <Icono nombre={i.icono} className="mr-2 -mt-0.5" />
                       {i.etiqueta}
                     </Link>
                   ))}
@@ -151,7 +152,7 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
               className="lg:hidden text-slate-400 hover:text-white px-2"
               aria-label="Menú"
             >
-              ☰
+              <Icono nombre="menu" tamano={20} />
             </button>
           </div>
         </div>
@@ -167,7 +168,7 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
                   activo(i.href) ? 'bg-slate-700/70 text-white' : 'text-slate-400'
                 }`}
               >
-                <span className="mr-2">{i.icono}</span>
+                <Icono nombre={i.icono} className="mr-2 -mt-0.5" />
                 {i.etiqueta}
               </Link>
             ))}

@@ -6,6 +6,7 @@ import NombreServicio from '@/components/NombreServicio';
 import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
 import FormFactura from './FormFactura';
+import Icono from '@/components/Icono';
 
 /**
  * Lo que falta facturar del mes, servicio por servicio.
@@ -78,9 +79,10 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
               aria-label="Buscar el servicio que quieres facturar"
               className="w-60 bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500"
             />
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm" aria-hidden="true">
-              🔍
-            </span>
+            <Icono
+              nombre="buscar"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+            />
           </div>
           <p className="text-xs text-slate-500">
             {termino ? (
@@ -110,6 +112,10 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
         </p>
       )}
 
+      {/* El botón de cada renglón va discreto y el de guardar, dentro del
+          formulario, va lleno. Doscientos diecisiete botones verdes en columna
+          no son doscientos diecisiete llamados a la acción: son una pared, y
+          entre ellos se pierde el único botón que de verdad confirma algo. */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[820px]">
           <thead className="bg-slate-900/60">
@@ -176,9 +182,9 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
                       setMensaje(null);
                       setAbierta(abierta === clave(f) ? null : clave(f));
                     }}
-                    className="text-xs bg-emerald-600/80 hover:bg-emerald-500 text-ultra-blanco rounded-lg px-3 py-1.5"
+                    className="text-xs border border-slate-600 text-slate-200 hover:bg-slate-700/60 hover:border-slate-500 rounded-lg px-3 py-1.5"
                   >
-                    {abierta === clave(f) ? 'Cerrar' : '🧾 Facturar'}
+                    {abierta === clave(f) ? 'Cerrar' : <><Icono nombre="factura" className="mr-1.5 -mt-0.5" />Facturar</>}
                   </button>
                 </td>
               </tr>
@@ -294,7 +300,7 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
                           }}
                           className="text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-1.5"
                         >
-                          {abierta === id ? 'Cerrar' : '➕ Otra factura'}
+                          {abierta === id ? 'Cerrar' : <><Icono nombre="alta" className="mr-1.5 -mt-0.5" />Otra factura</>}
                         </button>
                       </td>
                     </tr>

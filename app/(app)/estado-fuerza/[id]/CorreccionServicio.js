@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Icono from '@/components/Icono';
 
 const input =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
@@ -128,7 +129,7 @@ export default function CorreccionServicio({ servicio, correcciones, opciones, c
           onClick={() => setAbierto((v) => !v)}
           className="text-xs bg-amber-600/80 hover:bg-amber-500 text-ultra-blanco rounded-lg px-3 py-1.5"
         >
-          {abierto ? 'Cerrar' : '🛠 Corregir'}
+          {abierto ? 'Cerrar' : <><Icono nombre="corregir" className="mr-1.5 -mt-0.5" />Corregir</>}
         </button>
       </div>
 

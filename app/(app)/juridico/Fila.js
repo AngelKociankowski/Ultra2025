@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { comoFecha, enPalabras } from './formato';
 import EditorContrato from './EditorContrato';
+import Icono from '@/components/Icono';
 
 const TONO = {
   red: 'bg-red-500/10 text-red-300 border-red-500/30',
@@ -89,7 +90,7 @@ export default function Fila({ servicio: s, puedeEditar }) {
               onClick={(e) => e.stopPropagation()}
               className="text-emerald-300 hover:underline whitespace-nowrap"
             >
-              📄 Ver el contrato
+              <Icono nombre="documento" className="mr-1.5 -mt-0.5" />Ver el contrato
             </a>
           ) : (
             <span className="text-slate-600 whitespace-nowrap">sin PDF</span>
