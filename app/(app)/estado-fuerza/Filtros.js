@@ -5,6 +5,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { MODALIDADES } from '@/lib/modalidades';
 import Icono from '@/components/Icono';
+import { hoyLocal } from '@/lib/utils';
 
 const clase =
   'bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:border-cyan-500';
@@ -26,7 +27,15 @@ const etiquetaPeriodo = (p) => {
   return `${MESES[Number(m)]} ${a}`;
 };
 
-export default function Filtros({ valores, catalogos, periodos = [], vigente }) {
+export default function Filtros({
+  valores,
+  catalogos,
+  periodos = [],
+  vigente,
+  dia = null,
+  diaMinimo = null,
+  diasConMovimiento = [],
+}) {
   const router = useRouter();
   const [f, setF] = useState(valores);
 
@@ -36,6 +45,20 @@ export default function Filtros({ valores, catalogos, periodos = [], vigente }) 
     router.push(`/estado-fuerza?${params.toString()}`);
   }
 
+  /**
+   * Ir a una fecha, o volver del día al mes.
+   *
+   * El día y el mes se excluyen: pedir los dos a la vez no querría decir nada.
+   * Los filtros de zona, asesor y demás sí se conservan, porque la pregunta que
+   * se está haciendo —«¿cómo estaba la zona sur el día 3?»— es la misma.
+   */
+  function irAlDia(v) {
+    const params = new URLSearchParams();
+    for (const [k, x] of Object.entries(f)) if (x && k !== 'periodo') params.set(k, x);
+    if (v) params.set('dia', v);
+    router.push(`/estado-fuerza${params.toString() ? `?${params}` : ''}`);
+  }
+
   function cambiar(k, v) {
     const siguiente = { ...f, [k]: v };
     // Al saltar de mes se sueltan los filtros que ese corte quizá no tiene:
@@ -43,6 +66,14 @@ export default function Filtros({ valores, catalogos, periodos = [], vigente }) 
     if (k === 'periodo') {
       siguiente.zona = '';
       siguiente.asesor = '';
+    }
+    // Elegir un mes saca del día: son dos formas de mirar lo mismo y solo una
+    // puede estar puesta.
+    if (k === 'periodo' && dia) {
+      const params = new URLSearchParams();
+      if (v) params.set('periodo', v);
+      router.push(`/estado-fuerza${params.toString() ? `?${params}` : ''}`);
+      return;
     }
     setF(siguiente);
     if (k !== 'q') aplicar(siguiente);
@@ -90,6 +121,38 @@ export default function Filtros({ valores, catalogos, periodos = [], vigente }) 
             ))}
         </select>
       )}
+
+      {/* La fecha, al lado del mes. Son la misma pregunta a dos escalas: el mes
+          dice cómo cerró y el día, cómo estaba esa mañana. */}
+      <div className="flex items-center gap-1.5">
+        <label htmlFor="dia" className="text-xs text-slate-500 whitespace-nowrap">
+          o al día
+        </label>
+        <input
+          id="dia"
+          type="date"
+          value={dia || ''}
+          max={hoyLocal()}
+          {...(diaMinimo ? { min: diaMinimo } : {})}
+          title={
+            diaMinimo
+              ? `Del ${diaMinimo} en adelante. Para fechas anteriores, el bueno es el corte del mes: elígelo arriba.`
+              : undefined
+          }
+          onChange={(e) => irAlDia(e.target.value)}
+          className={dia ? `${clase} border-cyan-500/70 text-cyan-200` : clase}
+        />
+        {dia && (
+          <button
+            type="button"
+            onClick={() => irAlDia('')}
+            title="Volver al mes en curso"
+            className="text-slate-500 hover:text-white px-1"
+          >
+            <Icono nombre="cerrar" tamano={14} />
+          </button>
+        )}
+      </div>
 
       {/* La búsqueda va primero y más ancha: es lo que se usa nueve de cada
           diez veces que se entra, y tenerla del mismo tamaño que «Factura:
@@ -186,6 +249,33 @@ export default function Filtros({ valores, catalogos, periodos = [], vigente }) 
         Buscar
       </button>
       </div>
+
+      {/* Un calendario de treinta y un casillas donde solo tres tienen algo
+          obliga a ir probando. Estos son los días en que de verdad entró o salió
+          gente ese mes. */}
+      {diasConMovimiento.length > 0 && (
+        <p className="text-xs text-slate-500 mt-2.5 pt-2.5 border-t border-slate-700/50 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span>Días con movimiento:</span>
+          {diasConMovimiento.map((d) => (
+            <button
+              key={d.fecha}
+              type="button"
+              onClick={() => irAlDia(d.fecha)}
+              className={`rounded px-1.5 py-0.5 tabular-nums transition-colors ${
+                dia === d.fecha ? 'bg-cyan-500/20 text-cyan-200' : 'hover:bg-slate-700/60 text-slate-400'
+              }`}
+              title={`${d.entraron} entraron · ${d.salieron} salieron`}
+            >
+              {Number(d.fecha.slice(8))}
+              <span className="text-[10px] ml-1 text-slate-600">
+                {d.entraron > 0 && `+${d.entraron}`}
+                {d.entraron > 0 && d.salieron > 0 && ' '}
+                {d.salieron > 0 && `−${d.salieron}`}
+              </span>
+            </button>
+          ))}
+        </p>
+      )}
 
       {puestos.length > 0 && (
         <p className="text-xs text-slate-500 mt-2.5 pt-2.5 border-t border-slate-700/50">
