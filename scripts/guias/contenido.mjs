@@ -35,6 +35,19 @@ const COMUNES = {
     ],
     nota: 'Si se te olvida la contraseña, no la puedes recuperar tú: pídele al administrador que te la reinicie. Es a propósito — así nadie puede entrar a tu cuenta pidiendo un cambio por correo.',
   },
+  verUnDia: {
+    titulo: 'Ver cómo estaba un día',
+    intro: 'Sirve para contestar «¿con cuántos elementos amanecimos el 5?» sin tener que acordarse.',
+    pasos: [
+      'Entra a <b>Estado de fuerza</b>.',
+      'En la barra de filtros, junto al mes, hay una casilla que dice <b>o al día</b>. Escoge la fecha.',
+      'La tabla se rehace como estaba esa mañana, y arriba te dice qué entró y qué salió ese día.',
+      'Para volver al día de hoy, da clic en el tache que sale al lado de la fecha.',
+    ],
+    nota: 'Debajo de la fecha hay una fila de <b>«Días con movimiento»</b>: son los días en que de verdad entró o salió gente ese mes. Da clic en uno para saltar directo, en vez de ir probando fechas.',
+    aviso:
+      'Solo alcanza para las fechas recientes, y la pantalla te lo dice en rojo cuando te pasas. Más atrás faltan los servicios que se cancelaron antes de que se cargara el histórico: no están en el sistema, así que el total saldría más bajo de lo que fue. Para una fecha vieja, el bueno es el <b>corte de ese mes</b>, que se escoge en la casilla del mes.',
+  },
   moverse: {
     titulo: 'Cómo moverte',
     pasos: [
@@ -66,12 +79,13 @@ export const GUIAS = [
     secciones: [
       COMUNES.entrar,
       COMUNES.moverse,
+      COMUNES.verUnDia,
       {
         titulo: 'Tu trabajo principal: dar de alta un servicio nuevo',
         intro: 'Esto es lo que haces cuando cierras con un cliente. Es la única forma de que el servicio exista en el sistema.',
         pasos: [
           'Entra a la pestaña <b>Aperturas</b>.',
-          'Da clic en el botón verde <b>«➕ Nueva apertura»</b>, arriba a la derecha.',
+          'Da clic en el botón verde <b>«Nueva apertura»</b>, arriba a la derecha.',
           'Arriba salen tres botones: <b>APERTURA</b>, <b>INCREMENTO</b> y <b>TEMPORAL</b>. Deja APERTURA si es un cliente nuevo.',
           'Abajo te pregunta <b>«¿El servicio es fijo o termina?»</b>. Si el cliente lo contrató sin fecha de fin, deja <b>Fijo</b>. Si es por unos meses, escoge <b>Temporal</b> y pon hasta cuándo.',
           'Llena el nombre del servicio y la fecha de apertura. Esos dos son obligatorios.',
@@ -89,7 +103,7 @@ export const GUIAS = [
         titulo: 'Cuando a un cliente que ya tienes le sumas guardias',
         intro: 'Eso NO es una apertura nueva. Es un incremento sobre el servicio que ya existe.',
         pasos: [
-          'Entra a <b>Aperturas</b> → <b>«➕ Nueva apertura»</b>.',
+          'Entra a <b>Aperturas</b> → <b>«Nueva apertura»</b>.',
           'Arriba, escoge el botón <b>INCREMENTO</b>.',
           'Escoge el servicio de la lista de servicios activos.',
           'Pon cuántos guardias se le suman, en qué turno.',
@@ -158,11 +172,12 @@ export const GUIAS = [
     secciones: [
       COMUNES.entrar,
       COMUNES.moverse,
+      COMUNES.verUnDia,
       {
         titulo: 'Dar de alta, sumar o bajar guardias',
         intro: 'Es lo mismo que hace ventas y funciona igual. Lo importante es escoger bien de qué se trata.',
         pasos: [
-          'Para un cliente nuevo: <b>Aperturas</b> → <b>«➕ Nueva apertura»</b> → botón <b>APERTURA</b>.',
+          'Para un cliente nuevo: <b>Aperturas</b> → <b>«Nueva apertura»</b> → botón <b>APERTURA</b>.',
           'Para sumarle gente a uno que ya existe: el mismo camino, pero botón <b>INCREMENTO</b> y escoges el servicio de la lista.',
           'Para bajarle gente o cerrarlo: <b>Cancelaciones</b> → <b>«Movimiento de guardias»</b> → <b>REDUCCIÓN</b> o <b>CANCELACIÓN</b>.',
           'Siempre escribe el motivo cuando sea una baja.',
@@ -174,9 +189,9 @@ export const GUIAS = [
         pasos: [
           'Busca el servicio en <b>Estado de fuerza</b> y da clic en su nombre.',
           'Baja hasta el bloque <b>Pausar el servicio</b>.',
-          'Da clic en <b>«⏸ Suspender»</b>.',
+          'Da clic en <b>«Suspender»</b>.',
           'Escribe por qué se pausa.',
-          'Cuando el cliente regrese, entra igual y da clic en <b>«▶ Reactivar el servicio»</b>.',
+          'Cuando el cliente regrese, entra igual y da clic en <b>«Reactivar el servicio»</b>.',
         ],
         aviso:
           'La diferencia importa. Una <b>cancelación</b> dice que el cliente se fue: sale en las bajas del mes y en el reporte de motivos. Una <b>suspensión</b> dice que paró y va a volver: sus guardias dejan de contar, deja de proponerse para facturar, pero conserva su plantilla, su precio y su contrato. Si usas cancelación cuando era una pausa, tus números de bajas mienten.',
@@ -202,7 +217,7 @@ export const GUIAS = [
           'Si sí: da clic en <b>«Aplicar»</b>. El servicio entra al estado de fuerza.',
           'Si no —porque es viejo y ya no existe—: da clic en <b>«Descartar»</b> y escribe por qué. No se borra, solo deja de contar como pendiente.',
         ],
-        nota: 'Si el botón dice <b>«⚠ Corregir»</b> en amarillo, es que esa apertura trae un dato que ya no existe en las listas (por ejemplo una zona que se dejó de usar). Da clic ahí primero y escoge el bueno.',
+        nota: 'Si el botón dice <b>«Corregir»</b> en amarillo, es que esa apertura trae un dato que ya no existe en las listas (por ejemplo una zona que se dejó de usar). Da clic ahí primero y escoge el bueno.',
       },
       {
         titulo: 'Decir si el cliente pide REPSE',
@@ -252,6 +267,7 @@ export const GUIAS = [
     secciones: [
       COMUNES.entrar,
       COMUNES.moverse,
+      COMUNES.verUnDia,
       {
         titulo: 'Facturar el mes',
         intro: 'Es tu tarea principal, normalmente a principios del mes siguiente.',
@@ -339,6 +355,7 @@ export const GUIAS = [
     secciones: [
       COMUNES.entrar,
       COMUNES.moverse,
+      COMUNES.verUnDia,
       {
         titulo: 'Tu pantalla: la pestaña Jurídico',
         intro: 'Todo lo tuyo está ahí. Arriba, cinco números que resumen la situación de los contratos.',
@@ -380,9 +397,9 @@ export const GUIAS = [
         titulo: 'Subir el PDF del contrato',
         intro: 'Hoy hay cero contratos cargados. Un contrato que nadie encuentra es, en la práctica, un contrato que no está.',
         pasos: [
-          'En el mismo renglón que abriste, da clic en <b>«⬆ Subir el PDF del contrato»</b>.',
+          'En el mismo renglón que abriste, da clic en <b>«Subir el PDF del contrato»</b>.',
           'Escoge el archivo. Solo acepta PDF.',
-          'Una vez subido, cualquiera puede abrirlo desde el estado de fuerza dando clic en «📄 Cuenta con contrato».',
+          'Una vez subido, cualquiera puede abrirlo desde el estado de fuerza dando clic en «Con contrato».',
         ],
       },
       {
@@ -391,7 +408,7 @@ export const GUIAS = [
           'Es el nombre legal del cliente: el que va en el contrato y en la factura, no el corto con el que lo nombra operaciones. De 217 servicios, 193 lo tienen distinto. Solo tú y el administrador la pueden cambiar.',
         pasos: [
           'Busca el servicio en <b>Estado de fuerza</b> y da clic en su nombre.',
-          'Baja hasta <b>Corregir captura</b> y da clic en <b>«🛠 Corregir»</b>.',
+          'Baja hasta <b>Corregir captura</b> y da clic en <b>«Corregir»</b>.',
           'Te va a salir solo el campo de <b>Razón social</b>. Es lo único que tu rol corrige.',
           'Escribe el nombre legal correcto.',
           'Escribe el <b>motivo</b>: por qué estaba mal. Es obligatorio.',
@@ -433,6 +450,7 @@ export const GUIAS = [
     secciones: [
       COMUNES.entrar,
       COMUNES.moverse,
+      COMUNES.verUnDia,
       {
         titulo: 'Dar de alta a alguien del equipo',
         pasos: [
@@ -482,7 +500,7 @@ export const GUIAS = [
           'Es la salida de emergencia para cuando el dato nació mal. No es para uso diario: si a un servicio de verdad le subieron o le bajaron guardias, eso es un movimiento, no una corrección.',
         pasos: [
           'Busca el servicio y abre su ficha.',
-          'Baja hasta <b>Corregir captura</b> y da clic en <b>«🛠 Corregir»</b>.',
+          'Baja hasta <b>Corregir captura</b> y da clic en <b>«Corregir»</b>.',
           'Puedes cambiar el nombre, la razón social, el total de guardias, los turnos y la fecha de alta.',
           'Escribe el <b>motivo</b>: qué estaba mal. Es obligatorio.',
           'Si el servicio está dado de baja por error, aquí lo puedes reactivar.',
@@ -534,6 +552,7 @@ export const GUIAS = [
     secciones: [
       COMUNES.entrar,
       COMUNES.moverse,
+      COMUNES.verUnDia,
       {
         titulo: 'Qué puedes ver',
         lista: [
@@ -567,7 +586,7 @@ export const GUIAS = [
         titulo: 'Ver el contrato o la factura de un servicio',
         pasos: [
           'En la tabla del estado de fuerza, la columna <b>Contrato</b> dice si tiene o no.',
-          'Si dice «📄 Cuenta con contrato», da clic y se descarga el PDF.',
+          'Si dice «Con contrato», da clic y se descarga el PDF.',
           'La columna <b>Factura</b> hace lo mismo con la factura de ese mes.',
         ],
       },

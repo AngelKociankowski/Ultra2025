@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requerirUsuario, NoAutenticado } from '@/lib/auth';
 import { serviciosDeCorte } from '@/lib/queries';
 import { listarServicios } from '@/lib/servicios';
+import { estadoAlDia, comoDia } from '@/lib/dias';
 import { getDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,9 @@ export const dynamic = 'force-dynamic';
  * información que ya ve en pantalla, en un archivo que se abre en Excel.
  *
  * `periodo` puede ser un corte cerrado (2026-01) o `actual`, que exporta la
- * plantilla viva.
+ * plantilla viva. Con `?dia=AAAA-MM-DD` sale la reconstrucción de esa fecha,
+ * que es la misma que se ve en pantalla: quien la baja para llevarla a una
+ * junta se lleva lo que vio, no otra cosa parecida.
  */
 
 const COLUMNAS = [
@@ -78,8 +81,12 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Periodo inválido. Usa AAAA-MM o "actual".' }, { status: 400 });
     }
 
+    const dia = comoDia(new URL(request.url).searchParams.get('dia'));
+
     let filas;
-    if (esActual) {
+    if (dia) {
+      filas = estadoAlDia(dia).servicios;
+    } else if (esActual) {
       filas = listarServicios({ estatus: 'ACTIVO' });
     } else {
       const existe = getDb().prepare('SELECT 1 FROM snapshots WHERE periodo = ? LIMIT 1').get(periodo);
@@ -89,7 +96,15 @@ export async function GET(request, { params }) {
       filas = serviciosDeCorte(periodo);
     }
 
-    const columnas = esActual ? [...COLUMNAS, ...COLUMNAS_ACTUAL] : COLUMNAS;
+    // La reconstrucción de un día lleva una columna más: cuántos elementos se
+    // le revirtieron a ese servicio. Sin ella, el archivo enseña una plantilla
+    // ajustada sin decir que se ajustó, y fuera de la pantalla ya no hay quién
+    // lo explique.
+    const columnas = dia
+      ? [...COLUMNAS, ...COLUMNAS_ACTUAL, ['plantilla_ajustada', 'Ajuste aplicado a la plantilla']]
+      : esActual
+        ? [...COLUMNAS, ...COLUMNAS_ACTUAL]
+        : COLUMNAS;
     const lineas = [
       columnas.map(([, et]) => celda(et)).join(SEPARADOR),
       ...filas.map((f) =>
@@ -103,7 +118,7 @@ export async function GET(request, { params }) {
     return new NextResponse(BOM + lineas.join('\r\n') + '\r\n', {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="estado-fuerza-${esActual ? 'actual' : periodo}.csv"`,
+        'Content-Disposition': `attachment; filename="estado-fuerza-${dia || (esActual ? 'actual' : periodo)}.csv"`,
         'Cache-Control': 'no-store',
       },
     });

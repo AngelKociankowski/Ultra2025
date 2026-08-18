@@ -13,6 +13,16 @@ import { formatCurrency, formatNumber } from '@/lib/utils';
 import { gruposEditables } from '@/lib/rbac';
 import { conteoComentarios } from '@/lib/comentarios';
 import { facturasDelPeriodoPorServicio, numerosDelCorte, idsPorNombre } from '@/lib/facturacion';
+import {
+  estadoAlDia,
+  movimientosDelDia,
+  contrasteConCorte,
+  comoDia,
+  diasConMovimiento,
+  desdeCuando,
+} from '@/lib/dias';
+import { hoy } from '@/lib/fechas';
+import AvisoDia from './AvisoDia';
 import Filtros from './Filtros';
 import RepartoTurnos from '@/components/RepartoTurnos';
 import CeldaFactura from '@/components/CeldaFactura';
@@ -29,6 +39,11 @@ const nombreMes = (p) => {
 
 const delta = (n, fmt = formatNumber) =>
   n === 0 ? '=' : `${n > 0 ? '+' : '−'}${fmt(Math.abs(n))}`;
+
+const textoDia = (d) => {
+  const [a, m, dd] = String(d).split('-');
+  return `${Number(dd)} de ${MESES[Number(m)]} de ${a}`;
+};
 
 /**
  * Si el cliente nos pide REPSE, en tres estados.
@@ -71,6 +86,17 @@ export default function EstadoFuerza({ searchParams }) {
   const pedido = searchParams?.periodo || '';
   const esCorte = Boolean(pedido) && pedido !== vigente && periodos.some((p) => p.periodo === pedido);
 
+  /**
+   * Y con `dia` se ve una fecha concreta.
+   *
+   * Es el hueco que faltaba: entre «cómo está hoy» y «cómo cerró el mes» hay
+   * treinta días donde caen las preguntas que de verdad se hacen —«¿con cuántos
+   * amanecimos el 15?»—. Manda sobre el mes: pedir los dos a la vez no tendría
+   * sentido, y el día es lo más específico de los dos.
+   */
+  const dia = comoDia(searchParams?.dia);
+  const esDia = Boolean(dia) && !esCorte;
+
   const filtros = {
     estatus: searchParams?.estatus ?? 'ACTIVO',
     zona: searchParams?.zona || '',
@@ -83,7 +109,8 @@ export default function EstadoFuerza({ searchParams }) {
     periodo: esCorte ? pedido : '',
   };
 
-  const servicios = esCorte ? serviciosDeCorte(pedido, filtros) : listarServicios(filtros);
+  const alDia = esDia ? estadoAlDia(dia, filtros) : null;
+  const servicios = esDia ? alDia.servicios : esCorte ? serviciosDeCorte(pedido, filtros) : listarServicios(filtros);
 
   /**
    * El reparto por turno se calcula sobre los mismos filtros pero sin el de
@@ -93,9 +120,11 @@ export default function EstadoFuerza({ searchParams }) {
   const sinFiltroTurno = { ...filtros, turno: '' };
   const reparto = repartoDeTurnos(
     filtros.turno
-      ? esCorte
-        ? serviciosDeCorte(pedido, sinFiltroTurno)
-        : listarServicios(sinFiltroTurno)
+      ? esDia
+        ? estadoAlDia(dia, sinFiltroTurno).servicios
+        : esCorte
+          ? serviciosDeCorte(pedido, sinFiltroTurno)
+          : listarServicios(sinFiltroTurno)
       : servicios
   );
 
@@ -142,7 +171,11 @@ export default function EstadoFuerza({ searchParams }) {
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold text-white">Estado de fuerza</h1>
-            {esCorte ? (
+            {esDia ? (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                al {textoDia(dia)}
+              </span>
+            ) : esCorte ? (
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
                 corte de {nombreMes(pedido)} · cerrado
               </span>
@@ -159,7 +192,11 @@ export default function EstadoFuerza({ searchParams }) {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap justify-end">
-          {esCorte ? (
+          {esDia ? (
+            <p className="text-xs text-slate-500 max-w-md text-right">
+              Una fecha del pasado es una reconstrucción y no se edita. Debajo dice qué parte es exacta y cuál no.
+            </p>
+          ) : esCorte ? (
             <p className="text-xs text-slate-500 max-w-md text-right">
               Un corte cerrado es el respaldo de lo que se facturó ese mes: no se edita, ni con permisos de
               administrador. Para cambiar la plantilla, vuelve al mes en curso.
@@ -172,7 +209,7 @@ export default function EstadoFuerza({ searchParams }) {
             <p className="text-xs text-slate-500">Tu rol tiene acceso de consulta sobre esta base.</p>
           )}
           <a
-            href={`/api/cortes/${esCorte ? pedido : 'actual'}`}
+            href={`/api/cortes/${esCorte ? pedido : 'actual'}${esDia ? `?dia=${dia}` : ''}`}
             download
             className="shrink-0 text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-1.5"
           >
@@ -204,7 +241,28 @@ export default function EstadoFuerza({ searchParams }) {
         </p>
       )}
 
-      <Filtros valores={filtros} catalogos={cat} periodos={periodos} vigente={vigente} />
+      {esDia && (
+        <AvisoDia
+          fueraDeAlcance={alDia.fueraDeAlcance}
+          limite={alDia.limite}
+          dia={dia}
+          exactitud={alDia.exactitud}
+          contraste={contrasteConCorte(dia, totalGuardias, servicios.length)}
+          movimientos={movimientosDelDia(dia)}
+          guardias={totalGuardias}
+          servicios={servicios.length}
+        />
+      )}
+
+      <Filtros
+        valores={filtros}
+        catalogos={cat}
+        periodos={periodos}
+        vigente={vigente}
+        dia={dia}
+        diaMinimo={desdeCuando()}
+        diasConMovimiento={diasConMovimiento(esDia ? dia.slice(0, 7) : vigente)}
+      />
 
       {/* En banda de una línea y no en tarjetas. Ocupaba cuatrocientos píxeles
           antes de que empezara la tabla, así que se entraba a la pantalla del
