@@ -198,12 +198,29 @@ export default function TablaMovimientos({ clase, movimientos, puedeAplicar = fa
                             </h4>
                             {f.servicio_id ? (
                               <dl className="space-y-1">
+                                {/* Un servicio con fecha de alta futura está
+                                    registrado y no está en la calle. Decía
+                                    «ACTIVO · 7 guardias» dos semanas antes de
+                                    que hubiera nadie parado en esa puerta, que
+                                    es exactamente lo que hacía creer que ya
+                                    contaba. */}
                                 <div className="flex gap-2 text-xs">
                                   <dt className="text-slate-500 min-w-[110px]">Estatus</dt>
-                                  <dd className={f.estatus_servicio === 'ACTIVO' ? 'text-emerald-400' : 'text-slate-400'}>
-                                    {f.estatus_servicio}
-                                    {f.s_guardias != null && ` · ${formatNumber(f.s_guardias)} guardia${f.s_guardias === 1 ? '' : 's'}`}
-                                  </dd>
+                                  {f.por_arrancar ? (
+                                    <dd className="text-cyan-300">
+                                      Arranca el {f.s_alta}
+                                      {f.s_guardias != null &&
+                                        ` · ${formatNumber(f.s_guardias)} guardia${f.s_guardias === 1 ? '' : 's'} cuando arranque`}
+                                      <span className="block text-slate-500">
+                                        Todavía no cuenta en el estado de fuerza.
+                                      </span>
+                                    </dd>
+                                  ) : (
+                                    <dd className={f.estatus_servicio === 'ACTIVO' ? 'text-emerald-400' : 'text-slate-400'}>
+                                      {f.estatus_servicio}
+                                      {f.s_guardias != null && ` · ${formatNumber(f.s_guardias)} guardia${f.s_guardias === 1 ? '' : 's'}`}
+                                    </dd>
+                                  )}
                                 </div>
                                 {f.turnosServicio && Object.keys(f.turnosServicio).length > 0 && (
                                   <div className="flex gap-2 text-xs">
@@ -221,7 +238,9 @@ export default function TablaMovimientos({ clase, movimientos, puedeAplicar = fa
                                   ['Contrato', f.s_contrato ? 'Sí' : 'No'],
                                   ['Pendiente de pago', dinero(f.s_pendiente)],
                                   ['Saldo vencido', dinero(f.s_vencido)],
-                                  ['Alta', f.s_alta],
+                                  // La fecha de alta ya se dijo arriba cuando
+                                  // el servicio todavía no arranca.
+                                  ...(f.por_arrancar ? [] : [['Alta', f.s_alta]]),
                                 ]
                                   .filter(([, v]) => v !== null && v !== undefined && v !== '')
                                   .map(([etiqueta, v]) => (
