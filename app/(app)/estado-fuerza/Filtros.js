@@ -87,7 +87,7 @@ export default function Filtros({
   const puestos = [
     ['q', f.q, `«${f.q}»`],
     ['modalidad', f.modalidad, MODALIDADES[f.modalidad]?.etiqueta || f.modalidad],
-    ['estatus', f.estatus && f.estatus !== 'ACTIVO' ? f.estatus : '', f.estatus],
+    ['estatus', f.estatus && f.estatus !== 'ACTIVO' ? f.estatus : '', f.estatus === 'POR_ARRANCAR' ? 'por arrancar' : f.estatus],
     ['zona', f.zona, f.zona],
     ['asesor', f.asesor, f.asesor],
     ['turno', f.turno, f.turno],
@@ -198,6 +198,9 @@ export default function Filtros({
           className={activo(f.estatus && f.estatus !== 'ACTIVO' ? f.estatus : '')}
         >
           <option value="ACTIVO">Activos</option>
+          {/* Registrados y todavía sin montar. No están en la calle, así que no
+              cuentan en el total; se ven pidiéndolos aquí. */}
+          <option value="POR_ARRANCAR">Por arrancar</option>
           <option value="SUSPENDIDO">Suspendidos</option>
           <option value="BAJA">Bajas</option>
           <option value="">Todos</option>

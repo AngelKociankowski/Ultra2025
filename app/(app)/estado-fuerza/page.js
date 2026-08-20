@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { usuarioActual } from '@/lib/auth';
-import { listarServicios, catalogos } from '@/lib/servicios';
+import { listarServicios, catalogos, porArrancarResumen } from '@/lib/servicios';
 import {
   periodosDisponibles,
   periodoVigente,
@@ -162,6 +162,16 @@ export default function EstadoFuerza({ searchParams }) {
    * servicio —en esos meses se llevaba por quincenas en otras columnas—, así
    * que conviene decirlo en vez de mostrar un total en ceros como si fuera real.
    */
+  /**
+   * Los que ya están cerrados y todavía no se montan.
+   *
+   * Se avisan aquí y no se cuentan en el total: una apertura registrada el 20
+   * con fecha del 28 es un servicio que existe en papel y no en la calle. Sin
+   * el aviso, quien la capturó no lo encuentra en la lista y cree que no se
+   * guardó.
+   */
+  const porArrancar = !esCorte && !esDia ? porArrancarResumen() : null;
+
   const conFactura = esCorte ? servicios.filter((s) => s.importe_factura).length : 0;
   const sinFacturacion = esCorte && servicios.length > 0 && conFactura < servicios.length / 2;
 
@@ -254,6 +264,22 @@ export default function EstadoFuerza({ searchParams }) {
         />
       )}
 
+      {porArrancar?.servicios > 0 && filtros.estatus !== 'POR_ARRANCAR' && (
+        <p className="text-xs text-slate-400 bg-slate-800/30 border border-slate-700/50 rounded-xl px-4 py-2.5">
+          <strong className="text-slate-200">
+            {formatNumber(porArrancar.servicios)} servicio{porArrancar.servicios === 1 ? '' : 's'}
+          </strong>{' '}
+          ya {porArrancar.servicios === 1 ? 'está registrado y arranca' : 'están registrados y arrancan'} más
+          adelante — {formatNumber(porArrancar.guardias)} guardia{porArrancar.guardias === 1 ? '' : 's'},{' '}
+          {porArrancar.servicios === 1 ? 'el' : 'el primero el'} {porArrancar.proxima}.{' '}
+          {porArrancar.servicios === 1 ? 'No cuenta' : 'No cuentan'} aquí porque todavía no hay nadie en esa
+          puerta.{' '}
+          <Link href="/estado-fuerza?estatus=POR_ARRANCAR" className="text-cyan-400 hover:underline">
+            Verlos
+          </Link>
+        </p>
+      )}
+
       <Filtros
         valores={filtros}
         catalogos={cat}
@@ -331,6 +357,14 @@ export default function EstadoFuerza({ searchParams }) {
                       )}
                       {/* El contador de notas era una columna entera para un
                           número de una cifra que casi siempre está vacío. */}
+                      {s.por_arrancar && (
+                        <span
+                          title={`Registrado, arranca el ${s.fecha_alta}. Todavía no cuenta en el estado de fuerza.`}
+                          className="text-[10px] bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 rounded px-1.5 shrink-0 whitespace-nowrap"
+                        >
+                          arranca {s.fecha_alta}
+                        </span>
+                      )}
                       {!esCorte && notas.get(s.id) > 0 && (
                         <Link
                           href={`/estado-fuerza/${s.id}#comentarios`}

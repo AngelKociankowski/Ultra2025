@@ -97,6 +97,8 @@ export const GUIAS = [
           'Marca las <b>Autorizaciones</b> que ya tengas firmadas.',
           'Da clic en <b>«Registrar apertura»</b>. El servicio ya está en el estado de fuerza.',
         ],
+        aviso:
+          'Si le pones una <b>fecha futura</b> —porque el montaje es la semana que entra— el servicio queda registrado pero <b>no cuenta todavía</b> en el estado de fuerza. Es a propósito: hasta que llegue ese día no hay nadie parado en esa puerta. Lo ves en el aviso de arriba de la tabla, o escogiendo <b>«Por arrancar»</b> en el filtro de estatus. El día que llegue, entra solo: no hay que activarlo.',
         nota: 'Si el nombre que pusiste ya existe y está activo, el sistema no te va a dejar. Te dirá que uses INCREMENTO si le vas a sumar gente, o que le pongas otro nombre si de verdad es otro servicio (otra torre, otro turno, otro domicilio).',
       },
       {
