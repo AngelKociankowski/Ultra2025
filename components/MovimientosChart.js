@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -54,8 +54,34 @@ function useTema() {
   return tema;
 }
 
+/**
+ * ¿La gráfica llegó a pintarse?
+ *
+ * Se comprueba mirando el documento, no confiando en que Recharts avise: un
+ * momento después de montar, si en el contenedor no hay ni un `<svg>`, es que
+ * no se dibujó. La causa da igual —el contenedor midió cero, la librería no
+ * cargó— porque la respuesta es la misma: enseñar los números en texto en vez
+ * de dejar un hueco.
+ */
+function useSePinto(ref) {
+  const [fallo, setFallo] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const caja = ref.current;
+      if (!caja) return;
+      const svg = caja.querySelector('svg');
+      // Sin svg, o con uno sin ancho: las dos cosas se ven igual de vacías.
+      setFallo(!svg || svg.getBoundingClientRect().width < 2);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [ref]);
+  return fallo;
+}
+
 export default function MovimientosChart({ datos }) {
   const c = PALETA[useTema()];
+  const caja = useRef(null);
+  const fallo = useSePinto(caja);
 
   if (!datos?.length) {
     return <p className="text-slate-500 text-sm py-8 text-center">Sin movimientos registrados.</p>;
@@ -68,8 +94,39 @@ export default function MovimientosChart({ datos }) {
     Neto: d.neto,
   }));
 
+  /**
+   * Si la gráfica no logra dibujarse, el recuadro no se queda vacío.
+   *
+   * Recharts necesita medir el ancho de su contenedor antes de pintar. Cuando
+   * algo se lo impide —o cuando su código no llegó a correr— el resultado era
+   * un hueco del alto de la gráfica: ni datos, ni explicación, ni pista de que
+   * faltara algo. La lista de abajo es la misma información y aparece sola en
+   * ese caso.
+   */
+  if (fallo) {
+    return (
+      <div className="h-72 overflow-y-auto">
+        <p className="text-xs text-amber-300/80 mb-2">
+          La gráfica no se pudo dibujar en este navegador. Estos son los mismos números:
+        </p>
+        <ul className="text-xs text-slate-400 space-y-1">
+          {data.map((d) => (
+            <li key={d.periodo} className="flex justify-between gap-3 tabular-nums">
+              <span>{d.periodo}</span>
+              <span>
+                <span className="text-emerald-400">+{d.Aperturas}</span>{' '}
+                <span className="text-red-400">−{Math.abs(d.Cancelaciones)}</span>{' '}
+                <span className="text-slate-300">= {d.Neto > 0 ? '+' : ''}{d.Neto}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-72">
+    <div className="h-72" ref={caja}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 5, right: 5, left: -18, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={c.rejilla} vertical={false} />

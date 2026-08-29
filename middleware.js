@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 
-const PUBLICAS = ['/login', '/api/auth/login'];
+// `/api/version` va sin sesión a propósito: cuando algo está roto, quien
+// necesita saber qué versión corre puede ser justo quien no logra entrar.
+const PUBLICAS = ['/login', '/api/auth/login', '/api/version'];
 
 /**
  * Archivos estáticos servidos desde public/. Sin esta excepción el logo de la

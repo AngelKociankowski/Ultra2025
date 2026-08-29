@@ -23,9 +23,28 @@ let ventas;
 let juridico;
 
 /** Fechas relativas a hoy, para no depender del día en que corran las pruebas. */
-const HOY = new Date().toISOString().slice(0, 10);
+/**
+ * Hoy donde opera la empresa, no donde corre el servidor.
+ *
+ * Era `new Date().toISOString()`, o sea hoy en UTC, mientras que la plataforma
+ * mide los vencimientos con la fecha de México. Entre las seis de la tarde y la
+ * medianoche los dos relojes están en días distintos, así que estas pruebas
+ * fallaban todas las noches por un día de diferencia —«9 !== 10»— y volvían a
+ * pasar solas por la mañana.
+ *
+ * Un archivo de pruebas que falla seis horas al día no avisa de nada: enseña a
+ * no hacerle caso, y el día que se rompa algo de verdad va a parecer lo mismo
+ * de siempre.
+ */
+const HOY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Mexico_City',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(new Date());
+
 function haceDias(n) {
-  const d = new Date(`${HOY}T00:00:00Z`);
+  const d = new Date(`${HOY}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() - n);
   return d.toISOString().slice(0, 10);
 }
