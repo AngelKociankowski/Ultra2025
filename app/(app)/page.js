@@ -22,6 +22,8 @@ import Icono from '@/components/Icono';
 
 export const dynamic = 'force-dynamic';
 
+const delta = (n) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${formatNumber(Math.abs(n))}`;
+
 /**
  * Una cifra del tablero.
  *
@@ -150,7 +152,29 @@ export default function Tablero() {
               {formatNumber(netoTotal)}
             </span>
           </div>
+          {/* La gráfica la dibuja el navegador. Si su JavaScript no corre
+              —una actualización a medias, una red que corta un archivo— lo que
+              quedaba era un recuadro vacío del alto de la gráfica, que no dice
+              nada y encima hace pensar que no hay movimientos.
+
+              Debajo va la misma información en texto, escrita por el servidor.
+              La gráfica la tapa cuando logra dibujarse; si no, esto es lo que
+              se ve, y son los mismos números. */}
           <MovimientosChart datos={movimientos} />
+          <noscript>
+            <ul className="text-xs text-slate-400 space-y-1 mt-2">
+              {movimientos.map((m) => (
+                <li key={m.periodo} className="flex justify-between gap-3 tabular-nums">
+                  <span>{m.periodo}</span>
+                  <span>
+                    <span className="text-emerald-400">+{formatNumber(m.guardias_apertura)}</span>{' '}
+                    <span className="text-red-400">−{formatNumber(m.guardias_cancelacion)}</span>{' '}
+                    <span className="text-slate-300">= {delta(m.neto)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </noscript>
         </div>
 
         <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">

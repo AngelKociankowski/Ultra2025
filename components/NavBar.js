@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import Icono from './Icono';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { LogoConNombre } from './Logo';
 import TemaToggle from './TemaToggle';
 
@@ -18,8 +17,6 @@ const COLOR_ROL = {
 export default function NavBar({ usuario, items, etiquetaRol }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [abierto, setAbierto] = useState(false);
-  const [admin, setAdmin] = useState(false);
 
   async function salir() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -79,14 +76,11 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
               </Link>
             ))}
 
+            {/* Mismo motivo que el menú de teléfono: abre sin JavaScript. */}
             {conGrupo && (
-              <div className="relative" onMouseLeave={() => setAdmin(false)}>
-                <button
-                  type="button"
-                  onClick={() => setAdmin((v) => !v)}
-                  onMouseEnter={() => setAdmin(true)}
-                  aria-expanded={admin}
-                  className={`px-2 xl:px-2.5 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors ${
+              <details className="relative" name="menu-admin">
+                <summary
+                  className={`list-none cursor-pointer px-2 xl:px-2.5 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors marker:hidden [&::-webkit-details-marker]:hidden ${
                     grupoActivo
                       ? 'bg-ultra-rojo text-ultra-blanco font-medium'
                       : 'text-slate-400 hover:text-white hover:bg-slate-700/40'
@@ -95,19 +89,12 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
                   <Icono nombre="engrane" className="mr-1.5 hidden 2xl:inline -mt-0.5" />
                   Administrar
                   <span className="ml-1 text-[10px]">▾</span>
-                </button>
-                {/* Se queda en el documento y solo se esconde: así el menú
-                    existe para quien navega con el teclado o con un lector. */}
-                <div
-                  className={`absolute right-0 mt-1 min-w-[190px] rounded-xl border border-slate-700/70 bg-slate-900 shadow-xl p-1 z-30 ${
-                    admin ? 'block' : 'hidden'
-                  }`}
-                >
+                </summary>
+                <div className="absolute right-0 mt-1 min-w-[190px] rounded-xl border border-slate-700/70 bg-slate-900 shadow-xl p-1 z-30">
                   {enGrupo.map((i) => (
                     <Link
                       key={i.href}
                       href={i.href}
-                      onClick={() => setAdmin(false)}
                       className={`block px-3 py-2 rounded-lg text-sm whitespace-nowrap ${
                         activo(i.href) ? 'bg-slate-700/70 text-white' : 'text-slate-300 hover:bg-slate-700/40'
                       }`}
@@ -117,7 +104,7 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
                     </Link>
                   ))}
                 </div>
-              </div>
+              </details>
             )}
           </nav>
 
@@ -147,33 +134,41 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
             >
               Salir
             </button>
-            <button
-              onClick={() => setAbierto((v) => !v)}
-              className="lg:hidden text-slate-400 hover:text-white px-2"
-              aria-label="Menú"
-            >
-              <Icono nombre="menu" tamano={20} />
-            </button>
+            {/* El menú de teléfono va con <details>, no con un estado de React.
+                Parece un rodeo y es lo contrario: <details> abre y cierra por
+                cuenta del navegador, sin una línea de JavaScript.
+
+                La razón no es el peso del código. Si algún día el JavaScript de
+                la página falla —una actualización a medias, una red que corta
+                un archivo, un navegador viejo— todo lo que dependa de él deja
+                de responder, y con el menú de antes eso significaba quedarse
+                encerrado en la pantalla en la que uno estaba, sin manera de ir
+                a ninguna otra. La salida de una página rota no puede depender
+                de lo que se rompió. */}
+            <details className="lg:hidden relative" name="menu-movil">
+              <summary
+                aria-label="Menú"
+                className="list-none cursor-pointer text-slate-400 hover:text-white px-2 py-1 marker:hidden [&::-webkit-details-marker]:hidden"
+              >
+                <Icono nombre="menu" tamano={20} />
+              </summary>
+              <nav className="absolute right-0 top-full mt-2 z-40 min-w-[220px] rounded-xl border border-slate-700/70 bg-slate-900 shadow-xl p-1 flex flex-col gap-0.5">
+                {items.map((i) => (
+                  <Link
+                    key={i.href}
+                    href={i.href}
+                    className={`px-3 py-2 rounded-lg text-sm whitespace-nowrap ${
+                      activo(i.href) ? 'bg-slate-700/70 text-white' : 'text-slate-300 hover:bg-slate-700/40'
+                    }`}
+                  >
+                    <Icono nombre={i.icono} className="mr-2 -mt-0.5" />
+                    {i.etiqueta}
+                  </Link>
+                ))}
+              </nav>
+            </details>
           </div>
         </div>
-
-        {abierto && (
-          <nav className="lg:hidden pb-3 flex flex-col gap-1">
-            {items.map((i) => (
-              <Link
-                key={i.href}
-                href={i.href}
-                onClick={() => setAbierto(false)}
-                className={`px-3 py-2 rounded-lg text-sm ${
-                  activo(i.href) ? 'bg-slate-700/70 text-white' : 'text-slate-400'
-                }`}
-              >
-                <Icono nombre={i.icono} className="mr-2 -mt-0.5" />
-                {i.etiqueta}
-              </Link>
-            ))}
-          </nav>
-        )}
       </div>
     </header>
   );
