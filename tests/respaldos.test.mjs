@@ -14,6 +14,7 @@
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -257,5 +258,79 @@ describe('el peso del respaldo', () => {
     assert.ok(estado.ultimoCompleto, 'hay uno completo');
     assert.equal(estado.ultimoCompleto.completo, true);
     assert.equal(estado.ultimoCompleto.alcanceTexto, 'Base + facturas');
+  });
+});
+
+/**
+ * El respaldo se arma escribiendo al disco archivo por archivo, en lugar de
+ * juntarlo todo en memoria: en un servidor chico, leer la base y todos los PDF
+ * a la vez para luego concatenarlos termina con el proceso muerto por falta de
+ * memoria, y eso desde fuera se ve como la plataforma caída sin explicación.
+ *
+ * Ese cambio toca cómo se produce el único archivo del que depende la vuelta
+ * atrás, así que aquí no se comprueba que «se generó»: se comprueba que lo que
+ * se metió sale idéntico byte por byte, incluidos los dos casos donde el ZIP se
+ * escribe distinto —un archivo que no se puede comprimir, y uno vacío—.
+ */
+describe('los adjuntos entran y salen intactos', () => {
+  const PRUEBA = {
+    // Ya comprimido: `deflate` lo dejaría más grande, así que el ZIP lo guarda
+    // tal cual. Es la rama que nadie prueba nunca.
+    'zz-prueba-incompresible.pdf': randomBytes(64 * 1024),
+    'zz-prueba-vacio.xml': Buffer.alloc(0),
+    'zz-prueba-texto.xml': Buffer.from('<factura>ñ á é — acentos y guiones largos</factura>', 'utf8'),
+  };
+
+  before(() => {
+    const dir = path.join(app.carpetaDatos, 'archivos');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [nombre, datos] of Object.entries(PRUEBA)) fs.writeFileSync(path.join(dir, nombre), datos);
+  });
+
+  test('un respaldo completo los trae, y son los mismos bytes', async () => {
+    const hecho = await admin.pedir('/api/respaldos', { method: 'POST', body: JSON.stringify({ motivo: 'manual' }) });
+    assert.equal(hecho.status, 201, hecho.texto);
+    assert.equal(hecho.json.completo, true);
+
+    const { ruta } = await bajar(hecho.json.nombre);
+    // Que el `unzip` del sistema lo dé por bueno con los adjuntos dentro: es lo
+    // que hará la computadora del administrador.
+    execFileSync('unzip', ['-t', ruta]);
+
+    for (const [nombre, datos] of Object.entries(PRUEBA)) {
+      const salida = execFileSync('unzip', ['-p', ruta, `archivos/${nombre}`], { maxBuffer: 8 * 1024 * 1024 });
+      assert.equal(salida.length, datos.length, `${nombre} cambió de tamaño`);
+      assert.ok(salida.equals(datos), `${nombre} no salió igual a como entró`);
+    }
+
+    const manifiesto = JSON.parse(execFileSync('unzip', ['-p', ruta, 'respaldo.json']).toString());
+    assert.ok(
+      manifiesto.archivos >= Object.keys(PRUEBA).length,
+      `el manifiesto dice ${manifiesto.archivos} adjuntos y hay al menos ${Object.keys(PRUEBA).length}`
+    );
+    assert.ok(manifiesto.base_bytes > 10000, 'el manifiesto pesa la base, no el zip');
+  });
+
+  test('restaurarlo repone los adjuntos borrados', async () => {
+    const hecho = await admin.pedir('/api/respaldos', { method: 'POST', body: JSON.stringify({ motivo: 'manual' }) });
+    const { datos } = await bajar(hecho.json.nombre);
+
+    // Se borran del disco, como si el servidor se hubiera perdido.
+    const dir = path.join(app.carpetaDatos, 'archivos');
+    for (const nombre of Object.keys(PRUEBA)) fs.rmSync(path.join(dir, nombre), { force: true });
+    assert.equal(fs.existsSync(path.join(dir, 'zz-prueba-texto.xml')), false);
+
+    const cuerpo = new FormData();
+    cuerpo.append('archivo', new Blob([datos], { type: 'application/zip' }), hecho.json.nombre);
+    cuerpo.append('confirmacion', 'RESTAURAR');
+    const r = await fetch(`${app.base}/api/respaldos`, { method: 'POST', headers: { cookie: admin.cookie }, body: cuerpo });
+    const salida = await r.json();
+    assert.equal(r.status, 200, JSON.stringify(salida));
+    assert.equal(salida.traiaArchivos, true);
+
+    for (const [nombre, esperado] of Object.entries(PRUEBA)) {
+      const vuelto = fs.readFileSync(path.join(dir, nombre));
+      assert.ok(vuelto.equals(esperado), `${nombre} volvió distinto`);
+    }
   });
 });
