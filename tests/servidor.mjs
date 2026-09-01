@@ -213,6 +213,10 @@ export async function arrancar() {
 
   return {
     base,
+    // La carpeta de datos del servidor de prueba. Se expone para las pruebas
+    // que necesitan mirar —o dejar— archivos que no pasan por la API: los
+    // adjuntos de las facturas viven en el disco, no dentro de la base.
+    carpetaDatos: dir,
     entrar,
     entrarYAsentar,
     anonimo: () => cliente(),
