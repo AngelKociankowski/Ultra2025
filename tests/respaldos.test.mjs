@@ -113,6 +113,46 @@ describe('quién puede tocarlos', () => {
       assert.equal(r.status, 400, `${malo} no debería bajarse`);
     }
   });
+
+  test('la marca del respaldo a medias no se lista ni se puede bajar', async () => {
+    // La agenda deja un `.intento` en esta misma carpeta para no reintentar un
+    // respaldo que mató al proceso. No es un respaldo y no debe parecerlo.
+    const dir = path.join(app.carpetaDatos, 'respaldos');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.intento'), new Date().toISOString());
+
+    const { respaldos } = (await admin.pedir('/api/respaldos')).json;
+    assert.equal(respaldos.some((r) => r.nombre === '.intento'), false, 'no aparece en la lista');
+    assert.equal((await admin.pedir('/api/respaldos/.intento')).status, 400, 'no se baja');
+
+    fs.rmSync(path.join(dir, '.intento'), { force: true });
+  });
+});
+
+describe('bajar un respaldo', () => {
+  test('llega entero y con el tamaño que anuncia', async () => {
+    // Se manda por pedazos desde el disco en vez de cargarlo a memoria: un
+    // respaldo completo puede pesar cientos de megabytes y leerlo de golpe
+    // mataba el proceso, que desde fuera se veía como la plataforma caída justo
+    // al darle a Bajar. Lo que se comprueba aquí es que al partirlo en pedazos
+    // no se pierde ni se repite nada.
+    const hecho = await admin.pedir('/api/respaldos', { method: 'POST', body: JSON.stringify({ motivo: 'manual' }) });
+    assert.equal(hecho.status, 201, hecho.texto);
+
+    const r = await fetch(`${app.base}/api/respaldos/${hecho.json.nombre}`, { headers: { cookie: admin.cookie } });
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('content-type'), 'application/zip');
+    assert.match(r.headers.get('content-disposition'), /attachment; filename="respaldo-/);
+
+    const datos = Buffer.from(await r.arrayBuffer());
+    assert.equal(datos.length, Number(r.headers.get('content-length')), 'lo que dice pesar y lo que llega');
+    assert.equal(datos.length, hecho.json.bytes, 'y coincide con lo que se hizo');
+
+    // Y sigue siendo un ZIP bueno después de pasar por el troceado.
+    const ruta = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ultra-baja-')), hecho.json.nombre);
+    fs.writeFileSync(ruta, datos);
+    execFileSync('unzip', ['-t', ruta]);
+  });
 });
 
 describe('restaurar', () => {
