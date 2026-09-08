@@ -96,6 +96,25 @@ describe('varias facturas del mismo mes', () => {
     assert.match(dos.json.error, /idéntica/i);
   });
 
+  test('el estado de cuenta las devuelve todas, distinguibles por folio', async () => {
+    // Es lo que necesita la pantalla para poder decir «este mes ya lleva tres
+    // facturas por $X» arriba del formulario. Cobranza leyó el formulario de un
+    // solo juego de campos como «solo tengo un espacio», y tenía razón en lo
+    // que veía: nada le decía cuántas llevaba el mes ni que podía seguir.
+    //
+    // Que el formulario se quede abierto después de guardar se comprobó en un
+    // navegador de verdad; aquí se fija que los datos con los que se dibuja
+    // lleguen completos, que es lo que esta suite puede sostener.
+    const { facturas } = await estadoDeCuenta(finanzas);
+    const agosto = facturas.filter((f) => f.periodo === '2026-08' && !f.cancelada);
+    assert.equal(agosto.length, 3, 'las tres facturas de agosto tienen que venir en el estado de cuenta');
+    assert.deepEqual(
+      agosto.map((f) => f.folio).sort(),
+      ['A-100', 'A-101', 'A-102'],
+      'cada una con su folio: es lo que las distingue en pantalla'
+    );
+  });
+
   test('el mismo folio dos veces sí se frena: es la misma factura', async () => {
     const r = await facturar(finanzas, {
       periodo: '2026-08',

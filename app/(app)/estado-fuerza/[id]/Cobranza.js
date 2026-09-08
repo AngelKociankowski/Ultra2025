@@ -56,6 +56,10 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
   // servir —mandar el importe— caía en el registro de pagos.
   const [corrigiendo, setCorrigiendo] = useState(null);
 
+  // Las facturas vivas del mes que se está capturando. Se recalcula solo al
+  // cambiar el mes en el campo, así que sigue a lo que la persona escribe.
+  const yaDelMes = facturas.filter((f) => f.periodo === nueva.periodo && !f.cancelada);
+
   async function llamar(metodo, cuerpo, ruta = '/api/facturas') {
     setOcupado(true);
     setMensaje(null);
@@ -80,17 +84,37 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
     }
   }
 
+  /**
+   * Registrar una factura, y quedarse listo para la siguiente del mismo mes.
+   *
+   * Antes el formulario se cerraba al guardar, y eso comunicaba algo que no era
+   * cierto: que el mes ya estaba facturado. Cobranza lo dijo con esas palabras
+   * —«son dos facturas que tengo que cargar, pero solo tengo un espacio»— y
+   * tenía razón en lo que veía: había un solo juego de campos, se llenaba una
+   * vez y desaparecía. El problema nunca fue que la plataforma lo prohibiera;
+   * era que no había manera de saber que se podía otra vez.
+   *
+   * Ahora se queda abierto con el mes y el concepto puestos, y se vacían el
+   * importe y el folio, que es lo único que cambia entre una factura y otra del
+   * mismo mes. Y el aviso lo dice en voz alta en lugar de esperar a que alguien
+   * lo deduzca.
+   */
   async function emitir(e) {
     e.preventDefault();
     const data = await llamar('POST', { servicio_id: servicio.id, ...nueva });
     if (data) {
+      const delMes = facturas.filter((f) => f.periodo === nueva.periodo && !f.cancelada).length + 1;
       setMensaje({
         tipo: 'ok',
-        texto: `Factura registrada. Vence el ${data.fecha_vencimiento}${
-          data.dias_credito ? ` (${data.dias_credito} días de crédito)` : ' (sin crédito pactado)'
-        }.`,
+        texto:
+          `Factura registrada. Vence el ${data.fecha_vencimiento}` +
+          `${data.dias_credito ? ` (${data.dias_credito} días de crédito)` : ' (sin crédito pactado)'}. ` +
+          `Este mes lleva ${delMes} factura${delMes === 1 ? '' : 's'}. ` +
+          'Si falta otra del mismo mes, captúrala aquí mismo.',
       });
-      setAbierto(null);
+      // El mes y el concepto se quedan; el importe y el folio se vacían porque
+      // son justo lo que distingue una factura de la otra.
+      setNueva((prev) => ({ ...prev, importe: '', folio: '' }));
     }
   }
 
@@ -183,6 +207,30 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
 
       {abierto === 'factura' && puedeFacturar && (
         <form onSubmit={emitir} className="bg-slate-900/50 rounded-xl p-4 space-y-3">
+          {/* Lo que ese mes ya lleva registrado, arriba del formulario.
+              «Solo tengo un espacio» era una lectura razonable de lo que había:
+              un juego de campos y nada que dijera cuántas facturas llevaba el
+              mes. Con esto, capturar la segunda deja de ser un acto de fe. */}
+          {yaDelMes.length > 0 && (
+            <div className="text-xs bg-slate-800/60 border border-slate-700/60 rounded-lg px-3 py-2">
+              <p className="text-slate-300">
+                {nueva.periodo} ya lleva {yaDelMes.length} factura{yaDelMes.length === 1 ? '' : 's'} por{' '}
+                {formatCurrency(yaDelMes.reduce((a, f) => a + (Number(f.importe) || 0), 0))}:
+              </p>
+              <ul className="text-slate-500 mt-1 space-y-0.5">
+                {yaDelMes.map((f) => (
+                  <li key={f.id}>
+                    {f.concepto} · {formatCurrency(f.importe)}
+                    {f.folio ? ` · folio ${f.folio}` : ' · sin folio'}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-slate-500 mt-1.5">
+                Puedes registrar otra de este mismo mes. Si va a tener el mismo importe y la misma fecha que
+                una de arriba, captúrale el folio fiscal para distinguirlas.
+              </p>
+            </div>
+          )}
           {sinCondiciones && (
             <p className="text-xs text-amber-300/90">
               Este servicio no tiene esquema de facturación, así que la fecha no viene propuesta: captúrala a mano o
