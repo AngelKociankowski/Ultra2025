@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { formatCurrency, formatNumber } from '@/lib/utils';
+import AjustarAcuerdo from './AjustarAcuerdo';
 
 const TONO = {
   guardias_de_menos: 'text-red-300',
@@ -21,7 +22,7 @@ const TONO = {
  * es una factura que el cliente va a rebotar, y eso se descubre solo. Por eso
  * lo primero va en rojo y lo segundo en ámbar.
  */
-export default function Conciliacion({ datos, periodo }) {
+export default function Conciliacion({ datos, periodo, puedeEditar = false }) {
   const { hallazgos, resumen } = datos;
   if (!resumen.servicios) return null;
 
@@ -102,6 +103,21 @@ export default function Conciliacion({ datos, periodo }) {
                         {p.texto}
                       </p>
                     ))}
+                    {/* El atajo solo aparece cuando lo que no cuadra es el
+                        importe. Si la diferencia es de guardias, el dato que
+                        está mal es la plantilla en la calle, y esa es de
+                        operaciones: ofrecer aquí un botón que la tapara sería
+                        cambiar un descuadre visible por uno escondido. */}
+                    {puedeEditar &&
+                      h.contratado > 0 &&
+                      h.problemas.some((p) => p.clase.startsWith('importe_')) && (
+                        <AjustarAcuerdo
+                          servicioId={h.servicio_id}
+                          servicio={h.servicio}
+                          facturado={h.facturado}
+                          contratado={h.contratado}
+                        />
+                      )}
                   </td>
                 </tr>
               ))}
