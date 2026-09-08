@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MOTIVOS_CANCELACION, AUTORIZACIONES_CANCELACION } from '@/lib/campos';
+import { AUTORIZACIONES_CANCELACION } from '@/lib/campos';
 import { hoyLocal } from '@/lib/utils';
+import DesgloseTurnos from '@/components/DesgloseTurnos';
 
 const input =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
@@ -60,11 +61,19 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
   );
   const [servicioId, setServicioId] = useState(preseleccion);
   const [motivo, setMotivo] = useState('');
-  const [motivoOtro, setMotivoOtro] = useState('');
+  // El detalle ya no es «lo que se escribe cuando el motivo es OTRO»: es el
+  // caso particular de esta cancelación, y se puede escribir con cualquier
+  // motivo. Antes, elegir OTRO reemplazaba el motivo por el texto libre, y así
+  // es como se llegó a 125 motivos distintos para 330 cancelaciones.
+  const [motivoDetalle, setMotivoDetalle] = useState('');
   const [fecha, setFecha] = useState(hoyLocal());
   const [cxc, setCxc] = useState('');
   const [auditoria, setAuditoria] = useState('');
   const [turnos, setTurnos] = useState({});
+  // Mismo desglose por turno que en la apertura. Se pidió expresamente para
+  // Incremento y Temporal —«mismas observaciones para los iconos de Incremento
+  // y Temporal»— y las tres cosas pasan por este formulario.
+  const [turnosDetalle, setTurnosDetalle] = useState({});
   // Los turnos que se añaden a mano se recuerdan aparte de sus cantidades: si
   // dependieran de `turnos`, borrar el número le quitaría el renglón de enfrente
   // a quien apenas lo está capturando.
@@ -125,8 +134,10 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
 
     if (!servicioId) return setError('Selecciona el servicio.');
     if (!esAmpliacion) {
-      const motivoFinal = motivo === 'OTRO' ? motivoOtro.trim() : motivo;
-      if (!motivoFinal) return setError('Indica el motivo.');
+      if (!motivo) return setError('Indica el motivo.');
+      if (motivo === 'OTRO' && !motivoDetalle.trim()) {
+        return setError('Con «OTRO», escribe abajo qué pasó: es lo único que va a quedar de esta cancelación.');
+      }
     }
     if (!esCancelacion && total <= 0) {
       return setError(
@@ -152,8 +163,9 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
               servicio_id: Number(servicioId),
               fecha,
               turnos,
+              turnos_detalle: turnosDetalle,
               guardias: total,
-              comentarios: motivo === 'OTRO' ? motivoOtro.trim() : motivo || null,
+              comentarios: [motivo, motivoDetalle.trim()].filter(Boolean).join(' · ') || null,
               aut,
             }),
           })
@@ -163,7 +175,8 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
             body: JSON.stringify({
               tipo: modo,
               servicio_id: Number(servicioId),
-              motivo: motivo === 'OTRO' ? motivoOtro.trim() : motivo,
+              motivo,
+              motivo_detalle: motivoDetalle.trim() || null,
               fecha,
               cxc,
               auditoria,
@@ -252,7 +265,7 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
               className={input}
             >
               <option value="">{esAmpliacion ? 'Opcional…' : 'Selecciona…'}</option>
-              {MOTIVOS_CANCELACION.map((m) => (
+              {(opciones?.motivosBaja || []).map((m) => (
                 <option key={m} value={m}>
                   {m}
                 </option>
@@ -260,10 +273,21 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
             </select>
           </div>
 
-          {motivo === 'OTRO' && (
+          {!esAmpliacion && (
             <div className="sm:col-span-2">
-              <label className={label}>Especifica el motivo *</label>
-              <input required value={motivoOtro} onChange={(e) => setMotivoOtro(e.target.value)} className={input} />
+              <label className={label}>
+                Detalle {motivo === 'OTRO' ? '*' : '(opcional)'}
+              </label>
+              <input
+                required={motivo === 'OTRO'}
+                value={motivoDetalle}
+                onChange={(e) => setMotivoDetalle(e.target.value)}
+                className={input}
+                placeholder="Lo que la lista no alcanza a decir: qué pasó exactamente en este caso."
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                El motivo de arriba es para poder sumar; esto es para poder entender. Se guardan los dos.
+              </p>
             </div>
           )}
 
@@ -349,6 +373,18 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
                   </div>
                 ))}
               </div>
+
+              {/* Solo en la ampliación. En una disminución lo que se captura es
+                  qué se retira, y pedir el turno de lo que se va sería preguntar
+                  por un dato que ya no va a existir. */}
+              {esAmpliacion && (
+                <DesgloseTurnos
+                  turnos={turnos}
+                  detalle={turnosDetalle}
+                  setDetalle={setTurnosDetalle}
+                  turnosDia={opciones?.turnosDia || []}
+                />
+              )}
 
               {esAmpliacion && (
                 <div className="mt-3 flex flex-wrap items-end gap-2">

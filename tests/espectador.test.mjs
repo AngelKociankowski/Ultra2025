@@ -125,7 +125,7 @@ describe('no toca nada, por ninguna puerta', () => {
     rechazado(
       await miron.pedir('/api/cancelaciones', {
         method: 'POST',
-        body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: servicioId, motivo: 'porque sí' }),
+        body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: servicioId, motivo: 'OTRO', motivo_detalle: 'porque sí' }),
       }),
       'cancelación'
     );

@@ -235,7 +235,7 @@ describe('la información completa de cada movimiento', () => {
         tipo: 'CANCELACION',
         servicio_id: alta.json.servicioId,
         fecha: '2019-08-20',
-        motivo: 'El cliente cerró la sucursal y no habrá reposición en otra plaza',
+        motivo: 'CIERRE DE INSTALACIÓN O SUCURSAL', motivo_detalle: 'El cliente cerró la sucursal y no habrá reposición en otra plaza',
       }),
     });
     assert.equal(baja.status, 201, baja.texto);

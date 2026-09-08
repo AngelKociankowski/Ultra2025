@@ -84,7 +84,7 @@ describe('servicio con desglose por turno', () => {
         tipo: 'REDUCCION',
         servicio_id: id,
         turnos: { '8X16 L-S': 2 },
-        motivo: 'FIN DE SERVICIO',
+        motivo: 'FIN DE SERVICIO O PROYECTO',
       }),
     });
     assert.equal(r.status, 201);
@@ -142,7 +142,7 @@ describe('servicio sin desglose por turno', () => {
   test('la disminución no puede dejarlo en cero', async () => {
     const r = await admin.pedir('/api/cancelaciones', {
       method: 'POST',
-      body: JSON.stringify({ tipo: 'REDUCCION', servicio_id: id, guardias: 9, motivo: 'CIERRE DE SERVICIO' }),
+      body: JSON.stringify({ tipo: 'REDUCCION', servicio_id: id, guardias: 9, motivo: 'FIN DE SERVICIO O PROYECTO' }),
     });
     assert.equal(r.status, 400);
     assert.match(r.json.error, /cancelaci/i);
@@ -169,7 +169,7 @@ describe('quién puede mover guardias', () => {
 
       const baja = await sesion.pedir('/api/cancelaciones', {
         method: 'POST',
-        body: JSON.stringify({ tipo: 'REDUCCION', servicio_id: id, guardias: 3, motivo: 'FALTA DE COBERTURA' }),
+        body: JSON.stringify({ tipo: 'REDUCCION', servicio_id: id, guardias: 3, motivo: 'FALLAS DE COBERTURA' }),
       });
       assert.equal(baja.status, 201);
       assert.equal(await guardiasDe(id), 9);

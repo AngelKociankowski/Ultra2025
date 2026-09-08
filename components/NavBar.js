@@ -14,7 +14,7 @@ const COLOR_ROL = {
   Ventas: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
 };
 
-export default function NavBar({ usuario, items, etiquetaRol }) {
+export default function NavBar({ usuario, items, etiquetaRol, avisos = 0 }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -109,6 +109,22 @@ export default function NavBar({ usuario, items, etiquetaRol }) {
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* La campana solo aparece cuando hay algo que ver. Un icono que
+                está siempre y casi nunca dice nada deja de mirarse, y entonces
+                el día que sí trae algo tampoco se mira. */}
+            {avisos > 0 && (
+              <Link
+                href="/avisos"
+                title={`${avisos} aviso${avisos === 1 ? '' : 's'} sin leer`}
+                className="relative text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-800"
+              >
+                <Icono nombre="campana" tamano={18} />
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-ultra-rojo text-ultra-blanco text-[10px] leading-4 text-center font-medium">
+                  {avisos > 9 ? '9+' : avisos}
+                </span>
+                <span className="sr-only">Avisos sin leer</span>
+              </Link>
+            )}
             <TemaToggle />
             {/* El nombre lleva a la cuenta propia: ahí se cambia la contraseña.
                 Entre lg y 2xl se quita: es la franja donde el menú completo ya

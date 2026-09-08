@@ -205,7 +205,7 @@ describe('lo que ya trabajó se cancela, no se deshace', () => {
     const { servicioId } = await abrir('SE VA DE VERDAD');
     const r = await admin.pedir('/api/cancelaciones', {
       method: 'POST',
-      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: servicioId, motivo: 'El cliente terminó el contrato' }),
+      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: servicioId, motivo: 'FIN DE CONTRATO', motivo_detalle: 'El cliente terminó el contrato' }),
     });
     assert.equal(r.status, 201, r.texto);
     const s = (await admin.pedir(`/api/servicios/${servicioId}`)).json.servicio;
