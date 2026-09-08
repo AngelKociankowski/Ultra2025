@@ -7,7 +7,9 @@ import { AUTORIZACIONES_APERTURA } from '@/lib/campos';
 import CampoCatalogo from '@/components/CampoCatalogo';
 import { MODALIDADES } from '@/lib/modalidades';
 import { EQUIPO } from '@/lib/equipo';
-import { hoyLocal } from '@/lib/utils';
+import { hoyLocal, formatCurrency } from '@/lib/utils';
+import DesgloseTurnos from '@/components/DesgloseTurnos';
+import AsesoresExtra from '@/components/AsesoresExtra';
 
 const input =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
@@ -60,6 +62,13 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
     comentarios: '',
   });
   const [turnos, setTurnos] = useState({});
+  // A qué hora se cubre cada jornada: {"12X36": {"NOCTURNO": 4}}. Opcional,
+  // porque los 217 servicios que ya estaban no lo tienen y no se les puede
+  // exigir hacia atrás; pero cuando se llena, tiene que cuadrar con la jornada.
+  const [turnosDetalle, setTurnosDetalle] = useState({});
+  // Los asesores además del principal. Van aparte del formulario porque el
+  // principal es un campo y estos son una lista.
+  const [asesoresExtra, setAsesoresExtra] = useState([]);
   const [equipo, setEquipo] = useState({});
   const [aut, setAut] = useState({});
   const [error, setError] = useState('');
@@ -103,7 +112,7 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
       const res = await fetch('/api/aperturas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...f, tipo, turnos, guardias: total, aut, equipo }),
+        body: JSON.stringify({ ...f, tipo, turnos, turnos_detalle: turnosDetalle, asesores: asesoresExtra, guardias: total, aut, equipo }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -266,6 +275,22 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
               className={input}
             />
             {opciones.asesores.length === 0 && <SinCatalogo que="asesores" />}
+
+            {/* Un servicio puede llevarlo más de un asesor, y hasta ahora el
+                campo aceptaba uno solo. Se notaba en los datos: hay dos
+                renglones del catálogo que en realidad son dos personas juntas
+                —los mismos dos, además, en distinto orden— y cinco servicios
+                con una barra en medio del nombre. Cuando el dato no cabe en el
+                campo, acaba metido a la fuerza en el que hay.
+
+                El de arriba sigue siendo el principal: es por el que filtran
+                las pantallas y por el que agrupan los cortes ya cerrados. */}
+            <AsesoresExtra
+              principal={f.asesor}
+              lista={asesoresExtra}
+              setLista={setAsesoresExtra}
+              opciones={opciones.asesores}
+            />
           </div>
 
           <div>
@@ -367,7 +392,7 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
             Total: <strong className="text-emerald-400">{total}</strong> guardias
           </span>
         </div>
-        {opciones.turnos.length === 0 && <SinCatalogo que="turnos" />}
+        {opciones.turnos.length === 0 && <SinCatalogo que="jornadas" />}
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
           {opciones.turnos.map((t) => (
             <div key={t}>
@@ -384,12 +409,42 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
                     else next[t] = Number(v);
                     return next;
                   });
+                  // Si la jornada se vacía, su reparto por turno deja de tener
+                  // sentido: se va con ella en vez de quedarse colgando y
+                  // reaparecer si alguien vuelve a teclear un número.
+                  if (v === '' || Number(v) === 0) {
+                    setTurnosDetalle((prev) => {
+                      const next = { ...prev };
+                      delete next[t];
+                      return next;
+                    });
+                  }
                 }}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-cyan-500"
               />
             </div>
           ))}
         </div>
+
+        <DesgloseTurnos
+          turnos={turnos}
+          detalle={turnosDetalle}
+          setDetalle={setTurnosDetalle}
+          turnosDia={opciones.turnosDia || []}
+        />
+
+        {/* El valor del guardia, aquí y no solo en el bloque de precios. Se
+            pidió verlo justo al capturar la cantidad por jornada, y tiene
+            sentido: es el momento en que uno decide si el número está bien, y
+            «doce guardias» y «doce guardias son 96 mil al mes» son dos cosas
+            distintas de mirar. */}
+        {total > 0 && Number(f.precio_guardia) > 0 && (
+          <p className="text-xs text-slate-400 mt-3 bg-slate-900/50 rounded-lg px-3 py-2">
+            {total} guardias × {formatCurrency(Number(f.precio_guardia))} ={' '}
+            <strong className="text-white">{formatCurrency(total * Number(f.precio_guardia))}</strong>{' '}
+            al mes
+          </p>
+        )}
       </section>
 
       <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">

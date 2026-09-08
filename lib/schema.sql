@@ -34,7 +34,20 @@ CREATE TABLE IF NOT EXISTS servicios (
   cluster                    TEXT,
   estado_geo                 TEXT,
   supervisor                 TEXT,
+  -- El asesor «principal», y la lista completa aparte.
+  --
+  -- Un servicio puede llevarlo más de un asesor, y la operación lo venía
+  -- resolviendo como podía: hay dos renglones en el catálogo que en realidad
+  -- son dos personas juntas —«ARMANDO LOPEZ MAURICIO VALENZUELA» y «MAURICIO
+  -- VALENZUELA/ARMANDO LOPEZ», que además son los mismos dos en distinto
+  -- orden— y cinco servicios con una barra en medio del nombre.
+  --
+  -- `asesor` se queda con el primero y no se toca: por él filtran las pantallas,
+  -- por él agrupan los cortes ya cerrados y él es el que viaja a los reportes.
+  -- `asesores_json` trae la lista entera. Un servicio de un solo asesor deja el
+  -- JSON vacío y se comporta exactamente como siempre.
   asesor                     TEXT,
+  asesores_json              TEXT NOT NULL DEFAULT '[]',
   gerente                    TEXT,
 
   -- estado de fuerza
@@ -64,6 +77,18 @@ CREATE TABLE IF NOT EXISTS servicios (
   fecha_fin_prevista         TEXT,
   total_guardias             INTEGER NOT NULL DEFAULT 0,
   turnos_json                TEXT NOT NULL DEFAULT '{}',
+  -- El desglose por turno DENTRO de cada jornada: {"12X36": {"MATUTINO": 4,
+  -- "NOCTURNO": 4}}. Va aparte de `turnos_json` y no lo reemplaza, y esa es la
+  -- decisión importante: `turnos_json` lo lee media plataforma —el reparto, los
+  -- filtros, los cortes cerrados— y cambiarle la forma habría obligado a
+  -- reescribir todo eso y a migrar el histórico entero para ganar un dato que
+  -- ningún servicio viejo tiene.
+  --
+  -- Así, un servicio sin este desglose sigue funcionando igual que siempre; el
+  -- que lo tiene contesta además a qué hora se cubre. Cuando está, la suma de
+  -- cada jornada tiene que coincidir con lo que dice `turnos_json`: si no, el
+  -- mismo servicio afirmaría dos plantillas distintas.
+  turnos_detalle_json        TEXT NOT NULL DEFAULT '{}',
   precio_guardia             REAL,
   sueldo_base                REAL,
   bono                       REAL,
@@ -148,11 +173,14 @@ CREATE TABLE IF NOT EXISTS aperturas (
   cluster            TEXT,
   estado_geo         TEXT,
   asesor             TEXT,
+  asesores_json      TEXT NOT NULL DEFAULT '[]',
   gerente            TEXT,
   supervisor         TEXT,
   reporta            TEXT,
   guardias           INTEGER NOT NULL DEFAULT 0,
   turnos_json        TEXT NOT NULL DEFAULT '{}',
+  -- El desglose por turno dentro de cada jornada. Ver la nota en `servicios`.
+  turnos_detalle_json TEXT NOT NULL DEFAULT '{}',
   fecha              TEXT,
   periodo            TEXT,
   precio_guardia     REAL,
@@ -455,7 +483,7 @@ CREATE TABLE IF NOT EXISTS catalogos (
   -- viola el CHECK, y como las siembras usan `INSERT OR IGNORE` el error se
   -- descarta en silencio. El catálogo queda vacío, la captura rechaza todos los
   -- valores por «no están en el catálogo», y nada en la bitácora dice por qué.
-  tipo      TEXT NOT NULL CHECK (tipo IN ('zona','asesor','turno','forma_pago','puesto','gerente','supervisor','estado_geo','tipo_repse','uniforme','motivo_baja')),
+  tipo      TEXT NOT NULL CHECK (tipo IN ('zona','asesor','turno','forma_pago','puesto','gerente','supervisor','estado_geo','tipo_repse','uniforme','motivo_baja','turno_dia')),
   valor     TEXT NOT NULL,
   -- Los turnos se ordenan como los lee la operación (8X16, 12X12, 24X48…), no
   -- alfabéticamente. Zonas y asesores se quedan en 0 y salen por nombre.

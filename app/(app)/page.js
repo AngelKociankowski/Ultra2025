@@ -7,6 +7,7 @@ import {
   motivosCancelacion,
   distribucionPorZona,
   distribucionPorTurno,
+  distribucionPorTurnoDia,
   distribucionPorModalidad,
   rankingAsesores,
   contratosPorVencer,
@@ -18,6 +19,7 @@ import { formatCurrency, formatNumber } from '@/lib/utils';
 import MovimientosChart from '@/components/MovimientosChart';
 import RepartoTurnos from '@/components/RepartoTurnos';
 import Modalidades from '@/components/Modalidades';
+import TurnosDelDia from '@/components/TurnosDelDia';
 import Icono from '@/components/Icono';
 
 export const dynamic = 'force-dynamic';
@@ -65,6 +67,7 @@ export default function Tablero() {
   const motivos = motivosCancelacion(8);
   const zonas = distribucionPorZona();
   const turnos = distribucionPorTurno();
+  const turnosDia = distribucionPorTurnoDia();
   const modalidades = distribucionPorModalidad();
   const asesores = rankingAsesores(10);
   const vencen = contratosPorVencer(90);
@@ -224,7 +227,9 @@ export default function Tablero() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
-        <RepartoTurnos reparto={turnos} base="/estado-fuerza" />
+        <RepartoTurnos reparto={turnos} base="/estado-fuerza" titulo="Guardias por jornada" />
+
+        <TurnosDelDia datos={turnosDia} />
 
         <Modalidades datos={modalidades} />
 

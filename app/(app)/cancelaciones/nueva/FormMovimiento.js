@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AUTORIZACIONES_CANCELACION } from '@/lib/campos';
 import { hoyLocal } from '@/lib/utils';
+import DesgloseTurnos from '@/components/DesgloseTurnos';
 
 const input =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
@@ -69,6 +70,10 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
   const [cxc, setCxc] = useState('');
   const [auditoria, setAuditoria] = useState('');
   const [turnos, setTurnos] = useState({});
+  // Mismo desglose por turno que en la apertura. Se pidió expresamente para
+  // Incremento y Temporal —«mismas observaciones para los iconos de Incremento
+  // y Temporal»— y las tres cosas pasan por este formulario.
+  const [turnosDetalle, setTurnosDetalle] = useState({});
   // Los turnos que se añaden a mano se recuerdan aparte de sus cantidades: si
   // dependieran de `turnos`, borrar el número le quitaría el renglón de enfrente
   // a quien apenas lo está capturando.
@@ -158,6 +163,7 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
               servicio_id: Number(servicioId),
               fecha,
               turnos,
+              turnos_detalle: turnosDetalle,
               guardias: total,
               comentarios: [motivo, motivoDetalle.trim()].filter(Boolean).join(' · ') || null,
               aut,
@@ -367,6 +373,18 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
                   </div>
                 ))}
               </div>
+
+              {/* Solo en la ampliación. En una disminución lo que se captura es
+                  qué se retira, y pedir el turno de lo que se va sería preguntar
+                  por un dato que ya no va a existir. */}
+              {esAmpliacion && (
+                <DesgloseTurnos
+                  turnos={turnos}
+                  detalle={turnosDetalle}
+                  setDetalle={setTurnosDetalle}
+                  turnosDia={opciones?.turnosDia || []}
+                />
+              )}
 
               {esAmpliacion && (
                 <div className="mt-3 flex flex-wrap items-end gap-2">
