@@ -487,6 +487,39 @@ CREATE TABLE IF NOT EXISTS comentarios (
 
 CREATE INDEX IF NOT EXISTS idx_comentarios_servicio ON comentarios(servicio_id, id DESC);
 
+-- ------------------------------------------------------------------ avisos
+-- Que a quien capturó un dato le llegue que se lo corrigieron.
+--
+-- La bitácora ya guardaba toda corrección, con su motivo y su antes y después.
+-- Pero la bitácora hay que ir a mirarla, y nadie mira una bitácora por si
+-- acaso. El resultado era que la persona que tecleó «12x12 de lunes a domingo»
+-- donde iban «12x36 diurno» nunca se enteraba, y volvía a capturarlo igual la
+-- siguiente vez. Una corrección que no vuelve a quien se equivocó arregla el
+-- dato y deja intacta la causa.
+--
+-- No es una copia de la bitácora: la bitácora es el registro completo de lo que
+-- pasó, para auditar; esto son las pocas cosas que UNA persona en concreto
+-- tiene que ver. Por eso lleva destinatario y se marca como leído.
+CREATE TABLE IF NOT EXISTS avisos (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  -- A quién le toca verlo. Un aviso sin destinatario es un aviso de nadie.
+  usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  tipo        TEXT NOT NULL,
+  titulo      TEXT NOT NULL,
+  cuerpo      TEXT,
+  -- Para poder abrir el servicio del que habla sin buscarlo.
+  entidad     TEXT,
+  entidad_id  INTEGER,
+  -- Quién lo provocó. Va por nombre y no solo por id: si esa cuenta se da de
+  -- baja, el aviso tiene que seguir diciendo quién corrigió.
+  origen_id   INTEGER REFERENCES usuarios(id),
+  origen      TEXT,
+  leido_en    TEXT,
+  creado_en   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_avisos_usuario ON avisos(usuario_id, leido_en, id DESC);
+
 -- ---------------------------------------------------- historial de precios
 -- Cada año se le sube el precio al cliente, y no a todos en el mismo mes: cada
 -- servicio trae el suyo (`servicios.mes_incremento`) desde que se contrató.

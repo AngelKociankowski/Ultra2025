@@ -200,15 +200,24 @@ describe('reactivar un servicio cancelado por error', () => {
   });
 });
 
-describe('solo el admin corrige', () => {
+/**
+ * Quién corrige qué.
+ *
+ * Corregir no es un permiso de todo o nada, y por eso no basta con probar que
+ * unos pueden y otros no: hay que probar el alcance de cada uno. Cada rol
+ * arregla lo que le pertenece —operaciones lo que opera, jurídico el nombre
+ * legal del cliente— y el servidor rechaza lo demás en vez de ignorarlo en
+ * silencio, que haría creer que se guardó.
+ */
+describe('cada rol corrige lo suyo, y solo lo suyo', () => {
   let id;
 
   before(async () => {
     id = await abrir('INTOCABLE PARA EL RESTO', { guardias: 4 });
   });
 
-  for (const rol of ['juridico', 'finanzas', 'operaciones', 'ventas']) {
-    test(`${rol} recibe 403`, async () => {
+  for (const rol of ['finanzas', 'ventas']) {
+    test(`${rol} no corrige nada`, async () => {
       const sesion = await srv.entrarYAsentar(ROLES[rol]);
       const r = await corregir(sesion, id, {
         total_guardias: 40,
@@ -218,6 +227,55 @@ describe('solo el admin corrige', () => {
       assert.equal((await traer(id)).total_guardias, 4);
     });
   }
+
+  test('operaciones sí corrige la plantilla: es el dato que opera', async () => {
+    // Antes tenía que pedírselo a un administrador, que es como se llega a que
+    // nadie lo arregle. Quien detecta estos errores es quien los comete.
+    const sesion = await srv.entrarYAsentar(ROLES.operaciones);
+    const r = await corregir(sesion, id, {
+      total_guardias: 6,
+      motivo: 'Se capturaron 4 guardias y en el alta iban 6.',
+    });
+    assert.equal(r.status, 201, r.texto);
+    assert.equal((await traer(id)).total_guardias, 6);
+  });
+
+  test('pero no la razón social, que es de jurídico', async () => {
+    const sesion = await srv.entrarYAsentar(ROLES.operaciones);
+    const r = await corregir(sesion, id, {
+      razon_social: 'LA QUE SEA S.A. DE C.V.',
+      motivo: 'Intento de tocar un campo de otra área.',
+    });
+    assert.equal(r.status, 403);
+    assert.match(r.json.error, /razon_social/);
+  });
+
+  test('ni el estatus: reactivar una baja no es corregir una captura', async () => {
+    // Dar de baja tiene su vía —la cancelación, con folio y motivo— y revivir
+    // un servicio cancelado es deshacer esa decisión, no arreglar un dedazo.
+    const sesion = await srv.entrarYAsentar(ROLES.operaciones);
+    const r = await corregir(sesion, id, {
+      estatus: 'ACTIVO',
+      motivo: 'Intento de mover el estatus desde operaciones.',
+    });
+    assert.equal(r.status, 403);
+    assert.match(r.json.error, /estatus/);
+  });
+
+  test('jurídico sigue entrando solo por la razón social', async () => {
+    const sesion = await srv.entrarYAsentar(ROLES.juridico);
+    const malo = await corregir(sesion, id, {
+      total_guardias: 40,
+      motivo: 'Intento de mover la plantilla desde jurídico.',
+    });
+    assert.equal(malo.status, 403);
+
+    const bueno = await corregir(sesion, id, {
+      razon_social: 'INTOCABLE S.A. DE C.V.',
+      motivo: 'El acta constitutiva dice otra cosa.',
+    });
+    assert.equal(bueno.status, 201, bueno.texto);
+  });
 
   test('sin sesión tampoco', async () => {
     const r = await fetch(`${srv.base}/api/servicios/${id}/correccion`, {

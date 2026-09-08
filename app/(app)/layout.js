@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { usuarioActual } from '@/lib/auth';
 import { navegacion, ROLES } from '@/lib/rbac';
+import { sinLeer } from '@/lib/avisos';
 import NavBar from '@/components/NavBar';
 
 export default function AppLayout({ children }) {
@@ -23,11 +24,17 @@ export default function AppLayout({ children }) {
    */
   const items = usuario.debe_cambiar_password ? [] : navegacion(usuario.rol);
 
+  // El contador va en el layout y no dentro de la barra porque la barra corre
+  // en el navegador y esto lee la base. Con la contraseña prestada va en cero:
+  // esa sesión no puede entrar a ningún lado todavía.
+  const avisos = usuario.debe_cambiar_password ? 0 : sinLeer(usuario.id);
+
   return (
     <div className="min-h-screen flex flex-col">
       <NavBar
         usuario={usuario}
         items={items}
+        avisos={avisos}
         etiquetaRol={ROLES[usuario.rol]?.etiqueta || usuario.rol}
       />
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-6">{children}</main>
