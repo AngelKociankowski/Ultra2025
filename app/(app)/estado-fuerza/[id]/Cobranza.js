@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency, hoyLocal } from '@/lib/utils';
 import ArchivoFactura from '@/components/ArchivoFactura';
+import CorregirFactura from './CorregirFactura';
 import Icono from '@/components/Icono';
 
 const input =
@@ -50,6 +51,10 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
     folio: '',
   }));
   const [pago, setPago] = useState({ fecha: hoyLocal(), importe: '', referencia: '' });
+  // La factura que se está corrigiendo. Cobranza reportó «el importe no es el
+  // correcto, pero no me deja mover»: no había ninguna vía, y la que parecía
+  // servir —mandar el importe— caía en el registro de pagos.
+  const [corrigiendo, setCorrigiendo] = useState(null);
 
   async function llamar(metodo, cuerpo, ruta = '/api/facturas') {
     setOcupado(true);
@@ -318,6 +323,15 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
                       Registrar pago
                     </button>
                   )}
+                  {puedeFacturar && !f.cancelada && (
+                    <button
+                      onClick={() => setCorrigiendo(corrigiendo?.id === f.id ? null : f)}
+                      disabled={ocupado}
+                      className="text-xs text-slate-400 hover:underline hover:text-white ml-2 disabled:opacity-40"
+                    >
+                      Corregir
+                    </button>
+                  )}
                   {puedeCancelar && !f.cancelada && !f.importe_pagado && (
                     <button
                       onClick={() => cancelar(f)}
@@ -341,6 +355,18 @@ export default function Cobranza({ servicio, facturas, resumen, programa, puedeF
           </tbody>
         </table>
       </div>
+
+      {corrigiendo && puedeFacturar && (
+        <CorregirFactura
+          factura={corrigiendo}
+          onCancelar={() => setCorrigiendo(null)}
+          onListo={(texto) => {
+            setCorrigiendo(null);
+            setMensaje({ tipo: 'ok', texto });
+            router.refresh();
+          }}
+        />
+      )}
 
       {typeof abierto === 'number' && puedeFacturar && (
         <form

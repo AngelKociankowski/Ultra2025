@@ -9,6 +9,7 @@ import {
   registrarFactura,
   registrarPago,
   cancelarFactura,
+  corregirFactura,
   facturasVencidas,
   pendientesDeFacturar,
 } from '@/lib/facturacion';
@@ -62,6 +63,19 @@ export const PATCH = conPermiso('editar_finanzas', async (request, { usuario }) 
       throw new PermisoError('Solo el administrador cancela una factura ya emitida.');
     }
     return NextResponse.json(cancelarFactura(cuerpo.id, cuerpo.cancelar, usuario));
+  }
+
+  // Corregir lo que se capturó mal. Va antes del pago y con su propia llave
+  // porque los dos llegan por aquí y confundirlos es caro: mandar el importe
+  // corregido caía en el registro de pagos, así que la plataforma entendía «me
+  // pagaron esto» cuando le estaban diciendo «esto estaba mal escrito».
+  //
+  // Lo hace finanzas, sin pedir `corregir`. Es quien tiene la factura en la
+  // mano, quien detecta el error y la única que puede saber cuál es el número
+  // bueno; obligarla a pedirle a un administrador que le arregle un importe es
+  // como se llega a que nadie lo arregle. Queda en la bitácora con su motivo.
+  if (cuerpo.correccion) {
+    return NextResponse.json(corregirFactura(cuerpo.id, cuerpo.correccion, usuario));
   }
 
   return NextResponse.json(registrarPago({ ...(cuerpo.pago || cuerpo), factura_id: cuerpo.id }, usuario));
