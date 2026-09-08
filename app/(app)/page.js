@@ -127,8 +127,23 @@ export default function Tablero() {
         <Kpi titulo="Servicios activos" valor={formatNumber(k.servicios)} />
         <Kpi titulo="Guardias en operación" valor={formatNumber(k.guardias)} sub={`${k.promGuardias} por servicio`} />
         <Kpi titulo="Facturación mensual" valor={formatCurrency(k.facturacion)} />
-        <Kpi titulo="Sin contrato" valor={formatNumber(k.sinContrato)} sub={`${k.conContrato} con contrato`} tono={k.sinContrato ? 'amber' : 'slate'} />
-        <Kpi titulo="Sin facturar" valor={formatNumber(k.sinFacturar)} sub={`${k.facturados} facturados`} tono={k.sinFacturar ? 'amber' : 'slate'} />
+        {/* El número grande cuenta servicios y el de abajo, guardias. Se
+            preguntó cuál de las dos cosas era, que es señal de que no decirlo
+            volvía el dato inservible: veinte servicios sin contrato no pesan
+            igual si son veinte porterías de un guardia que si uno es un CEDIS
+            de sesenta. */}
+        <Kpi
+          titulo="Servicios sin contrato"
+          valor={formatNumber(k.sinContrato)}
+          sub={`${formatNumber(k.guardiasSinContrato)} guardias · ${formatNumber(k.conContrato)} con contrato`}
+          tono={k.sinContrato ? 'amber' : 'slate'}
+        />
+        <Kpi
+          titulo="Servicios sin facturar"
+          valor={formatNumber(k.sinFacturar)}
+          sub={`${formatNumber(k.guardiasSinFacturar)} guardias · ${formatNumber(k.facturados)} facturados`}
+          tono={k.sinFacturar ? 'amber' : 'slate'}
+        />
         {/* Vencido y por vencer van separados a propósito: los dos son dinero
             sin cobrar, pero solo el primero es adeudo. Al segundo todavía le
             corre el plazo de crédito que se le concedió al cliente. */}

@@ -301,6 +301,50 @@ describe('desactivar y borrar', () => {
   });
 });
 
+/**
+ * Lo que faltaba en las listas, según la revisión de la operación.
+ *
+ * Dos observaciones distintas con la misma trampa detrás: una opción que no
+ * está en el catálogo no se puede capturar, y entonces la operación la escribe
+ * donde puede o la deja en blanco. Por eso se comprueban una por una, y se
+ * comprueba sobre todo que agregarlas no se llevó por delante las que ya
+ * estaban —que es exactamente lo que pasó al escribir esta migración—.
+ */
+describe('las listas que la operación pidió completar', () => {
+  test('están las tres zonas que faltaban', async () => {
+    const { zonas } = await catalogo(admin);
+    for (const z of ['TOLUCA', 'STAFF', 'CUBRE DESCANSOS']) {
+      assert.ok(zonas.includes(z), `falta la zona ${z}`);
+    }
+  });
+
+  test('y siguen estando las que ya se usaban', async () => {
+    // La migración corre antes que la siembra. Si crea el tipo desde cero, la
+    // siembra lo ve «ya poblado» y no mete las suyas: la instalación arranca
+    // con tres zonas en vez de las de la operación. Esto es el guardián.
+    const { zonas } = await catalogo(admin);
+    for (const z of ['NORTE', 'SUR']) assert.ok(zonas.includes(z), `se perdió la zona ${z}`);
+    assert.ok(zonas.length >= 5, `quedaron solo ${zonas.length} zonas: la siembra no corrió`);
+  });
+
+  test('están las cinco jornadas que faltaban', async () => {
+    const { turnos } = await catalogo(admin);
+    for (const j of ['48X48', '12X12 L-J', '12X12 V-D', '10X14 L-S', '10X14 L-V']) {
+      assert.ok(turnos.includes(j), `falta la jornada ${j}`);
+    }
+  });
+
+  test('y las jornadas que ya se trabajaban no se fueron', async () => {
+    // «24 HRS» y «12 HRS» solas cargan la mayor parte de los guardias
+    // capturados. Quitarlas dejaría sin explicación a la mitad del histórico.
+    const { turnos } = await catalogo(admin);
+    for (const j of ['24 HRS', '12 HRS', '12X36', '12X12 L-D', '8X16 L-S']) {
+      assert.ok(turnos.includes(j), `se perdió la jornada ${j}`);
+    }
+    assert.ok(turnos.length >= 15, `quedaron solo ${turnos.length} jornadas: la siembra no corrió`);
+  });
+});
+
 test('los movimientos del catálogo quedan en la bitácora', async () => {
   const r = await admin.pedir('/bitacora');
   assert.equal(r.status, 200);
