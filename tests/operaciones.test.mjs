@@ -474,7 +474,7 @@ describe('capturar dos veces la misma alta', () => {
     const id = a.json.servicioId;
     const c = await admin.pedir('/api/cancelaciones', {
       method: 'POST',
-      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: id, motivo: 'cerró temporalmente' }),
+      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: id, motivo: 'OTRO', motivo_detalle: 'cerró temporalmente' }),
     });
     assert.equal(c.status, 201, c.texto);
 

@@ -84,7 +84,7 @@ describe('ciclo de vida completo de un servicio', () => {
   test('una reducción resta guardias y el servicio sigue activo', async () => {
     const r = await admin.pedir('/api/cancelaciones', {
       method: 'POST',
-      body: JSON.stringify({ tipo: 'REDUCCION', servicio_id: id, turnos: { '24X24': 4 }, motivo: 'AJUSTE OPERATIVO' }),
+      body: JSON.stringify({ tipo: 'REDUCCION', servicio_id: id, turnos: { '24X24': 4 }, motivo: 'REDUCCIÓN DE PLANTILLA', motivo_detalle: 'Ajuste operativo' }),
     });
     assert.equal(r.status, 201);
     const s = await admin.pedir(`/api/servicios/${id}`);
@@ -99,7 +99,7 @@ describe('ciclo de vida completo de un servicio', () => {
         tipo: 'REDUCCION',
         servicio_id: id,
         turnos: { '24X24': 5, '12X12 L-D': 4 },
-        motivo: 'AJUSTE OPERATIVO',
+        motivo: 'REDUCCIÓN DE PLANTILLA', motivo_detalle: 'Ajuste operativo',
       }),
     });
     assert.equal(r.status, 400);
@@ -111,7 +111,7 @@ describe('ciclo de vida completo de un servicio', () => {
     // dirían cosas distintas y la siguiente disminución trabajaría con basura.
     const reducir = await admin.pedir('/api/cancelaciones', {
       method: 'POST',
-      body: JSON.stringify({ tipo: 'REDUCCION', servicio_id: id, guardias: 2, motivo: 'AJUSTE OPERATIVO' }),
+      body: JSON.stringify({ tipo: 'REDUCCION', servicio_id: id, guardias: 2, motivo: 'REDUCCIÓN DE PLANTILLA', motivo_detalle: 'Ajuste operativo' }),
     });
     assert.equal(reducir.status, 400);
     assert.match(reducir.json.error, /desglose/i);

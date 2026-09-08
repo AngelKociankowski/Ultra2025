@@ -56,7 +56,7 @@ describe('quién registra movimientos', () => {
 
       const c = await s[rol].pedir('/api/cancelaciones', {
         method: 'POST',
-        body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: a.json.servicioId, motivo: 'PRUEBA' }),
+        body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: a.json.servicioId, motivo: 'OTRO', motivo_detalle: 'Prueba' }),
       });
       assert.equal(c.status, 201);
     });
@@ -72,7 +72,7 @@ describe('quién registra movimientos', () => {
 
       const c = await s[rol].pedir('/api/cancelaciones', {
         method: 'POST',
-        body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: 1, motivo: 'PRUEBA' }),
+        body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: 1, motivo: 'OTRO', motivo_detalle: 'Prueba' }),
       });
       assert.equal(c.status, 403);
     });

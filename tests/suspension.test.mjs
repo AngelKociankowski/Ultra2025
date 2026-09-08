@@ -179,7 +179,7 @@ describe('volver a la operación', () => {
     const id = await servicio('SUSPENDER TRAS BAJA');
     await admin.pedir('/api/cancelaciones', {
       method: 'POST',
-      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: id, motivo: 'El cliente terminó el contrato' }),
+      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: id, motivo: 'FIN DE CONTRATO', motivo_detalle: 'El cliente terminó el contrato' }),
     });
     const r = await reactivar(admin, id);
     assert.equal(r.status, 400);
@@ -200,7 +200,7 @@ describe('lo que no se puede hacer con un suspendido', () => {
     const id = await servicio('SUSPENDER UNA BAJA');
     await admin.pedir('/api/cancelaciones', {
       method: 'POST',
-      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: id, motivo: 'Se terminó el servicio' }),
+      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: id, motivo: 'FIN DE SERVICIO O PROYECTO', motivo_detalle: 'Se terminó el servicio' }),
     });
     const r = await suspender(admin, id);
     assert.equal(r.status, 400);
@@ -269,7 +269,7 @@ describe('cancelar sigue siendo la salida cuando el cliente ya no vuelve', () =>
 
     const r = await admin.pedir('/api/cancelaciones', {
       method: 'POST',
-      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: id, motivo: 'Al final el cliente no regresó' }),
+      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: id, motivo: 'OTRO', motivo_detalle: 'Al final el cliente no regresó' }),
     });
     assert.equal(r.status, 201, r.texto);
 

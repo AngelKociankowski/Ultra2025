@@ -217,7 +217,13 @@ CREATE TABLE IF NOT EXISTS cancelaciones (
   periodo         TEXT,
   zona            TEXT,
   asesor          TEXT,
+  -- El motivo sale del catálogo; el detalle es lo que no cabe en una lista.
+  -- Se escribía todo junto y a mano: 125 textos distintos para 330
+  -- cancelaciones, con el mismo hecho escrito de cuatro formas. Separarlos deja
+  -- las dos cosas: se puede contar por motivo, y no se pierde que el pago
+  -- quedaba pendiente hasta el viernes.
   motivo          TEXT,
+  motivo_detalle  TEXT,
   reporta         TEXT,
   auditoria       TEXT,
   cxc             REAL,
@@ -445,7 +451,11 @@ CREATE INDEX IF NOT EXISTS idx_pagos_factura ON pagos(factura_id, id DESC);
 -- a los cortes cerrados, que son el respaldo de facturación.
 CREATE TABLE IF NOT EXISTS catalogos (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
-  tipo      TEXT NOT NULL CHECK (tipo IN ('zona','asesor','turno','forma_pago','puesto','gerente','supervisor','estado_geo','tipo_repse','uniforme')),
+  -- Agregar un tipo aquí NO es opcional: sin él, cada INSERT del tipo nuevo
+  -- viola el CHECK, y como las siembras usan `INSERT OR IGNORE` el error se
+  -- descarta en silencio. El catálogo queda vacío, la captura rechaza todos los
+  -- valores por «no están en el catálogo», y nada en la bitácora dice por qué.
+  tipo      TEXT NOT NULL CHECK (tipo IN ('zona','asesor','turno','forma_pago','puesto','gerente','supervisor','estado_geo','tipo_repse','uniforme','motivo_baja')),
   valor     TEXT NOT NULL,
   -- Los turnos se ordenan como los lee la operación (8X16, 12X12, 24X48…), no
   -- alfabéticamente. Zonas y asesores se quedan en 0 y salen por nombre.

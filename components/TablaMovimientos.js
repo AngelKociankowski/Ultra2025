@@ -269,10 +269,18 @@ export default function TablaMovimientos({ clase, movimientos, puedeAplicar = fa
                             {f.comentarios}
                           </p>
                         )}
-                        {!esApertura && f.motivo && (
+                        {!esApertura && (f.motivo || f.motivo_detalle) && (
                           <p className="text-xs text-slate-400 mt-4 bg-slate-900/60 rounded-lg p-2.5">
                             <strong className="text-slate-300">Motivo: </strong>
                             {f.motivo}
+                            {/* El detalle es lo que la lista no alcanza a decir
+                                —que el pago quedaba para el viernes, que la
+                                ubicación tenía problemas fiscales—. Va junto al
+                                motivo y no en su lugar: el de arriba sirve para
+                                sumar, este para entender. */}
+                            {f.motivo_detalle && (
+                              <span className="block mt-1 text-slate-500">{f.motivo_detalle}</span>
+                            )}
                           </p>
                         )}
                       </td>

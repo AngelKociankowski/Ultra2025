@@ -236,7 +236,7 @@ describe('un servicio suspendido sigue siendo asunto de jurídico', () => {
     });
     const c = await admin.pedir('/api/cancelaciones', {
       method: 'POST',
-      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: id, motivo: 'cerró la sucursal' }),
+      body: JSON.stringify({ tipo: 'CANCELACION', servicio_id: id, motivo: 'CIERRE DE INSTALACIÓN O SUCURSAL', motivo_detalle: 'cerró la sucursal' }),
     });
     assert.equal(c.status, 201, c.texto);
 
