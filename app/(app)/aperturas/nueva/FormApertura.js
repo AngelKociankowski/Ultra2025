@@ -9,6 +9,7 @@ import { MODALIDADES } from '@/lib/modalidades';
 import { EQUIPO } from '@/lib/equipo';
 import { hoyLocal, formatCurrency } from '@/lib/utils';
 import DesgloseTurnos from '@/components/DesgloseTurnos';
+import DesglosePuestos from '@/components/DesglosePuestos';
 import AsesoresExtra from '@/components/AsesoresExtra';
 
 const input =
@@ -69,6 +70,10 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
   // Los asesores además del principal. Van aparte del formulario porque el
   // principal es un campo y estos son una lista.
   const [asesoresExtra, setAsesoresExtra] = useState([]);
+  // El desglose por puesto y sueldo. Se guarda como partidas de precio del
+  // servicio, que es donde ya vivía: lo que faltaba era poder capturarlo al dar
+  // de alta, que es cuando quien abre el servicio tiene el dato en la mano.
+  const [puestos, setPuestos] = useState([]);
   const [equipo, setEquipo] = useState({});
   const [aut, setAut] = useState({});
   const [error, setError] = useState('');
@@ -104,7 +109,7 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
     setError('');
     setOk('');
     if (total <= 0) {
-      setError('Captura al menos un guardia en el desglose de turnos.');
+      setError('Captura al menos un guardia en el desglose de jornadas.');
       return;
     }
     setEnviando(true);
@@ -112,7 +117,7 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
       const res = await fetch('/api/aperturas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...f, tipo, turnos, turnos_detalle: turnosDetalle, asesores: asesoresExtra, guardias: total, aut, equipo }),
+        body: JSON.stringify({ ...f, tipo, turnos, turnos_detalle: turnosDetalle, asesores: asesoresExtra, partidas: puestos, guardias: total, aut, equipo }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -387,7 +392,7 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
 
       <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
         <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-base font-semibold text-white">Desglose de turnos</h2>
+          <h2 className="text-base font-semibold text-white">Desglose de jornadas</h2>
           <span className="text-sm text-slate-400">
             Total: <strong className="text-emerald-400">{total}</strong> guardias
           </span>
@@ -431,6 +436,14 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
           detalle={turnosDetalle}
           setDetalle={setTurnosDetalle}
           turnosDia={opciones.turnosDia || []}
+        />
+
+        <DesglosePuestos
+          filas={puestos}
+          setFilas={setPuestos}
+          puestos={opciones.puestos || []}
+          jornadas={Object.keys(turnos)}
+          plantilla={total}
         />
 
         {/* El valor del guardia, aquí y no solo en el bloque de precios. Se

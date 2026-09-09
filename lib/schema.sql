@@ -604,6 +604,18 @@ CREATE TABLE IF NOT EXISTS partidas_precio (
   turno           TEXT,
   cantidad        INTEGER NOT NULL DEFAULT 1,
   precio_unitario REAL NOT NULL DEFAULT 0,
+  -- Lo que se le paga al guardia de ese puesto, al mes.
+  --
+  -- El precio y el sueldo son los dos lados del mismo renglón y hasta ahora
+  -- solo se guardaba uno. El servicio tenía UN sueldo base para todos, y eso
+  -- no es cierto en ninguna parte: un jefe de servicio no gana lo que un
+  -- guardia raso, igual que no cuesta lo mismo. Con los dos juntos, cada
+  -- renglón dice por fin lo que deja.
+  --
+  -- Opcional: hay servicios cotizados de los que todavía no se sabe con qué
+  -- sueldo se van a cubrir, y exigirlo frenaría la captura del precio, que es
+  -- lo que sí se sabe al cerrar la venta.
+  sueldo          REAL,
   nota            TEXT,
   orden           INTEGER NOT NULL DEFAULT 0,
   creado_en       TEXT NOT NULL DEFAULT (datetime('now')),

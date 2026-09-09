@@ -12,7 +12,7 @@ const numero = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const vacia = () => ({ puesto: '', turno: '', cantidad: '', precio_unitario: '', nota: '' });
+const vacia = () => ({ puesto: '', turno: '', cantidad: '', precio_unitario: '', sueldo: '', nota: '' });
 
 /**
  * El precio del servicio, renglón por renglón.
@@ -40,6 +40,7 @@ export default function Partidas({ servicio, resumen, puestos, turnos, puedeEdit
           turno: p.turno || '',
           cantidad: String(p.cantidad),
           precio_unitario: String(p.precio_unitario),
+          sueldo: p.sueldo === null || p.sueldo === undefined ? '' : String(p.sueldo),
           nota: p.nota || '',
         }))
       : []
@@ -53,9 +54,17 @@ export default function Partidas({ servicio, resumen, puestos, turnos, puedeEdit
   const quitar = (i) => setFilas((f) => f.filter((_, j) => j !== i));
   const agregar = () => setFilas((f) => [...f, vacia()]);
 
-  const conDatos = filas.filter((f) => f.puesto || f.cantidad || f.precio_unitario);
+  const conDatos = filas.filter((f) => f.puesto || f.cantidad || f.precio_unitario || f.sueldo);
   const guardias = conDatos.reduce((a, f) => a + Math.round(numero(f.cantidad)), 0);
   const sinIva = redondear(conDatos.reduce((a, f) => a + numero(f.cantidad) * numero(f.precio_unitario), 0));
+  // La nómina solo suma los renglones con sueldo capturado. Contar como cero
+  // los que no lo tienen daría un margen inventado, y un margen inventado se ve
+  // igual de bien que uno real.
+  const conSueldo = conDatos.filter((f) => String(f.sueldo || '').trim() !== '');
+  const nomina = redondear(conSueldo.reduce((a, f) => a + numero(f.cantidad) * numero(f.sueldo), 0));
+  const precioConSueldo = redondear(
+    conSueldo.reduce((a, f) => a + numero(f.cantidad) * numero(f.precio_unitario), 0)
+  );
   const cuadra = conDatos.length === 0 || guardias === servicio.total_guardias;
 
   async function guardar() {
@@ -127,6 +136,7 @@ export default function Partidas({ servicio, resumen, puestos, turnos, puedeEdit
                 <th className="text-left px-3 py-3">Turno</th>
                 <th className="text-right px-3 py-3">Guardias</th>
                 <th className="text-right px-3 py-3">Precio c/u</th>
+                <th className="text-right px-3 py-3">Sueldo c/u</th>
                 <th className="text-right px-3 py-3">Importe</th>
                 <th className="text-left px-3 py-3">Nota</th>
                 {editando && <th className="w-10 px-3 py-3"></th>}
@@ -196,6 +206,17 @@ export default function Partidas({ servicio, resumen, puestos, turnos, puedeEdit
                         className={`${campo} w-28 text-right`}
                       />
                     </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={p.sueldo}
+                        onChange={(e) => cambiar(i, 'sueldo', e.target.value)}
+                        placeholder="opcional"
+                        className={`${campo} w-28 text-right`}
+                      />
+                    </td>
                     <td className="px-3 py-2 text-right text-slate-300">
                       {formatCurrency(numero(p.cantidad) * numero(p.precio_unitario))}
                     </td>
@@ -224,6 +245,9 @@ export default function Partidas({ servicio, resumen, puestos, turnos, puedeEdit
                     <td className="px-3 py-2 text-slate-400">{p.turno || '—'}</td>
                     <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{p.cantidad}</td>
                     <td className="px-3 py-2 text-right text-slate-400">{formatCurrency(p.precio_unitario)}</td>
+                    <td className="px-3 py-2 text-right text-slate-500">
+                      {p.sueldo === null || p.sueldo === undefined ? '—' : formatCurrency(p.sueldo)}
+                    </td>
                     <td className="px-3 py-2 text-right text-slate-200">{formatCurrency(p.importe)}</td>
                     <td className="px-3 py-2 text-slate-500 text-xs">{p.nota || ''}</td>
                   </tr>
@@ -237,6 +261,12 @@ export default function Partidas({ servicio, resumen, puestos, turnos, puedeEdit
                 </td>
                 <td className="px-3 py-2 text-right text-slate-200 tabular-nums">{formatNumber(guardias)}</td>
                 <td></td>
+                {/* La nómina va debajo de su columna, y el margen al lado del
+                    precio. Es la comparación por la que existe capturar el
+                    sueldo: un servicio puede facturar bien y no dejar nada. */}
+                <td className="px-3 py-2 text-right text-slate-400 tabular-nums text-xs">
+                  {nomina > 0 ? formatCurrency(nomina) : ''}
+                </td>
                 <td className="px-3 py-2 text-right font-semibold text-white">{formatCurrency(sinIva)}</td>
                 <td className="px-3 py-2 text-xs text-slate-500" colSpan={editando ? 2 : 1}>
                   {formatCurrency(redondear(sinIva * (1 + IVA)))} con IVA
@@ -244,6 +274,37 @@ export default function Partidas({ servicio, resumen, puestos, turnos, puedeEdit
               </tr>
             </tfoot>
           </table>
+        </div>
+      )}
+
+      {/* El margen, cuando hay con qué calcularlo. Se compara contra el precio
+          de los renglones que SÍ tienen sueldo, no contra el total: si tres de
+          cinco renglones no lo traen, decir «margen del 40%» sobre el total
+          sería un número inventado con aspecto de dato. */}
+      {nomina > 0 && (
+        <div className="px-5 py-3 border-t border-slate-700/50 text-xs flex flex-wrap gap-x-6 gap-y-1">
+          <span className="text-slate-400">
+            Nómina de estos puestos: <strong className="text-slate-200">{formatCurrency(nomina)}</strong>
+          </span>
+          <span className="text-slate-400">
+            Deja:{' '}
+            <strong className={precioConSueldo - nomina >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+              {formatCurrency(redondear(precioConSueldo - nomina))}
+            </strong>
+            {precioConSueldo > 0 && (
+              <span className="text-slate-500">
+                {' '}
+                ({Math.round(((precioConSueldo - nomina) / precioConSueldo) * 1000) / 10}%)
+              </span>
+            )}
+          </span>
+          {conDatos.length > conSueldo.length && (
+            <span className="text-amber-400/80">
+              {conDatos.length - conSueldo.length} renglón
+              {conDatos.length - conSueldo.length === 1 ? '' : 'es'} sin sueldo: no entra
+              {conDatos.length - conSueldo.length === 1 ? '' : 'n'} en la cuenta.
+            </span>
+          )}
         </div>
       )}
 
@@ -277,6 +338,7 @@ export default function Partidas({ servicio, resumen, puestos, turnos, puedeEdit
                     turno: t,
                     cantidad: String(servicio.turnos[t]),
                     precio_unitario: '',
+                    sueldo: '',
                     nota: '',
                   }))
                 )
@@ -306,6 +368,7 @@ export default function Partidas({ servicio, resumen, puestos, turnos, puedeEdit
                   turno: p.turno || '',
                   cantidad: String(p.cantidad),
                   precio_unitario: String(p.precio_unitario),
+                  sueldo: p.sueldo === null || p.sueldo === undefined ? '' : String(p.sueldo),
                   nota: p.nota || '',
                 }))
               );
