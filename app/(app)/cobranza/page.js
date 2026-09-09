@@ -115,7 +115,7 @@ export default function CobranzaGeneral({ searchParams }) {
         yaFacturados={pendientes.yaFacturados}
       />
 
-      <Conciliacion datos={conciliacion} periodo={periodo} />
+      <Conciliacion datos={conciliacion} periodo={periodo} puedeEditar={puede(usuario.rol, 'editar_finanzas')} />
 
       <Emitidas periodo={periodo} facturas={emitidas} puedeSubir={puede(usuario.rol, 'editar_finanzas')} />
 
