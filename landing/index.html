@@ -219,11 +219,11 @@ section::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;bac
 .titulo-tabla{margin-top:clamp(48px,7vw,80px);margin-bottom:14px;font-size:1.5rem}
 .tabla-envoltura{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:.98rem}
-@media (max-width:600px){.col-horas{display:none}table{font-size:.9rem}th,td{padding:10px 6px}}
 th,td{padding:12px 12px;border-bottom:1px solid var(--linea);text-align:left;vertical-align:middle}
 thead th{font:700 .78rem/1.2 var(--texto);text-transform:uppercase;letter-spacing:.08em;color:var(--tinta-2);border-bottom:2px solid var(--tinta)}
 td.num,th.num{text-align:right;font-weight:600}
 td.sube{color:var(--rojo-txt);font-weight:700}
+@media (max-width:600px){th:nth-child(2),td:nth-child(2){display:none}table{font-size:.9rem}th,td{padding:10px 6px}}
 
 .contingencia{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin-top:clamp(40px,6vw,64px);border:2px solid var(--tinta);border-radius:3px}
 .contingencia div{padding:18px 18px 20px;border-right:2px solid var(--tinta);position:relative}
@@ -399,9 +399,9 @@ td.sube{color:var(--rojo-txt);font-weight:700}
 .sectores p{font-size:.93rem;margin-top:4px;color:var(--tinta-2)}
 @media (max-width:860px){.sectores{grid-template-columns:1fr 1fr}}
 @media (max-width:520px){.sectores{grid-template-columns:1fr}}
-.clientes{margin-top:clamp(40px,6vw,64px);background:var(--placa);color:var(--placa-txt);border-radius:3px;padding:22px clamp(18px,3vw,32px)}
-.clientes h3.t{font-size:1.2rem;color:var(--placa-txt-2)}
-.clientes ul{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 0}
+.clientes{background:var(--placa);color:var(--placa-txt);border-radius:3px;padding:22px clamp(18px,3vw,32px)}
+.titulo-clientes{margin-top:clamp(40px,6vw,64px);margin-bottom:14px;font-size:1.5rem}
+.clientes ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 0}
 .clientes li{font:800 clamp(1.4rem,2.6vw,2rem)/1.1 var(--display);text-transform:uppercase;letter-spacing:.02em}
 .clientes li:not(:last-child)::after{content:"/";color:var(--rojo);margin-inline:14px;font-weight:600}
 
@@ -580,7 +580,7 @@ footer h3{font-size:1rem;letter-spacing:.08em;color:var(--tinta)}
       <h3 class="titulo-tabla">Cualquier turno de más de 40 horas semanales necesita 20% más guardias</h3>
       <div class="tabla-envoltura">
         <table>
-          <thead><tr><th>Turno</th><th class="num col-horas">Horas de servicio / sem</th><th class="num">Guardias 2026 · 48 h</th><th class="num">Guardias 2030 · 40 h</th></tr></thead>
+          <thead><tr><th>Turno</th><th class="num">Horas de servicio / sem</th><th class="num">Guardias 2026 · 48 h</th><th class="num">Guardias 2030 · 40 h</th></tr></thead>
           <tbody>
             <tr><td>24/7</td><td class="num">168</td><td class="num">3.50</td><td class="num sube">4.20</td></tr>
             <tr><td>12 h diurno, lunes a domingo</td><td class="num">84</td><td class="num">1.75</td><td class="num sube">2.10</td></tr>
@@ -911,9 +911,9 @@ footer h3{font-size:1rem;letter-spacing:.08em;color:var(--tinta)}
         <div><h3>Sector financiero y retail</h3><p>Sucursales, centros de datos y prevención de pérdidas.</p></div>
       </div>
 
+      <h3 class="titulo-clientes">Clientes que confían en Ultra</h3>
       <div class="clientes">
-        <h3 class="t">Clientes que confían en Ultra</h3>
-        <ul>
+        <ul aria-label="Clientes">
           <li>Similares</li><li>CIBanco</li><li>Kavak</li><li>Banco Plata</li><li>Kia México</li><li>7-Eleven</li><li>Alpura</li><li>Infonavit</li>
         </ul>
       </div>
