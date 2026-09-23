@@ -1,0 +1,1099 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Optimización de Seguridad Ultra</title>
+<meta name="description" content="Análisis de Optimización de Seguridad de Corporativo Ultra: menos horas-hombre y más capas de detección antes de que la jornada de 40 horas aumente el costo de su seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Big+Shoulders+Display:wght@600;700;800;900&family=Big+Shoulders+Stencil+Display:wght@800;900&display=swap">
+<style>
+:root{
+  --suelo:#DAD8D3;
+  --suelo-2:#CECBC4;
+  --placa:#1D1D1B;
+  --placa-txt:#F3F1EC;
+  --placa-txt-2:#B9B4AA;
+  --tinta:#16130F;
+  --tinta-2:#48443D;
+  --linea:#ADA9A1;
+  --rojo:#E7342B;
+  --rojo-osc:#C3261E;
+  --rojo-txt:#A81F18;
+  --blanco:#FFFFFF;
+  --amarillo:#F2C230;
+  --amarillo-txt:#16130F;
+  --sombra:0 1px 1px rgba(22,19,15,.10),0 8px 24px -8px rgba(22,19,15,.28);
+  --ease-out:cubic-bezier(0.23,1,0.32,1);
+  --ease-in-out:cubic-bezier(0.77,0,0.175,1);
+  --display:"Big Shoulders Display","Arial Narrow","Roboto Condensed",sans-serif;
+  --stencil:"Big Shoulders Stencil Display","Big Shoulders Display","Arial Narrow",sans-serif;
+  --texto:"Barlow","Helvetica Neue",Arial,sans-serif;
+  --ancho:1180px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --suelo:#1A1917;--suelo-2:#22211E;--placa:#0E0D0B;--placa-txt:#F3F1EC;--placa-txt-2:#A9A398;
+    --tinta:#EEEBE5;--tinta-2:#B7B1A7;--linea:#3F3C36;--rojo-txt:#FF6A5F;
+    --sombra:0 1px 1px rgba(0,0,0,.4),0 10px 28px -8px rgba(0,0,0,.7);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --suelo:#1A1917;--suelo-2:#22211E;--placa:#0E0D0B;--placa-txt:#F3F1EC;--placa-txt-2:#A9A398;
+  --tinta:#EEEBE5;--tinta-2:#B7B1A7;--linea:#3F3C36;--rojo-txt:#FF6A5F;
+  --sombra:0 1px 1px rgba(0,0,0,.4),0 10px 28px -8px rgba(0,0,0,.7);
+  color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;background:var(--suelo);color:var(--tinta);
+  font:400 17px/1.6 var(--texto);
+  padding-inline:clamp(16px,4vw,40px);
+  font-variant-numeric:tabular-nums;
+}
+::selection{background:var(--rojo);color:var(--blanco)}
+a{color:inherit;text-underline-offset:.2em;text-decoration-thickness:1px}
+:focus-visible{outline:3px solid var(--amarillo);outline-offset:3px;border-radius:2px}
+img,svg{max-width:100%}
+.envoltura{max-width:var(--ancho);margin-inline:auto}
+h1,h2,h3{font-family:var(--display);font-weight:800;line-height:.98;letter-spacing:-.005em;text-wrap:balance;margin:0}
+h2{font-size:clamp(2.3rem,5.2vw,4rem);text-transform:uppercase}
+h3{font-size:clamp(1.35rem,2.2vw,1.7rem);text-transform:uppercase;letter-spacing:.01em}
+p{margin:0;max-width:66ch}
+.secundario{color:var(--tinta-2)}
+
+/* Barra superior */
+.barra{
+  position:sticky;top:env(safe-area-inset-top,0px);z-index:20;
+  margin-inline:calc(-1 * clamp(16px,4vw,40px));
+  padding:10px clamp(16px,4vw,40px);
+  background:color-mix(in srgb,var(--suelo) 92%,transparent);
+  backdrop-filter:saturate(1.2) blur(8px);-webkit-backdrop-filter:saturate(1.2) blur(8px);
+  border-bottom:1px solid var(--linea);
+}
+.barra .envoltura{display:flex;align-items:center;gap:20px}
+.marca{display:flex;align-items:center;gap:10px;text-decoration:none;font-family:var(--display);font-weight:800;font-size:1.25rem;text-transform:uppercase;letter-spacing:.02em}
+.marca img{width:34px;height:34px}
+.barra nav{display:flex;gap:22px;margin-left:auto;font-weight:600;font-size:.95rem}
+.barra nav a{text-decoration:none;color:var(--tinta-2);transition:color 160ms ease}
+@media (hover:hover) and (pointer:fine){.barra nav a:hover{color:var(--tinta)}}
+@media (max-width:860px){.barra nav{display:none}.barra .boton{margin-left:auto}}
+
+/* Botones */
+.boton{
+  white-space:nowrap;
+  display:inline-flex;align-items:center;gap:10px;
+  font:800 1.2rem/1 var(--display);text-transform:uppercase;letter-spacing:.04em;
+  padding:15px 22px 14px;border-radius:3px;border:0;cursor:pointer;text-decoration:none;
+  background:var(--rojo-osc);color:var(--blanco);
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.22);
+  transition:transform 160ms var(--ease-out),background-color 160ms ease;
+}
+.boton:active{transform:scale(.97)}
+@media (hover:hover) and (pointer:fine){.boton:hover{background:#A81F18}}
+.boton.chico{font-size:1rem;padding:11px 16px 10px}
+.boton.fantasma{background:transparent;color:var(--tinta);box-shadow:inset 0 0 0 2px var(--tinta)}
+@media (hover:hover) and (pointer:fine){.boton.fantasma:hover{background:var(--tinta);color:var(--suelo)}}
+.boton svg{width:18px;height:18px;flex:none}
+
+/* Placas de sustento: cuadro = fuente, triángulo = ejemplo ilustrativo */
+.sustento{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:18px}
+.placa-s{
+  display:inline-flex;align-items:center;gap:7px;
+  font:700 .74rem/1 var(--texto);text-transform:uppercase;letter-spacing:.09em;
+  padding:6px 9px 6px 7px;background:var(--placa);color:var(--placa-txt);border-radius:2px;
+}
+.placa-s::before{content:"";width:9px;height:9px;background:var(--placa-txt);flex:none}
+.placa-s.ilustrativo{background:var(--amarillo);color:var(--amarillo-txt)}
+.placa-s.ilustrativo::before{width:0;height:0;background:none;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid var(--amarillo-txt)}
+.nota{font-size:.84rem;line-height:1.5;color:var(--tinta-2);max-width:80ch;margin-top:10px}
+
+/* Héroe */
+.heroe{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:clamp(28px,5vw,72px);align-items:center;padding-block:clamp(40px,7vw,88px) clamp(48px,7vw,96px)}
+.heroe h1{font-size:clamp(3rem,7.4vw,5.9rem);text-transform:uppercase;letter-spacing:-.01em}
+.heroe h1 em{font-style:normal;color:var(--rojo-txt)}
+.heroe .bajada{font-size:clamp(1.08rem,1.6vw,1.25rem);margin-top:22px;max-width:52ch}
+.acciones{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:center;margin-top:30px}
+.tel{font:700 1.15rem/1.2 var(--texto);text-decoration:none;white-space:nowrap}
+.tel small{display:block;font:500 .78rem/1.3 var(--texto);color:var(--tinta-2);letter-spacing:.02em}
+
+.puerta{
+  position:relative;aspect-ratio:4/4.6;max-width:100%;border-radius:3px;overflow:hidden;
+  background:
+    repeating-linear-gradient(180deg,rgba(0,0,0,0) 0 26px,rgba(0,0,0,.16) 26px 28px,rgba(255,255,255,.08) 28px 29px),
+    linear-gradient(180deg,#D42C23,#BE241C);
+  box-shadow:var(--sombra),inset 0 0 0 10px #2A2724,inset 0 0 0 12px #4a4642;
+  color:var(--blanco);display:flex;flex-direction:column;justify-content:space-between;padding:34px 34px 26px;
+}
+.puerta .rotulo{font:800 1rem/1 var(--display);letter-spacing:.2em;text-transform:uppercase;opacity:.92}
+.puerta .numero{font:900 clamp(9rem,21vw,17rem)/.8 var(--stencil);letter-spacing:-.02em;text-align:center;margin-block:8px}
+.puerta .numero .h{font-size:.28em;letter-spacing:0;margin-left:.06em;vertical-align:.12em}
+.puerta .pie{display:flex;justify-content:space-between;align-items:end;gap:14px;font:600 .9rem/1.35 var(--texto)}
+.puerta .pie b{font:800 1.3rem/1 var(--display);display:block;letter-spacing:.04em}
+.serie{list-style:none;margin:14px 0 0;padding:0;display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.serie li{background:repeating-linear-gradient(180deg,transparent 0 6px,rgba(0,0,0,.14) 6px 7px),var(--suelo-2);border-radius:2px;padding:8px 8px 7px;font:900 1.35rem/1 var(--stencil);color:var(--tinta);transition:background-color 240ms ease,color 240ms ease}
+.serie li span{display:block;font:800 .72rem/1 var(--display);letter-spacing:.12em;color:var(--tinta-2);margin-bottom:6px;transition:color 240ms ease}
+.serie li.activa{background-color:var(--rojo-osc);color:var(--blanco)}
+.serie li.activa span{color:var(--blanco)}
+.cinta{height:14px;margin-top:-14px;position:relative;background:repeating-linear-gradient(-45deg,var(--amarillo) 0 14px,#16130F 14px 28px);border-radius:0 0 3px 3px}
+
+/* Secciones */
+section{padding-block:clamp(64px,9vw,120px);position:relative}
+section::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;background:repeating-linear-gradient(90deg,var(--linea) 0 56px,transparent 56px 84px)}
+.cabeza{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px clamp(24px,5vw,64px);align-items:end;margin-bottom:clamp(32px,5vw,56px)}
+.cabeza p{font-size:1.08rem}
+@media (max-width:860px){.heroe,.cabeza,.horas{grid-template-columns:1fr}.puerta{max-width:460px}}
+@media (max-width:480px){.marca span{display:none}.barra-h{grid-template-columns:6.4rem 1fr}}
+
+/* OCDE + calendario */
+.horas{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(28px,5vw,64px);margin-bottom:clamp(48px,7vw,80px)}
+@media (max-width:860px){.horas{grid-template-columns:1fr}}
+.barras-h{display:grid;gap:14px}
+.barra-h{display:grid;grid-template-columns:7.5rem 1fr;align-items:center;gap:12px;font-weight:600}
+.barra-h .pista{height:34px;background:var(--suelo-2);border-radius:2px;position:relative}
+.barra-h .relleno{height:100%;background:var(--placa);border-radius:2px;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;color:var(--placa-txt);font:800 1.15rem/1 var(--display);letter-spacing:.03em}
+.barra-h.mx .relleno{background:var(--rojo-osc);color:var(--blanco)}
+.linea-tiempo{list-style:none;margin:0;padding:0;display:grid;gap:0;border-left:3px solid var(--tinta);}
+.linea-tiempo li{position:relative;padding:0 0 18px 22px}
+.linea-tiempo li:last-child{padding-bottom:0}
+.linea-tiempo li::before{content:"";position:absolute;left:-9px;top:5px;width:15px;height:15px;background:var(--suelo);border:3px solid var(--tinta)}
+.linea-tiempo li.fin::before{background:var(--rojo);border-color:var(--rojo)}
+.linea-tiempo time{display:block;font:800 1.15rem/1.1 var(--display);letter-spacing:.06em;text-transform:uppercase}
+
+/* Calculadora de andenes */
+.andenes{background:var(--placa);color:var(--placa-txt);border-radius:4px;padding:clamp(20px,3.4vw,40px);box-shadow:var(--sombra)}
+.andenes h3{color:var(--placa-txt)}
+.andenes .intro{color:var(--placa-txt-2);margin-top:10px}
+.puertas{min-width:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-top:26px;border:0;padding:0}
+.puertas legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.puertas input{position:absolute;opacity:0;pointer-events:none}
+.puertas label{
+  display:flex;flex-direction:column;justify-content:space-between;gap:12px;cursor:pointer;
+  min-height:128px;padding:12px 10px 10px;border-radius:2px;position:relative;
+  background:repeating-linear-gradient(180deg,transparent 0 14px,rgba(0,0,0,.25) 14px 15px),#34312C;
+  color:var(--placa-txt);
+  transition:transform 160ms var(--ease-out),background-color 200ms ease,box-shadow 200ms ease;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.puertas label:active{transform:scale(.97)}
+.puertas .anio{font:800 .95rem/1 var(--display);letter-spacing:.14em}
+.puertas .jor{font:900 clamp(2.2rem,4.4vw,3.4rem)/.85 var(--stencil)}
+.puertas .jor small{font-size:.38em;margin-left:2px}
+.puertas input:checked + label{
+  background:repeating-linear-gradient(180deg,transparent 0 14px,rgba(0,0,0,.16) 14px 15px),var(--rojo-osc);color:var(--blanco);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.2),0 0 0 3px var(--placa),0 0 0 5px var(--rojo);
+}
+.puertas input:focus-visible + label{outline:3px solid var(--amarillo);outline-offset:4px}
+@media (hover:hover) and (pointer:fine){.puertas input:not(:checked) + label:hover{background-color:#3F3B35}}
+.puertas .hoy .jor{font-size:clamp(1.5rem,3vw,2.2rem)}
+@media (max-width:720px){.puertas{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+.lectura{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:clamp(24px,4vw,48px);margin-top:28px;padding-top:26px;border-top:1px dashed rgba(255,255,255,.2)}
+@media (max-width:860px){.lectura{grid-template-columns:1fr}}
+.lectura .dato{font:900 clamp(3.4rem,7vw,5.2rem)/.85 var(--stencil);letter-spacing:-.01em}
+.lectura .dato small{font:700 1rem/1.2 var(--texto);letter-spacing:0;display:block;margin-top:10px;color:var(--placa-txt-2)}
+.guardias{display:flex;flex-wrap:wrap;gap:6px;margin-top:18px;min-height:52px;align-items:end}
+.guardias svg{width:30px;height:50px;color:var(--placa-txt)}
+.guardias .extra{font:800 .95rem/1.1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--placa-txt);align-self:center;margin-left:6px}
+.cambia{transition:filter 220ms ease,opacity 220ms ease}
+.cambia.borroso{filter:blur(3px);opacity:.35}
+.costos{display:grid;gap:18px}
+.costo .etq{display:flex;justify-content:space-between;gap:12px;font-weight:600;font-size:.95rem;color:var(--placa-txt-2)}
+.costo .etq b{font:800 1.5rem/1 var(--display);color:var(--placa-txt);letter-spacing:.02em;white-space:nowrap}
+.costo .pista{height:14px;background:rgba(255,255,255,.08);border-radius:2px;margin-top:8px;position:relative;overflow:hidden}
+.costo .pista i{position:absolute;inset:0;background:var(--placa-txt);border-radius:2px;transform-origin:left center;transition:transform 420ms var(--ease-out)}
+.costo.caro .pista i{background:var(--rojo)}
+.costo .sub{font-size:.85rem;color:var(--placa-txt-2);margin-top:6px}
+.escala{display:flex;justify-content:space-between;font:600 .75rem/1 var(--texto);color:var(--placa-txt-2);margin-top:4px}
+.plan-anio{margin-top:22px;padding:14px 16px;background:rgba(255,255,255,.06);border-radius:2px;font-size:.95rem}
+.plan-anio b{font:800 1.05rem/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:#FF6A5F;margin-right:8px}
+.andenes .nota{color:var(--placa-txt-2)}
+
+/* Tabla de turnos */
+.titulo-tabla{margin-top:clamp(48px,7vw,80px);margin-bottom:14px;font-size:1.5rem}
+.tabla-envoltura{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.98rem}
+@media (max-width:600px){.col-horas{display:none}table{font-size:.9rem}th,td{padding:10px 6px}}
+th,td{padding:12px 12px;border-bottom:1px solid var(--linea);text-align:left;vertical-align:middle}
+thead th{font:700 .78rem/1.2 var(--texto);text-transform:uppercase;letter-spacing:.08em;color:var(--tinta-2);border-bottom:2px solid var(--tinta)}
+td.num,th.num{text-align:right;font-weight:600}
+td.sube{color:var(--rojo-txt);font-weight:700}
+
+.contingencia{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin-top:clamp(40px,6vw,64px);border:2px solid var(--tinta);border-radius:3px}
+.contingencia div{padding:18px 18px 20px;border-right:2px solid var(--tinta);position:relative}
+.contingencia div:last-child{border-right:0;background:var(--tinta);color:var(--suelo)}
+.contingencia h3{font-size:1.3rem}
+.contingencia p{font-size:.95rem;margin-top:8px}
+@media (max-width:860px){.contingencia{grid-template-columns:1fr 1fr}.contingencia div:nth-child(2){border-right:0}.contingencia div:nth-child(-n+2){border-bottom:2px solid var(--tinta)}}
+@media (max-width:520px){.contingencia{grid-template-columns:1fr}.contingencia div{border-right:0;border-bottom:2px solid var(--tinta)}.contingencia div:last-child{border-bottom:0}}
+
+/* Detección */
+.deteccion{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:clamp(28px,5vw,64px);align-items:start}
+@media (max-width:860px){.deteccion{grid-template-columns:1fr}}
+.grafica{background:var(--suelo-2);border-radius:3px;padding:18px 18px 10px}
+.grafica svg{display:block;width:100%;height:auto}
+.grafica .ttl{font:800 1.1rem/1.2 var(--display);text-transform:uppercase;letter-spacing:.04em}
+.hechos{display:grid;gap:22px}
+.hecho{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:baseline;padding-bottom:18px;border-bottom:1px solid var(--linea)}
+.hecho:last-child{border-bottom:0}
+.hecho b{font:900 2.4rem/1 var(--stencil);color:var(--rojo-txt);min-width:4.4ch}
+.capas{display:grid;grid-template-columns:1fr 1fr;gap:clamp(16px,3vw,32px);margin-top:clamp(40px,6vw,64px)}
+@media (max-width:720px){.capas{grid-template-columns:1fr}}
+.capa-col h3{font-size:1.2rem;margin-bottom:12px}
+.pila{display:flex;gap:8px;align-items:stretch}
+.pila span{flex:1;min-height:96px;border-radius:2px;display:flex;align-items:flex-end;padding:8px;font:700 .8rem/1.15 var(--texto);text-transform:uppercase;letter-spacing:.06em;position:relative;overflow:hidden}
+.pila.humanas span{background:var(--suelo-2);color:var(--tinta)}
+.pila.humanas span::after{content:"";position:absolute;left:50%;top:22%;width:22px;height:22px;margin-left:-11px;border-radius:50%;background:var(--suelo)}
+.pila.mixtas span{background:var(--placa);color:var(--placa-txt)}
+.pila.mixtas span::after{content:"";position:absolute;width:20px;height:20px;border-radius:50%;background:var(--suelo)}
+.pila.mixtas span:nth-child(1)::after{left:20%;top:16%}
+.pila.mixtas span:nth-child(2)::after{left:58%;top:40%}
+.pila.mixtas span:nth-child(3)::after{left:30%;top:8%}
+.pila.mixtas span:nth-child(4)::after{left:62%;top:22%}
+.pila.mixtas span.alto{background:var(--rojo-osc);color:var(--blanco)}
+.capa-col p{font-size:.95rem;margin-top:12px}
+
+/* Noche CEDIS */
+.noche{display:grid;grid-template-columns:1fr 1fr;gap:clamp(16px,3vw,28px)}
+@media (max-width:760px){.noche{grid-template-columns:1fr}}
+.tarjeta{border-radius:3px;padding:22px 22px 18px;background:var(--suelo-2)}
+.tarjeta.nueva{background:var(--placa);color:var(--placa-txt)}
+.tarjeta h3{font-size:1.45rem;margin-bottom:16px}
+.checada{display:grid;grid-template-columns:6rem 1fr;gap:14px;padding:12px 0;border-top:1px dashed var(--linea)}
+.tarjeta.nueva .checada{border-top-color:rgba(255,255,255,.18)}
+.checada time{font:900 1.65rem/1 var(--stencil);letter-spacing:.02em;white-space:nowrap}
+.tarjeta:not(.nueva) .checada time{color:var(--tinta-2)}
+.tarjeta.nueva .checada time{color:var(--placa-txt)}
+.checada p{font-size:.96rem}
+.resultado{margin-top:10px;padding-top:14px;border-top:2px solid currentColor;font:800 1.15rem/1.2 var(--display);text-transform:uppercase;letter-spacing:.04em}
+.tarjeta.nueva .resultado{color:var(--placa-txt)}
+
+.formula{margin-top:clamp(40px,6vw,64px);display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:clamp(24px,4vw,56px);align-items:center}
+@media (max-width:860px){.formula{grid-template-columns:1fr}}
+.formula .ecuacion{font:900 clamp(2.2rem,4.6vw,3.6rem)/.95 var(--stencil);text-transform:uppercase}
+.formula .ecuacion span{color:var(--rojo-txt)}
+.carriles{display:grid;gap:18px}
+.carril .t{font:700 .8rem/1 var(--texto);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;justify-content:space-between;gap:10px}
+.carril .t b{font-family:var(--display);font-size:1rem;letter-spacing:.06em}
+.carril .riel{position:relative;height:44px;background:var(--suelo-2);border-radius:2px}
+.carril .seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;padding-inline:8px;font:700 .72rem/1 var(--texto);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden;border-radius:2px}
+.seg.intruso{background:repeating-linear-gradient(-45deg,var(--linea) 0 6px,transparent 6px 12px);color:var(--tinta);top:0;bottom:50%}
+.seg.det{background:var(--tinta);color:var(--suelo);top:50%}
+.seg.resp{background:var(--rojo-osc);color:var(--blanco);top:50%}
+.seg.fin{background:none;border-left:3px solid var(--tinta);top:-6px;bottom:-6px;padding:0;overflow:visible;border-radius:0}
+.eje{display:flex;justify-content:space-between;font:600 .75rem/1 var(--texto);color:var(--tinta-2);margin-top:6px}
+
+/* Método */
+.cuadrante{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto auto;gap:0;border:3px solid var(--tinta);border-radius:3px;overflow:hidden}
+.cuadrante .eje-col{grid-row:1;padding:12px 16px;font:700 .8rem/1.2 var(--texto);text-transform:uppercase;letter-spacing:.08em;border-bottom:3px solid var(--tinta);background:var(--suelo)}
+.cuadrante .eje-fila{grid-column:1;max-height:11rem;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 10px;font:700 .8rem/1.2 var(--texto);text-transform:uppercase;letter-spacing:.08em;border-left:3px solid var(--tinta);border-bottom:0;text-align:center;background:var(--suelo)}
+.cuadrante .esquina{grid-row:1;grid-column:1;border-bottom:3px solid var(--tinta);background:var(--suelo)}
+.celda{padding:clamp(16px,2.6vw,28px);background:var(--suelo)}
+.celda.izq{border-right:3px solid var(--tinta)}
+.cuadrante .eje-col.izq{border-right:3px solid var(--tinta)}
+.celda.arriba{border-bottom:3px solid var(--tinta)}
+.celda h3{font:900 clamp(2rem,3.6vw,2.8rem)/.9 var(--stencil);text-transform:uppercase;margin-bottom:10px}
+.celda p{font-size:.96rem}
+.celda.reforzar h3{color:var(--rojo-txt)}
+@media (max-width:640px){
+  .cuadrante{grid-template-columns:1fr;background:none}
+  .cuadrante .eje-col,.cuadrante .eje-fila,.cuadrante .esquina{display:none}
+  .celda{grid-column:auto!important;grid-row:auto!important;border-right:0!important;border-bottom:3px solid var(--tinta)}
+  .celda:last-child{border-bottom:0}
+  .celda .pos{display:block}
+}
+.celda .pos{display:none;font:700 .74rem/1.3 var(--texto);text-transform:uppercase;letter-spacing:.08em;color:var(--tinta-2);margin-bottom:8px}
+
+/* Plano CEDIS */
+.plano-bloque{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.7fr);gap:clamp(24px,4vw,48px);margin-top:clamp(48px,7vw,80px);align-items:start}
+@media (max-width:900px){.plano-bloque{grid-template-columns:1fr}}
+.plano{background:var(--placa);border-radius:3px;padding:14px;box-shadow:var(--sombra)}
+.plano svg{display:block;width:100%;height:auto}
+.plano .muro{fill:none;stroke:var(--placa-txt-2);stroke-width:2}
+.plano .zona{fill:rgba(255,255,255,.04);stroke:var(--placa-txt-2);stroke-width:1.2;stroke-dasharray:5 4}
+.plano .etq-zona{fill:var(--placa-txt-2);font:700 12px var(--texto);letter-spacing:.14em}
+.plano .andenes-l line{stroke:var(--amarillo);stroke-width:3}
+.puesto circle{stroke:var(--placa);stroke-width:3;transition:opacity 240ms ease,transform 240ms var(--ease-out)}
+.puesto text{font:900 17px var(--stencil);fill:var(--placa);text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.puesto{transform-box:fill-box;transform-origin:center;transition:opacity 240ms ease}
+.puesto.reforzar circle{fill:var(--rojo)} .puesto.reforzar text{fill:#fff}
+.puesto.complementar circle{fill:var(--amarillo)}
+.puesto.sustituir circle{fill:var(--placa-txt)}
+.puesto.eliminar circle{fill:var(--placa);stroke:var(--placa-txt);stroke-dasharray:4 3}
+.puesto.eliminar text{fill:var(--placa-txt)}
+.plano.filtrado .puesto:not(.activo){opacity:.18}
+.filtros{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.filtro{font:700 .82rem/1 var(--texto);text-transform:uppercase;letter-spacing:.08em;padding:10px 12px;border-radius:2px;border:2px solid var(--tinta);background:transparent;color:var(--tinta);cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:transform 160ms var(--ease-out),background-color 160ms ease,color 160ms ease}
+.filtro:active{transform:scale(.97)}
+.filtro[aria-pressed="true"]{background:var(--tinta);color:var(--suelo)}
+.filtro i{width:12px;height:12px;border-radius:50%;display:inline-block;flex:none}
+.leyenda-plano{list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:.95rem}
+.leyenda-plano li{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start}
+.leyenda-plano b{font:800 .85rem/1.5 var(--texto);text-transform:uppercase;letter-spacing:.08em}
+.antes-despues{display:flex;align-items:center;gap:16px;margin-top:26px;flex-wrap:wrap}
+.antes-despues div{font:900 clamp(3rem,6vw,4.4rem)/.85 var(--stencil)}
+.antes-despues div small{display:block;font:700 .78rem/1.3 var(--texto);text-transform:uppercase;letter-spacing:.08em;color:var(--tinta-2);margin-top:8px}
+.antes-despues .flecha{font:800 2rem/1 var(--display);color:var(--tinta-2)}
+.antes-despues .despues{color:var(--rojo-txt)}
+
+/* Fases */
+.fases{list-style:none;margin:clamp(48px,7vw,80px) 0 0;padding:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border-top:3px solid var(--tinta)}
+.fases li{padding:16px 14px 0 0;position:relative}
+.fases li::before{content:"";position:absolute;top:-9px;left:0;width:15px;height:15px;background:var(--rojo)}
+.fases .n{font:900 2.4rem/1 var(--stencil);display:flex;gap:8px;align-items:baseline}
+.fases .n span{font:800 1rem/1 var(--display);color:var(--rojo-txt);letter-spacing:.1em}
+.fases h3{font-size:1.2rem;margin-top:8px}
+.fases p{font-size:.9rem;margin-top:6px;color:var(--tinta-2)}
+@media (max-width:980px){.fases{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:28px}}
+@media (max-width:560px){.fases{grid-template-columns:1fr 1fr}}
+.entregables{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;margin-top:clamp(36px,5vw,56px);background:var(--linea);border:2px solid var(--linea);border-radius:3px}
+.entregables div{background:var(--suelo);padding:18px}
+.entregables h3{font-size:1.15rem}
+.entregables p{font-size:.92rem;margin-top:6px;color:var(--tinta-2)}
+@media (max-width:860px){.entregables{grid-template-columns:1fr 1fr}}
+@media (max-width:480px){.entregables{grid-template-columns:1fr}}
+
+/* Servicio */
+.servicio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(20px,3vw,40px)}
+@media (max-width:860px){.servicio{grid-template-columns:1fr}}
+.servicio h3{font-size:1.45rem;padding-bottom:10px;border-bottom:3px solid var(--tinta)}
+.servicio .lema{font-weight:600;margin-top:12px}
+.servicio ul{margin:12px 0 0;padding:0;list-style:none;display:grid;gap:8px}
+.servicio li{padding-left:18px;position:relative;font-size:.96rem}
+.servicio li::before{content:"";position:absolute;left:0;top:.62em;width:8px;height:8px;background:var(--rojo)}
+
+/* Renta */
+.renta{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(28px,5vw,64px);align-items:start}
+@media (max-width:860px){.renta{grid-template-columns:1fr}}
+.indice{background:var(--suelo-2);border-radius:3px;padding:22px}
+.indice .ttl{font:800 1.1rem/1.2 var(--display);text-transform:uppercase;letter-spacing:.04em;margin-bottom:18px}
+.col-indice{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:end;height:250px;border-bottom:2px solid var(--tinta)}
+.col-indice div{display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;height:100%}
+.col-indice i{display:block;background:var(--tinta);border-radius:2px 2px 0 0}
+.col-indice .caro i{background:var(--rojo-osc)}
+.col-indice b{font:900 2rem/1 var(--stencil);text-align:center;margin-bottom:6px}
+.rotulos-indice{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px;font:600 .82rem/1.3 var(--texto);text-align:center;color:var(--tinta-2)}
+.puntos-renta{display:grid;gap:22px}
+.puntos-renta h3{font-size:1.4rem}
+.puntos-renta p{margin-top:6px}
+.ctpat{margin-top:clamp(40px,6vw,64px);display:grid;grid-template-columns:auto 1fr;gap:clamp(20px,4vw,48px);align-items:center;padding:clamp(20px,3vw,32px);border:2px solid var(--tinta);border-radius:3px}
+.ctpat .fr{font:900 clamp(4rem,9vw,6.4rem)/.8 var(--stencil)}
+.ctpat .fr span{color:var(--tinta-2)}
+@media (max-width:560px){.ctpat{grid-template-columns:1fr}}
+
+/* Por qué Ultra */
+.tres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border-block:3px solid var(--tinta)}
+.tres div{padding:24px 22px 26px 0}
+.tres div + div{padding-left:22px;border-left:1px solid var(--linea)}
+.tres h3{font:900 clamp(2rem,3.4vw,2.9rem)/.9 var(--stencil);color:var(--rojo-txt);overflow-wrap:anywhere}
+.tres p{margin-top:12px;font-size:.98rem}
+@media (max-width:860px){.tres{grid-template-columns:1fr}.tres div + div{padding-left:0;border-left:0;border-top:1px solid var(--linea)}}
+.sectores{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px 32px;margin-top:clamp(40px,6vw,56px)}
+.sectores h3{font-size:1.15rem}
+.sectores p{font-size:.93rem;margin-top:4px;color:var(--tinta-2)}
+@media (max-width:860px){.sectores{grid-template-columns:1fr 1fr}}
+@media (max-width:520px){.sectores{grid-template-columns:1fr}}
+.clientes{margin-top:clamp(40px,6vw,64px);background:var(--placa);color:var(--placa-txt);border-radius:3px;padding:22px clamp(18px,3vw,32px)}
+.clientes h3.t{font-size:1.2rem;color:var(--placa-txt-2)}
+.clientes ul{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 0}
+.clientes li{font:800 clamp(1.4rem,2.6vw,2rem)/1.1 var(--display);text-transform:uppercase;letter-spacing:.02em}
+.clientes li:not(:last-child)::after{content:"/";color:var(--rojo);margin-inline:14px;font-weight:600}
+
+.director{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:clamp(24px,4vw,56px);margin-top:clamp(48px,7vw,80px);align-items:start}
+@media (max-width:860px){.director{grid-template-columns:1fr}}
+.gafete{--perno-c:var(--linea);background:var(--perno) 8px calc(100% - 8px)/14px 14px no-repeat,var(--perno) calc(100% - 8px) calc(100% - 8px)/14px 14px no-repeat,var(--suelo-2);border-radius:4px;padding:26px 30px 30px;position:relative;box-shadow:var(--sombra)}
+.gafete::before{content:"";position:absolute;top:14px;left:50%;width:54px;height:8px;margin-left:-27px;border-radius:4px;background:var(--suelo)}
+.gafete .cpp{display:inline-block;margin-top:18px;background:var(--rojo-osc);color:var(--blanco);font:900 1.9rem/1 var(--stencil);padding:8px 12px 6px;border-radius:2px;letter-spacing:.04em}
+.gafete h3{font-size:1.9rem;margin-top:14px;text-transform:none}
+.gafete p{margin-top:6px;color:var(--tinta-2)}
+.director ul{margin:14px 0 0;padding:0;list-style:none;display:grid;gap:12px}
+.director li{padding-left:22px;position:relative}
+.director li::before{content:"";position:absolute;left:0;top:.55em;width:10px;height:10px;border:2px solid var(--rojo)}
+
+/* Contacto */
+.contacto{background:var(--rojo-osc);color:var(--blanco);border-radius:4px;padding:clamp(28px,5vw,64px);margin-block:clamp(64px,9vw,120px) 0;position:relative;overflow:hidden;
+  background-image:repeating-linear-gradient(180deg,transparent 0 30px,rgba(0,0,0,.12) 30px 32px,rgba(255,255,255,.06) 32px 33px)}
+.contacto h2{color:var(--blanco);max-width:16ch}
+.contacto > p{margin-top:16px;font-size:1.12rem;max-width:58ch}
+.pasos{list-style:none;margin:clamp(28px,4vw,40px) 0 0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border-top:2px solid rgba(255,255,255,.55)}
+.pasos li{padding:14px 18px 0 0}
+.pasos b{font:900 2rem/1 var(--stencil);display:block}
+.pasos span{font:800 1.2rem/1.1 var(--display);text-transform:uppercase;display:block;margin-top:6px}
+.pasos small{display:block;font-size:.92rem;margin-top:4px;opacity:.9}
+@media (max-width:680px){.pasos{grid-template-columns:1fr}.pasos li{padding-bottom:10px}}
+.canales{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:clamp(28px,4vw,44px)}
+@media (max-width:760px){.canales{grid-template-columns:1fr}}
+.canal,.gafete{--perno:radial-gradient(circle,var(--perno-c) 0 3px,transparent 3.5px)}
+.canal{--perno-c:#4a4640;background:var(--perno) 8px 8px/14px 14px no-repeat,var(--perno) calc(100% - 8px) 8px/14px 14px no-repeat,var(--perno) 8px calc(100% - 8px)/14px 14px no-repeat,var(--perno) calc(100% - 8px) calc(100% - 8px)/14px 14px no-repeat,var(--placa);color:var(--placa-txt);border-radius:3px;padding:22px 26px;display:grid;gap:10px}
+.canal .t{font:700 .78rem/1 var(--texto);text-transform:uppercase;letter-spacing:.1em;color:var(--placa-txt-2)}
+.canal .valor{font:800 clamp(1.35rem,2.6vw,1.9rem)/1.05 var(--display);letter-spacing:.02em;user-select:all;overflow-wrap:anywhere}
+.canal .fila{display:flex;flex-wrap:wrap;gap:10px}
+.canal .boton{background:var(--rojo-osc);box-shadow:none}
+.canal .boton.fantasma{background:transparent;color:var(--placa-txt);box-shadow:inset 0 0 0 2px var(--placa-txt)}
+@media (hover:hover) and (pointer:fine){.canal .boton.fantasma:hover{background:var(--placa-txt);color:var(--placa)}}
+.contacto .asunto{margin-top:18px;font-size:1rem}
+.contacto .asunto b{background:var(--blanco);color:var(--rojo-osc);padding:1px 6px;border-radius:2px}
+[data-copiado]{position:relative}
+.aviso{font:600 .85rem/1.2 var(--texto);color:var(--amarillo);min-height:1.2em}
+
+footer{padding-block:40px 56px;font-size:.88rem;color:var(--tinta-2)}
+footer .envoltura{display:grid;gap:18px}
+footer .fuentes{border-top:1px solid var(--linea);padding-top:18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 40px}
+@media (max-width:760px){footer .fuentes{grid-template-columns:1fr}}
+footer h3{font-size:1rem;letter-spacing:.08em;color:var(--tinta)}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{transition-duration:0ms!important;animation-duration:0ms!important}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="guardia" viewBox="0 0 30 50">
+    <path fill="currentColor" d="M7 7.5c0-1.4 3.6-3 8-3s8 1.6 8 3v1.6H7z"/>
+    <rect x="5" y="8.6" width="20" height="2.2" rx="1.1" fill="currentColor"/>
+    <circle cx="15" cy="15.6" r="5" fill="currentColor"/>
+    <path fill="currentColor" d="M5 25.5c0-2.6 2-4.5 4.6-4.5h10.8c2.6 0 4.6 1.9 4.6 4.5V37h-3.6v12h-5.2V38h-2.4v11H8.6V37H5z"/>
+  </symbol>
+  <symbol id="i-tel" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z"/></symbol>
+  <symbol id="i-correo" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" d="M3 5h18v14H3zM3 6l9 7 9-7"/></symbol>
+  <symbol id="i-copiar" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" d="M8 8h12v12H8zM4 16V4h12"/></symbol>
+</svg>
+
+<header class="barra">
+  <div class="envoltura">
+    <a class="marca" href="#inicio" aria-label="Corporativo Ultra, inicio">
+      <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IlVsdHJhIFNlZ3VyaWRhZCBQcml2YWRhIj48dGl0bGU+VWx0cmEgU2VndXJpZGFkIFByaXZhZGE8L3RpdGxlPjxwYXRoIGQ9Ik0xMDAgNTBDMTAwIDc3LjYxIDc3LjYxIDEwMCA1MCAxMDBDMjIuMzkgMTAwIDAgNzcuNjEgMCA1MEMwIDIyLjM5IDIyLjM5IDAgNTAgMEM3Ny42MSAwIDEwMCAyMi4zOSAxMDAgNTAiIGZpbGw9IiNFNzM0MkIiLz48cGF0aCBkPSJNNjguNTkgNDcuNDRDNjMuMzEgNDQuODIgNTcuOTggNDIuMTkgNTIuNyAzOS42QzUyLjAyIDM5LjI1IDUxLjM4IDM4Ljg2IDUwLjcxIDM4LjYxQzQ5Ljc5IDM4LjI1IDQ5LjE1IDM4LjcyIDQ4LjM3IDM5LjExQzQ1LjM5IDQwLjYzIDQyLjQ0IDQyLjEyIDM5LjQ2IDQzLjYxQzM2Ljk0IDQ0Ljg5IDM0LjM5IDQ2LjE3IDMxLjg3IDQ3LjQ0QzMwLjQxIDQ4LjE1IDMxLjY5IDUwLjM1IDMzLjE0IDQ5LjYxTDUwLjY3IDQwLjc3TDQ5LjQgNDAuNzdDNTUuMzkgNDMuNzIgNjEuMzYgNDYuNjYgNjcuMzIgNDkuNjFDNjguNzcgNTAuMzIgNzAuMDUgNDguMTUgNjguNTkgNDcuNDQgTTU5LjIzIDQ4Ljk0TDU5LjIzIDU4LjkxTDQxLjIgNTguOTFMNDEuMiA0OC45QzQxLjIgNDcuMyAzOC42OCA0Ny4zIDM4LjY4IDQ4LjlMMzguNjggNjAuMThDMzguNjggNjAuODYgMzkuMjUgNjEuNDYgMzkuOTIgNjEuNDZMNjAuNSA2MS40NkM2MS4xOCA2MS40NiA2MS43NSA2MC44NiA2MS43NSA2MC4xOEw2MS43NSA0OC45NEM2MS43NSA0Ny4zIDU5LjIzIDQ3LjMgNTkuMjMgNDguOTQgTTIwLjY5IDY5LjEzTDE0LjE5IDY2LjE4QzE1LjU0IDYzLjIgMTYuODkgNjAuNDcgMTUuMzcgNTcuMTdDMTQuNDggNTUuMTggMTMuMiA1My40NCAxMi40MiA1MS40MkMxMS41MyA0OS4xNSAxMi4yNCA0Ni45MSAxMi45MiA0NC42OEMxMy41MiA0Mi41OCAxNC4zNCA0MC41NiAxNS4zMyAzOC42MUMxNS43OSAzNy42MiAxNi4zMiAzNi42NiAxNi44NiAzNS43QzE3LjE0IDM1LjI0IDE3Ljc0IDMzLjcxIDE4LjI0IDM0LjE3QzE5LjAyIDM0Ljg4IDE3LjcxIDM3Ljk3IDE3LjQ5IDM4LjcyQzE2LjkzIDQwLjU2IDE2LjMyIDQyLjM3IDE1Ljk3IDQ0LjI1QzE1LjQ0IDQ0LjM5IDE0Ljk0IDQ0LjY4IDE0LjU4IDQ1LjIxQzEzLjczIDQ2LjQ5IDE0LjA1IDQ4LjQ0IDE0LjQ0IDQ5LjgyQzE0LjkgNTEuNDUgMTUuNjggNTMuMDIgMTYuNDcgNTQuNTRDMTcgNTUuNjQgMTguMzEgNTcuNDUgMTcuOTkgNTguNzdDMTcuNzggNTkuODMgMTkuMzggNjAuMjkgMTkuNjIgNTkuMjNDMjAuMDkgNTcuMiAxOC41NiA1NS4wNCAxNy43MSA1My4zNEMxNy4wNyA1MS45OSAxNi4zOSA1MC42NCAxNiA0OS4xOEMxNS44NiA0OC41OCAxNS42NSA0Ny44IDE1Ljc5IDQ3LjJDMTUuODYgNDYuNyAxNi4yNSA0NS44OCAxNi45NiA0Ni4xQzE3LjI1IDQ2LjIgMTcuNjcgNDYuOTEgMTcuODEgNDcuMTZDMTguODEgNDguNjkgMTkuMDkgNTAuNSAxOS45MSA1Mi4wOUMyMC44MyA1My45NyAyMi4zNiA1NS41IDIzLjI4IDU3LjM4QzI1LjIgNjEuMzIgMjIuMzYgNjUuNDQgMjAuNjkgNjkuMTNNMjQuODQgNTYuNzhDMjMuNjMgNTQuMjIgMjEuNjggNTIuMjcgMjAuNzYgNDkuNTdDMjAuMTkgNDcuODcgMTkuMzggNDUuODEgMTcuOTIgNDQuNzFDMTcuODEgNDQuNjQgMTcuNzEgNDQuNTcgMTcuNjQgNDQuNTRDMTguMSA0Mi4zIDE4Ljg0IDQwLjE3IDE5LjQ4IDM4LjAxQzE5Ljg3IDM2LjY2IDIwLjQgMzQuOTIgMTkuOCAzMy41N0MxOS40MSAzMi42NSAxOC4yIDMxLjggMTcuMjEgMzIuMzNDMTYuNSAzMi42OCAxNi4xMSAzMy42OCAxNS43MiAzNC4zNUMxNS4wMSAzNS41MiAxNC4zNCAzNi43NiAxMy43MyAzOC4wMUMxMi42NyA0MC4yMSAxMS43OCA0Mi40OCAxMS4xMSA0NC44MkMxMC41IDQ2Ljk4IDkuOSA0OS4xNSAxMC42MSA1MS4zNUMxMS4zNiA1My42NiAxMi44MSA1NS42MSAxMy44IDU3Ljc3QzE1LjI2IDYwLjg2IDEzLjU5IDYzLjM4IDEyLjM1IDY2LjE4QzEyLjE3IDY2LjU0IDEyLjIxIDY3LjEgMTIuNjcgNjcuMzJDMTUuMzMgNjguNTIgMTguMDMgNjkuNzcgMjAuNjkgNzAuOTdDMjEuMjIgNzEuMjIgMjEuNzIgNzEuMDEgMjEuOTMgNzAuNDhDMjMuNyA2Ni4wOCAyNy4xMSA2MS41NyAyNC44NCA1Ni43OCBNMjMuNDIgMzMuNjhDMjIuOTYgMzEuMzcgMjIuNSAyOS4wMyAyMi4wNCAyNi42OUMyNS4yNyAyNi4wNSAyOC4yNSAyNS41NSAzMC4wOSAyMi4zOUMzMS4xNiAyMC41NSAzMS44MyAxOC40NSAzMy4wNCAxNi42NEMzNC4zNSAxNC42MiAzNi41OSAxMy45MSAzOC43OSAxMy4xM0M0MC44NCAxMi40MiA0Mi45NyAxMS45MiA0NS4xNCAxMS41N0M0Ni4yNCAxMS4zOSA0Ny4zIDExLjI1IDQ4LjQgMTEuMTRDNDguOTQgMTEuMTEgNTAuNTMgMTAuNjggNTAuNDMgMTEuMzlDNTAuMzIgMTIuNDIgNDcuMDUgMTMuMTcgNDYuMzEgMTMuNDFDNDQuNDYgMTMuOTggNDIuNjUgMTQuNTggNDAuOTIgMTUuMzdDNDAuNDkgMTUuMDEgMzkuOTYgMTQuOCAzOS4zNSAxNC44M0MzNy44MyAxNC44NyAzNi40MSAxNi4yNSAzNS41MiAxNy4zNUMzNC40MiAxOC43IDMzLjY0IDIwLjI2IDMyLjgyIDIxLjc1QzMyLjI2IDIyLjg1IDMxLjU1IDI0Ljk1IDMwLjMxIDI1LjQ4QzI5LjMxIDI1LjkgMjkuODggMjcuNDcgMzAuODcgMjcuMDRDMzIuNzUgMjYuMjYgMzMuNjggMjMuNzggMzQuNTYgMjIuMDdDMzUuMjQgMjAuNzYgMzUuOTggMTkuNDEgMzYuOTQgMTguMjhDMzcuMzMgMTcuODEgMzcuODYgMTcuMjEgMzguNDMgMTYuOTNDMzguODYgMTYuNzEgMzkuNzQgMTYuNTcgMzkuOTkgMTcuMjhDNDAuMSAxNy41NyAzOS43NCAxOC4zMSAzOS42NCAxOC41NkMzOC45NiAyMC4zIDM3LjY1IDIxLjU0IDM2LjgzIDIzLjE0QzM1Ljg0IDI0Ljk4IDM1LjQ5IDI3LjExIDM0LjQ2IDI4Ljk2QzMyLjQgMzIuNzkgMjcuNCAzMi45MyAyMy40MiAzMy42OE0zNS44OCAyOS44OEMzNy4yNiAyNy40MyAzNy43NiAyNC43IDM5LjM5IDIyLjM2QzQwLjQyIDIwLjk0IDQxLjYzIDE5LjA2IDQxLjY2IDE3LjIxQzQxLjcgMTcuMSA0MS42NiAxNyA0MS42NiAxNi44OUM0My43NSAxNS45NyA0NS45MiAxNS4zMyA0OC4wNSAxNC41OEM0OS4zNiAxNC4xMiA1MS4xIDEzLjU2IDUxLjg1IDEyLjI4QzUyLjM0IDExLjQ2IDUyLjM0IDkuOTcgNTEuMzUgOS40NEM1MC42NCA5LjA4IDQ5LjYxIDkuMzMgNDguODMgOS40QzQ3LjQ0IDkuNTEgNDYuMDYgOS42OSA0NC43MSA5Ljk0QzQyLjMgMTAuMzMgMzkuOTIgMTAuOTMgMzcuNjUgMTEuNzVDMzUuNTIgMTIuNTMgMzMuMzkgMTMuMjcgMzIuMDEgMTUuMTVDMzAuNTkgMTcuMSAyOS44NCAxOS40MSAyOC42NyAyMS40N0MyNyAyNC40NSAyMy45OSAyNC41NiAyMC45NyAyNS4yQzIwLjU4IDI1LjI3IDIwLjEyIDI1LjYyIDIwLjIzIDI2LjA4QzIwLjc5IDI4Ljk5IDIxLjM2IDMxLjg3IDIxLjkzIDM0Ljc4QzIyLjA0IDM1LjM0IDIyLjUgMzUuNTkgMjMuMDcgMzUuNDlDMjcuNjggMzQuMzkgMzMuMjkgMzQuNTMgMzUuODggMjkuODggTTUwLjIxIDIwLjQ0QzUxLjgxIDE4LjY3IDUzLjQxIDE2Ljg5IDU1IDE1LjE1QzU3LjQyIDE3LjM1IDU5LjYyIDE5LjQ1IDYzLjI0IDE5LjAyQzY1LjM3IDE4Ljc3IDY3LjQ2IDE4LjA2IDY5LjYyIDE3Ljk2QzcyLjA0IDE3LjgxIDczLjk1IDE5LjE2IDc1Ljg3IDIwLjQ4Qzc3LjY4IDIxLjcyIDc5LjM1IDIzLjEgODAuOTQgMjQuNjNDODEuNzIgMjUuNDEgODIuNDcgMjYuMTkgODMuMjIgMjdDODMuNTcgMjcuNCA4NC44NSAyOC40MiA4NC4yNCAyOC43OEM4My4zNiAyOS4zMSA4MC44IDI3LjExIDgwLjEzIDI2LjY1Qzc4LjU3IDI1LjU1IDc3IDI0LjQ1IDc1LjM0IDIzLjUzQzc1LjQxIDIyLjk2IDc1LjIzIDIyLjQzIDc0Ljg4IDIxLjkzQzczLjkyIDIwLjcyIDcxLjkzIDIwLjQ0IDcwLjUxIDIwLjM3QzY4LjgxIDIwLjMgNjcuMDcgMjAuNTggNjUuNCAyMC44M0M2NC4xNiAyMS4wNCA2Mi4wNyAyMS43MiA2MC44OSAyMS4wNEM1OS45NyAyMC40OCA1OS4wNSAyMS44OSA1OS45NyAyMi40NkM2MS43NSAyMy40OSA2NC4zIDIyLjcxIDY2LjE1IDIyLjQzQzY3LjY0IDIyLjIxIDY5LjEzIDIxLjk3IDcwLjY1IDIyLjA3QzcxLjI2IDIyLjExIDcyLjA0IDIyLjE0IDcyLjYgMjIuNDZDNzMuMDMgMjIuNjggNzMuNyAyMy4zMSA3My4yOCAyMy45MkM3My4xIDI0LjE3IDcyLjI5IDI0LjMxIDcyLjA0IDI0LjM4QzcwLjI2IDI0Ljg4IDY4LjQ1IDI0LjU5IDY2LjY4IDI0Ljg4QzY0LjYyIDI1LjIgNjIuNjcgMjYuMTUgNjAuNjEgMjYuNDdDNTYuMjggMjcuMTEgNTMuMTkgMjMuMTcgNTAuMjEgMjAuNDRNNjAuNjggMjguMTRDNjMuNDggMjcuNzkgNjUuOTcgMjYuNTQgNjguODEgMjYuNDdDNzAuNjIgMjYuNDQgNzIuODIgMjYuMyA3NC4zMSAyNS4yM0M3NC40MSAyNS4xNiA3NC40OSAyNS4wOSA3NC41OSAyNS4wMkM3Ni41NCAyNi4xNSA3OC4zNSAyNy41IDgwLjIzIDI4Ljc4QzgxLjQxIDI5LjU2IDgyLjg2IDMwLjU5IDg0LjM1IDMwLjQ1Qzg1LjM0IDMwLjM0IDg2LjUyIDI5LjQ1IDg2LjM0IDI4LjM1Qzg2LjIgMjcuNTQgODUuMzggMjYuOSA4NC44NSAyNi4zM0M4My45MiAyNS4yNyA4Mi45NyAyNC4yNyA4MS45NyAyMy4zMUM4MC4yIDIxLjYxIDc4LjMyIDIwLjA5IDc2LjMgMTguNzRDNzQuNDEgMTcuNDkgNzIuNTMgMTYuMjUgNzAuMTkgMTYuMjVDNjcuODEgMTYuMjUgNjUuNTEgMTcuMDcgNjMuMTMgMTcuMzVDNTkuNzYgMTcuNzggNTcuODggMTUuNDQgNTUuNTcgMTMuNDFDNTUuMjUgMTMuMTMgNTQuNzIgMTIuOTUgNTQuNCAxMy4zNEM1Mi40MSAxNS41MSA1MC40MyAxNy43MSA0OC40NyAxOS44N0M0OC4wNSAyMC4zIDQ4LjEyIDIwLjgzIDQ4LjU1IDIxLjIyQzUyLjIgMjQuMjQgNTUuNDMgMjguODUgNjAuNjggMjguMTQgTTc4LjgxIDMyLjM2QzgxLjAxIDMzLjMyIDgzLjIyIDM0LjI0IDg1LjM4IDM1LjE3Qzg0LjEgMzguMTggODIuODIgNDAuOTUgODQuNDIgNDQuMjJDODUuMzQgNDYuMTcgODYuNjkgNDcuOTEgODcuNTQgNDkuODlDODguNDcgNTIuMTMgODcuNzkgNTQuMzYgODcuMTkgNTYuNjRDODYuNjIgNTguNzMgODUuODQgNjAuNzkgODQuOTIgNjIuNzhDODQuNDYgNjMuNzcgODMuOTYgNjQuNzMgODMuNDYgNjUuNjhDODMuMTggNjYuMTggODIuNjUgNjcuNzEgODIuMTEgNjcuMjVDODEuMyA2Ni41NyA4Mi41NCA2My40NSA4Mi43NSA2Mi43QzgzLjI5IDYwLjg2IDgzLjgyIDU5LjAxIDg0LjE3IDU3LjEzQzg0LjY3IDU2Ljk5IDg1LjE3IDU2LjY3IDg1LjQ5IDU2LjE0Qzg2LjMgNTQuODYgODUuOTUgNTIuOTEgODUuNTIgNTEuNTNDODUuMDIgNDkuODkgODQuMjEgNDguMzcgODMuNDMgNDYuODRDODIuODIgNDUuNzQgODEuNDggNDQgODEuNzYgNDIuNjVDODEuOTcgNDEuNjMgODAuMzQgNDEuMiA4MC4xMyA0Mi4yNkM3OS43NCA0NC4yOSA4MS4zIDQ2LjQyIDgyLjE5IDQ4LjA4QzgyLjg2IDQ5LjQzIDgzLjU3IDUwLjc4IDg0IDUyLjJDODQuMTQgNTIuOCA4NC4zNSA1My41OCA4NC4yOCA1NC4xOUM4NC4yMSA1NC42OCA4My44MiA1NS41IDgzLjExIDU1LjI5QzgyLjgyIDU1LjIyIDgyLjQgNTQuNTEgODIuMjIgNTQuMjlDODEuMTkgNTIuNzcgODAuODcgNTAuOTYgODAuMDIgNDkuMzZDNzkuMDMgNDcuNTUgNzcuNSA0Ni4wMyA3Ni41MSA0NC4xOEM3NC41MiA0MC4zMSA3Ny4yMiAzNi4wOSA3OC44MSAzMi4zNk03NC45NSA0NC44MkM3Ni4yMiA0Ny4zNCA3OC4yMSA0OS4yOSA3OS4yMSA1MS45NUM3OS44NCA1My42MiA4MC43IDU1LjY0IDgyLjE5IDU2LjcxQzgyLjI5IDU2Ljc4IDgyLjQgNTYuODUgODIuNDcgNTYuODhDODIuMDggNTkuMTIgODEuMzcgNjEuMjggODAuOCA2My40OEM4MC40NSA2NC44MyA3OS45MSA2Ni41NyA4MC41NSA2Ny45MkM4MC45OCA2OC44MSA4Mi4yMiA2OS42MiA4My4yMiA2OS4wOUM4My44OSA2OC43NCA4NC4yNCA2Ny43MSA4NC42MyA2Ny4wM0M4NS4zMSA2NS44MyA4NS45NSA2NC41OCA4Ni41MiA2My4zMUM4Ny41NCA2MS4xMSA4OC4zNiA1OC44IDg4Ljk2IDU2LjQ2Qzg5LjUzIDU0LjI2IDkwLjEgNTIuMDkgODkuMzIgNDkuODlDODguNTQgNDcuNjIgODcuMDEgNDUuNzEgODUuOTggNDMuNThDODQuNDYgNDAuNTMgODYuMDUgMzcuOTcgODcuMjIgMzUuMTNDODcuMzcgMzQuNzQgODcuMzMgMzQuMTcgODYuOTEgMzRDODQuMTcgMzIuODIgODEuNDggMzEuNjkgNzguNzggMzAuNTVDNzguMjEgMzAuMzEgNzcuNzUgMzAuNTIgNzcuNTQgMzEuMDlDNzUuODcgMzUuNDkgNzIuNTcgNDAuMDYgNzQuOTUgNDQuODIgTTc2LjgzIDY2LjcxQzc3LjI1IDY5LjA2IDc3LjY4IDcxLjQgNzguMTEgNzMuNzRDNzQuODggNzQuMzEgNzEuODYgNzQuNzcgNzAuMDEgNzcuODlDNjguOTEgNzkuNzQgNjguMiA4MS44MyA2NyA4My42MUM2NS42MSA4NS42MyA2My4zOCA4Ni4zIDYxLjE4IDg3LjA1QzU5LjA4IDg3LjcyIDU2Ljk2IDg4LjIyIDU0Ljc5IDg4LjU0QzUzLjczIDg4LjY4IDUyLjYzIDg4LjgyIDUxLjUzIDg4Ljg5QzUwLjk5IDg4Ljk2IDQ5LjQzIDg5LjM1IDQ5LjUgODguNjRDNDkuNjEgODcuNjIgNTIuOTEgODYuOTEgNTMuNjkgODYuNjlDNTUuNSA4Ni4wOSA1Ny4zMSA4NS41MiA1OS4wOCA4NC43OEM1OS40NyA4NS4xMyA2MC4wMSA4NS4zOCA2MC42NSA4NS4zNEM2Mi4xNyA4NS4zMSA2My41OSA4My45NiA2NC41MSA4Mi44NkM2NS42MSA4MS41NSA2Ni40MyA3OS45OSA2Ny4yNSA3OC41QzY3Ljg1IDc3LjQzIDY4LjU5IDc1LjM0IDY5Ljg0IDc0LjhDNzAuODMgNzQuNDEgNzAuMyA3Mi44MiA2OS4yNyA3My4yNEM2Ny4zOSA3My45OSA2Ni40NyA3Ni40NyA2NS41NCA3OC4xNEM2NC44MyA3OS40NSA2NC4wOSA4MC44IDYzLjA5IDgxLjk0QzYyLjcgODIuNCA2Mi4xNyA4MyA2MS42IDgzLjI1QzYxLjE0IDgzLjQ2IDYwLjI2IDgzLjYxIDYwLjA0IDgyLjlDNTkuOTQgODIuNjEgNjAuMjkgODEuODcgNjAuNCA4MS42MkM2MS4xMSA3OS44OCA2Mi40MiA3OC42NCA2My4yNyA3Ny4wNEM2NC4yNyA3NS4yMyA2NC42OSA3My4xIDY1LjcyIDcxLjI5QzY3LjgxIDY3LjQ2IDcyLjgyIDY3LjQyIDc2LjgzIDY2LjcxTTY0LjMgNzAuMzNDNjIuOTIgNzIuNzggNjIuMzggNzUuNTEgNjAuNzIgNzcuNzlDNTkuNjUgNzkuMjQgNTguNDEgODEuMDkgNTguMzQgODIuOTNDNTguMzQgODMuMDQgNTguMzQgODMuMTQgNTguMzcgODMuMjVDNTYuMjggODQuMTQgNTQuMDggODQuNzQgNTEuOTUgODUuNDlDNTAuNiA4NS45MSA0OC45IDg2LjQ0IDQ4LjEyIDg3LjcyQzQ3LjU5IDg4LjU0IDQ3LjU5IDkwLjAzIDQ4LjU1IDkwLjU2QzQ5LjI1IDkwLjk1IDUwLjMyIDkwLjY3IDUxLjA2IDkwLjYzQzUyLjQ1IDkwLjUzIDUzLjg3IDkwLjM4IDU1LjIyIDkwLjE3QzU3LjYzIDg5Ljc4IDYwLjAxIDg5LjIxIDYyLjMxIDg4LjQzQzY0LjQ0IDg3LjcyIDY2LjU3IDg2Ljk4IDY3Ljk5IDg1LjEzQzY5LjQ1IDgzLjIyIDcwLjE5IDgwLjkxIDcxLjQgNzguODVDNzMuMTQgNzUuOSA3Ni4xMiA3NS44MyA3OS4xMyA3NS4yM0M3OS41NiA3NS4xNiA3OS45OSA3NC44IDc5LjkxIDc0LjM0Qzc5LjM4IDcxLjQzIDc4Ljg1IDY4LjU2IDc4LjMyIDY1LjY1Qzc4LjIxIDY1LjA4IDc3Ljc5IDY0LjggNzcuMjIgNjQuOTRDNzIuNiA2NS45NyA2Ni45NiA2NS43MiA2NC4zIDcwLjMzIE00OS41NCA4MC40NUM0Ny45NCA4Mi4yNiA0Ni4zOCA4NC4wMyA0NC44MiA4NS44MUM0Mi4zNyA4My42NCA0MC4xMyA4MS41OCAzNi41MiA4Mi4wNEMzNC4zOSA4Mi4zMyAzMi4zMyA4My4wNyAzMC4xNiA4My4yMkMyNy43NSA4My4zOSAyNS44IDgyLjA4IDIzLjg4IDgwLjc3QzIyLjA0IDc5LjU2IDIwLjMzIDc4LjE4IDE4Ljc0IDc2LjY5QzE3Ljk2IDc1Ljk0IDE3LjE4IDc1LjE2IDE2LjQzIDc0LjM4QzE2LjA4IDczLjk1IDE0LjggNzIuOTYgMTUuNCA3Mi42QzE2LjI5IDcyLjA3IDE4Ljg0IDc0LjIgMTkuNTIgNzQuNjZDMjEuMDggNzUuNzMgMjIuNjggNzYuODMgMjQuMzQgNzcuNzVDMjQuMzEgNzguMjggMjQuNDkgNzguODEgMjQuODggNzkuMzFDMjUuODMgODAuNDggMjcuNzkgODAuNzcgMjkuMjQgODAuOEMzMC45NCA4MC44NCAzMi42NSA4MC41NSAzNC4zNSA4MC4yN0MzNS41NiA4MC4wNiAzNy42NSA3OS4zNSAzOC44MiA4MC4wMkMzOS43OCA4MC41NSA0MC42NyA3OS4xMyAzOS43NCA3OC42QzM3LjkzIDc3LjU3IDM1LjQyIDc4LjM5IDMzLjUzIDc4LjcxQzMyLjA4IDc4Ljk2IDMwLjU5IDc5LjE3IDI5LjA2IDc5LjFDMjguNDYgNzkuMSAyNy42OCA3OS4wNiAyNy4xMSA3OC43NEMyNi42OSA3OC41MyAyNi4wMSA3Ny45MyAyNi40IDc3LjMyQzI2LjU4IDc3LjA4IDI3LjQgNzYuODYgMjcuNjggNzYuNzlDMjkuNDIgNzYuMyAzMS4yMyA3Ni41NCAzMyA3Ni4yMkMzNS4wNiA3NS45IDM2Ljk4IDc0LjkxIDM5LjAzIDc0LjU2QzQzLjM2IDczLjg4IDQ2LjQ5IDc3Ljc5IDQ5LjU0IDgwLjQ1TTM4LjkzIDcyLjg5QzM2LjEyIDczLjI4IDMzLjY4IDc0LjU5IDMwLjg0IDc0LjdDMjkuMDYgNzQuNzMgMjYuODYgNzQuOTEgMjUuMzQgNzYuMDFDMjUuMjcgNzYuMDggMjUuMTYgNzYuMTUgMjUuMDkgNzYuMjJDMjMuMSA3NS4xMiAyMS4yOSA3My43OCAxOS4zOCA3Mi41M0MxOC4yIDcxLjc5IDE2LjcxIDcwLjc2IDE1LjI2IDcwLjk0QzE0LjI3IDcxLjA0IDEzLjA5IDcxLjk3IDEzLjI3IDczLjA3QzEzLjQxIDczLjg1IDE0LjMgNzQuNDkgMTQuOCA3NS4wNUMxNS43MiA3Ni4wOCAxNi43MSA3Ny4wOCAxNy43NCA3OC4wM0MxOS41MiA3OS43IDIxLjQzIDgxLjE5IDIzLjQ2IDgyLjUxQzI1LjM3IDgzLjc1IDI3LjI1IDg0Ljk1IDI5LjYgODQuOTJDMzIuMDEgODQuODggMzQuMjggODQuMDMgMzYuNjYgODMuNzFDNDAuMDMgODMuMjUgNDEuOTQgODUuNTYgNDQuMjUgODcuNThDNDQuNTcgODcuODMgNDUuMTQgODcuOTcgNDUuNDYgODcuNjJDNDcuNDEgODUuNDIgNDkuMzMgODMuMjIgNTEuMjggODAuOThDNTEuNjcgODAuNTUgNTEuNjMgODAuMDIgNTEuMTcgNzkuNjdDNDcuNDggNzYuNjkgNDQuMTggNzIuMTEgMzguOTMgNzIuODkiIGZpbGw9IiNGRkZGRkYiLz48L3N2Zz4=" alt="" width="34" height="34">
+      <span>Corporativo Ultra</span>
+    </a>
+    <nav aria-label="Secciones">
+      <a href="#reforma">La reforma</a>
+      <a href="#deteccion">Detección</a>
+      <a href="#metodo">Método</a>
+      <a href="#ultra">Por qué Ultra</a>
+    </nav>
+    <a class="boton chico" href="#contacto">Agendar sitio piloto</a>
+  </div>
+</header>
+
+<main id="inicio">
+  <div class="envoltura heroe">
+    <div>
+      <h1>Menos horas-hombre. Más capas de <em>detección</em>.</h1>
+      <p class="bajada">Desde 2027 la jornada baja de 48 a 40 horas sin bajar el salario, y un puesto 24/7 que hoy cubren 2 guardias necesitará 4. El Análisis de Optimización de Seguridad de Corporativo Ultra decide, puesto por puesto, qué se elimina, sustituye, complementa o refuerza antes de que la reforma encarezca su servicio.</p>
+      <div class="acciones">
+        <a class="boton" href="#contacto">Agendar sitio piloto
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" d="M5 12h13M13 6l6 6-6 6"/></svg>
+        </a>
+        <a class="tel" href="tel:+525547770300"><small>O llame directo</small>+52 55 4777 0300</a>
+      </div>
+    </div>
+    <div>
+      <div class="puerta" role="img" aria-label="Puerta de andén rotulada: jornada legal de 40 horas semanales en 2030">
+        <div class="rotulo">Jornada legal semanal</div>
+        <div class="numero"><span id="contador">48</span><span class="h">h</span></div>
+        <div class="pie">
+          <span><b id="contador-anio">2026</b>de 48 a 40 horas, una etapa por año</span>
+          <span style="text-align:right">DOF<br>01/05/2026</span>
+        </div>
+      </div>
+      <div class="cinta" aria-hidden="true"></div>
+      <ol class="serie" aria-label="Calendario de la reforma">
+        <li data-i="0"><span>2026</span>48 h</li><li data-i="1"><span>2027</span>46 h</li><li data-i="2"><span>2028</span>44 h</li><li data-i="3"><span>2029</span>42 h</li><li data-i="4"><span>2030</span>40 h</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- La reforma -->
+  <section id="reforma">
+    <div class="envoltura">
+      <div class="cabeza">
+        <h2>Un puesto 24/7 pasa de 2 guardias a 4</h2>
+        <p>Un puesto 24/7 son 168 horas por semana. Cada guardia solo puede cubrir la jornada legal más un tope de horas extra, así que al bajar la jornada sube la plantilla mínima. La seguridad privada es de los sectores más expuestos: opera 24 horas los 7 días y su costo es casi todo mano de obra.</p>
+      </div>
+
+      <div class="horas">
+        <div>
+          <h3>México trabaja 457 horas más al año que el promedio de la OCDE</h3>
+          <div class="barras-h" style="margin-top:22px">
+            <div class="barra-h mx"><span>México</span><div class="pista"><div class="relleno" style="width:100%">2,193 h</div></div></div>
+            <div class="barra-h"><span>Promedio OCDE</span><div class="pista"><div class="relleno" style="width:79.2%">1,736 h</div></div></div>
+          </div>
+          <p class="nota">Horas trabajadas por persona al año. Según la OCDE, esas horas tampoco se traducen en productividad: el valor por hora trabajada en México está entre los más bajos de sus miembros. OECD Economic Surveys: Mexico 2026.</p>
+        </div>
+        <div>
+          <h3>Cómo llegó a ser ley</h3>
+          <ol class="linea-tiempo" style="margin-top:22px">
+            <li><time>Dic 2025</time>El Ejecutivo federal presenta la propuesta de 40 horas con reducción gradual.</li>
+            <li><time>03 mar 2026</time>Se publica en el DOF la reforma al Art. 123 constitucional.</li>
+            <li><time>01 may 2026</time>Se publica la reforma a la LFT: calendario, horas extra y registro electrónico de jornada.</li>
+            <li class="fin"><time>01 ene 2027</time>Primera reducción, de 48 a 46 horas. El salario no puede bajar.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="andenes" id="calculadora">
+        <h3>Elija un año y vea lo que cuesta un puesto 24/7</h3>
+        <p class="intro">Costo en salarios mensuales de guardia, sin cuotas IMSS/INFONAVIT, contra los 2 salarios que paga hoy.</p>
+
+        <fieldset class="puertas">
+          <legend>Año de la reforma</legend>
+          <input type="radio" name="anio" id="a-hoy" value="hoy"><label for="a-hoy" class="hoy"><span class="anio">HOY</span><span class="jor">24x24</span></label>
+          <input type="radio" name="anio" id="a-2026" value="2026"><label for="a-2026"><span class="anio">2026</span><span class="jor">48<small>h</small></span></label>
+          <input type="radio" name="anio" id="a-2027" value="2027"><label for="a-2027"><span class="anio">2027</span><span class="jor">46<small>h</small></span></label>
+          <input type="radio" name="anio" id="a-2028" value="2028"><label for="a-2028"><span class="anio">2028</span><span class="jor">44<small>h</small></span></label>
+          <input type="radio" name="anio" id="a-2029" value="2029"><label for="a-2029"><span class="anio">2029</span><span class="jor">42<small>h</small></span></label>
+          <input type="radio" name="anio" id="a-2030" value="2030" checked><label for="a-2030"><span class="anio">2030</span><span class="jor">40<small>h</small></span></label>
+        </fieldset>
+
+        <div class="lectura" aria-live="polite">
+          <div class="cambia" id="bloque-guardias">
+            <div class="dato"><span id="r-guardias">4</span><small id="r-guardias-txt">guardias por puesto, más 8 h extra por semana</small></div>
+            <div class="guardias" id="r-figuras" aria-hidden="true"></div>
+            <div class="plan-anio"><b id="r-etapa">Modelo estable</b><span id="r-plan">Plantilla dimensionada a la jornada final.</span></div>
+          </div>
+          <div class="costos cambia" id="bloque-costos">
+            <div class="costo">
+              <div class="etq"><span id="r-a-txt">4 guardias + 8 h extra al doble</span><b id="r-a">2.20×</b></div>
+              <div class="pista"><i id="r-a-barra" style="transform:scaleX(.733)"></i></div>
+              <div class="sub" id="r-a-sub">4.40 salarios. La forma más económica de cubrirlo en regla.</div>
+            </div>
+            <div class="costo caro">
+              <div class="etq"><span id="r-b-txt">3 guardias + horas extra</span><b id="r-b">2.85×</b></div>
+              <div class="pista"><i id="r-b-barra" style="transform:scaleX(.95)"></i></div>
+              <div class="sub" id="r-b-sub">5.70 salarios. Cada guardia trabaja 56 h: 12 al doble y 4 al triple.</div>
+            </div>
+            <div class="escala" aria-hidden="true"><span>0×</span><span>1×</span><span>2×</span><span>3×</span></div>
+          </div>
+        </div>
+        <p class="nota">Cálculo Ultra: 168 h ÷ jornada semanal legal (Art. 59 y transitorio Segundo, DOF 01/05/2026); límite diario de 12 h (Art. 68). Horas extra dentro del tope al doble; excedente, máximo 4 h, al triple (Arts. 66 y 68, transitorio Cuarto). Con un descansero compartido entre puestos el mínimo en 2030 es 4.2 salarios. El plan de cada año sigue el transitorio Segundo; el registro electrónico de jornada, el transitorio Quinto.</p>
+        <div class="sustento"><span class="placa-s">Ley</span><span class="placa-s">Cálculo propio</span></div>
+      </div>
+
+      <h3 class="titulo-tabla">Cualquier turno de más de 40 horas semanales necesita 20% más guardias</h3>
+      <div class="tabla-envoltura">
+        <table>
+          <thead><tr><th>Turno</th><th class="num col-horas">Horas de servicio / sem</th><th class="num">Guardias 2026 · 48 h</th><th class="num">Guardias 2030 · 40 h</th></tr></thead>
+          <tbody>
+            <tr><td>24/7</td><td class="num">168</td><td class="num">3.50</td><td class="num sube">4.20</td></tr>
+            <tr><td>12 h diurno, lunes a domingo</td><td class="num">84</td><td class="num">1.75</td><td class="num sube">2.10</td></tr>
+            <tr><td>12 h diurno, lunes a sábado</td><td class="num">72</td><td class="num">1.50</td><td class="num sube">1.80</td></tr>
+            <tr><td>12 h nocturno, lunes a viernes</td><td class="num">60</td><td class="num">1.25</td><td class="num sube">1.50</td></tr>
+            <tr><td>8 h, lunes a sábado</td><td class="num">48</td><td class="num">1.00</td><td class="num sube">1.20</td></tr>
+            <tr><td>8 h, lunes a viernes</td><td class="num">40</td><td class="num">1.00</td><td class="num">1.00</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="nota">Horas de servicio ÷ jornada legal, sin horas extra. Las fracciones se cubren con descanseros compartidos entre puestos. El turno nocturno, de 7 h diarias, reduce todavía más las horas disponibles por guardia.</p>
+
+      <div class="contingencia">
+        <div><h3>Cotiza bajo el costo legal</h3><p>Su tarifa no alcanza para 4.2 guardias por puesto en regla.</p></div>
+        <div><h3>Incumple</h3><p>Horas extra sin pagar, cuotas IMSS/INFONAVIT incompletas, jornada sin registro.</p></div>
+        <div><h3>Responde usted</h3><p>Por responsabilidad solidaria, el contratante responde por las obligaciones del prestador.</p></div>
+        <div><h3>Pierde la deducción</h3><p>Sin REPSE vigente y evidencia de cumplimiento, el pago no es deducible.</p></div>
+      </div>
+      <p class="nota">Si su proveedor no traslada el aumento conforme a la ley, la contingencia la paga usted. Cada puesto que se retira con fundamento técnico reduce nómina, cuotas y exposición solidaria a la vez. LFT Arts. 12 a 15; Ley del Seguro Social; Ley del INFONAVIT; Código Fiscal de la Federación.</p>
+      <div class="sustento"><span class="placa-s">Ley</span></div>
+    </div>
+  </section>
+
+  <!-- Detección -->
+  <section id="deteccion">
+    <div class="envoltura">
+      <div class="cabeza">
+        <h2>Más horas de guardia no compran más detección</h2>
+        <p>El desempeño del guardia en sitio cae con las horas del turno y con la noche. Los turnos de 12 horas son comunes en seguridad privada, y en la hora 12 el riesgo de error ya duplica el de las primeras ocho.</p>
+      </div>
+
+      <div class="deteccion">
+        <figure class="grafica" style="margin:0">
+          <figcaption class="ttl">Riesgo relativo de error según la hora del turno</figcaption>
+          <svg viewBox="0 0 560 300" role="img" aria-label="El riesgo relativo se mantiene en 1 durante las primeras 8 horas y sube hasta 2 en la hora 12">
+            <g font-family="Barlow, Arial, sans-serif" font-size="13" fill="currentColor" style="color:var(--tinta-2)">
+              <line x1="56" y1="250" x2="540" y2="250" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="56" y1="150" x2="540" y2="150" stroke="currentColor" stroke-opacity=".3" stroke-dasharray="3 4"/>
+              <line x1="56" y1="50" x2="540" y2="50" stroke="currentColor" stroke-opacity=".3" stroke-dasharray="3 4"/>
+              <text x="44" y="254" text-anchor="end">0</text>
+              <text x="44" y="154" text-anchor="end">1×</text>
+              <text x="44" y="54" text-anchor="end">2×</text>
+              <text x="56" y="274" text-anchor="middle">0</text>
+              <text x="217" y="274" text-anchor="middle">4</text>
+              <text x="379" y="274" text-anchor="middle">8</text>
+              <text x="540" y="274" text-anchor="end">12</text>
+              <text x="298" y="294" text-anchor="middle">Horas de turno</text>
+            </g>
+            <rect x="56" y="150" width="323" height="100" fill="var(--linea)" fill-opacity=".35"/>
+            <path d="M56 150 H379 C430 150 480 110 540 50" fill="none" stroke="var(--rojo)" stroke-width="5" stroke-linecap="round"/>
+            <circle cx="540" cy="50" r="7" fill="var(--rojo)"/>
+            <text x="524" y="40" text-anchor="end" font-family="'Big Shoulders Display', Arial, sans-serif" font-weight="800" font-size="19" fill="var(--tinta)">HORA 12 · 2×</text>
+            <text x="68" y="140" font-family="Barlow, Arial, sans-serif" font-size="13" fill="var(--tinta-2)">Primeras 8 horas = 1</text>
+          </svg>
+        </figure>
+        <div class="hechos">
+          <div class="hecho"><b>+25%</b><p>a +30% de riesgo de error en el turno nocturno frente al diurno.</p></div>
+          <div class="hecho"><b>+36%</b><p>en la cuarta noche consecutiva frente a la primera.</p></div>
+          <div class="hecho"><b>15’</b><p>De 15 a 30 minutos de vigilancia continua bastan para que baje la detección en caseta.</p></div>
+          <div class="hecho"><b>~97%</b><p>de la hora queda sin vigilancia con un rondín por hora: cada tramo del perímetro está a la vista cerca de minuto y medio.</p></div>
+        </div>
+      </div>
+      <p class="nota">Folkard y Tucker (2003), <i>Shift work, safety and productivity</i>, Occupational Medicine 53(2); Folkard y Lombardi (2006), American Journal of Industrial Medicine. El riesgo se mide como accidentes y errores, indicador de desempeño. Mackworth (1948), decremento de vigilancia. Rondín: ejemplo con perímetro de 1.2 km, campo de visión de 50 m y paso de 4 km/h.</p>
+      <div class="sustento"><span class="placa-s">Estudios</span><span class="placa-s ilustrativo">Ejemplo ilustrativo (rondín)</span></div>
+
+      <div class="capas">
+        <div class="capa-col">
+          <h3>Solo capas humanas: pérdida</h3>
+          <div class="pila humanas" aria-hidden="true"><span>Guardia</span><span>Rondín</span><span>Cámara</span><span>Bitácora</span></div>
+          <p>Las cuatro capas fallan por las mismas causas: fatiga de 3:00 a 5:00, rutina predecible, una persona que compromete varias capas y nadie que detecte hasta el cambio de turno. Los huecos coinciden y el incidente pasa.</p>
+        </div>
+        <div class="capa-col">
+          <h3>Capas mixtas: detenido en la capa 2</h3>
+          <div class="pila mixtas" aria-hidden="true"><span>Guardia</span><span class="alto">Perímetro</span><span>Analítica</span><span>Acceso</span></div>
+          <p>Cuando las capas son de distinta naturaleza, sus huecos no coinciden. Por eso agregar guardias no cierra los huecos y combinar tecnología con personas sí.</p>
+        </div>
+      </div>
+      <p class="nota">Modelo del queso suizo: Reason, J. (1990), <i>Human Error</i>.</p>
+      <div class="sustento"><span class="placa-s">Estudios</span></div>
+    </div>
+  </section>
+
+  <!-- Noche CEDIS -->
+  <section id="cedis">
+    <div class="envoltura">
+      <div class="cabeza">
+        <h2>Una noche en un CEDIS, dos veces</h2>
+        <p>El sitio pagaba guardia y cámara en el andén y nadie detectó el robo. Con la reforma, ese mismo esquema costará el doble por puesto y seguirá sin detectar. A la derecha, la misma noche con el servicio optimizado.</p>
+      </div>
+      <div class="noche">
+        <div class="tarjeta">
+          <h3>Esquema actual</h3>
+          <div class="checada"><time>03:12</time><p>El guardia de la caseta norte cumple su hora 10 del turno. El rondín se hizo a las 02:00, como todas las noches.</p></div>
+          <div class="checada"><time>03:40</time><p>La cámara del andén 4 graba a dos personas abriendo una caja seca. Nadie está viendo esa pantalla.</p></div>
+          <div class="checada"><time>06:05</time><p>El operador reporta el sello cambiado. La grabación está completa.</p></div>
+          <div class="checada"><time>Sem. 3</time><p>El cliente pide video y bitácora para el reclamo al seguro. No hay registro de quién revisó qué ni a qué hora.</p></div>
+          <p class="resultado">Pérdida y hallazgo de auditoría</p>
+        </div>
+        <div class="tarjeta nueva">
+          <h3>Con el rediseño</h3>
+          <div class="checada"><time>03:40</time><p>La analítica detecta intrusión en la zona del andén y envía la alerta a la central.</p></div>
+          <div class="checada"><time>03:41</time><p>El operador verifica en video y activa audio disuasivo.</p></div>
+          <div class="checada"><time>03:44</time><p>El supervisor móvil llega al andén. La caja no se abrió.</p></div>
+          <div class="checada"><time>Sem. 3</time><p>El reporte mensual documenta el evento, el video verificado y el tiempo de respuesta.</p></div>
+          <p class="resultado">Intento interrumpido, evidencia disponible</p>
+        </div>
+      </div>
+      <p class="nota">Tiempos de referencia. Los reales se miden en el levantamiento y se fijan como indicador de desempeño.</p>
+      <div class="sustento"><span class="placa-s ilustrativo">Ejemplo ilustrativo</span></div>
+
+      <div class="formula">
+        <div>
+          <p class="ecuacion">Detección + retardo <span>≥</span> respuesta</p>
+          <p style="margin-top:16px">El resultado se mide en minutos: la respuesta tiene que llegar antes de que el intruso termine. Es el principio de detección oportuna que usa ASIS International para evaluar sistemas de protección física.</p>
+        </div>
+        <div class="carriles" role="img" aria-label="Minutos ilustrativos: en el esquema actual la respuesta llega después de que el intruso termina; en el servicio optimizado la respuesta llega antes">
+          <div class="carril">
+            <div class="t"><b>Esquema actual</b><span>Llega tarde</span></div>
+            <div class="riel">
+              <div class="seg intruso" style="left:0;width:64%">Tarea del intruso</div>
+              <div class="seg fin" style="left:64%"></div>
+              <div class="seg det" style="left:0;width:40%">Detección</div>
+              <div class="seg resp" style="left:40%;width:50%">Respuesta</div>
+            </div>
+          </div>
+          <div class="carril">
+            <div class="t"><b>Servicio optimizado</b><span>Interrumpe</span></div>
+            <div class="riel">
+              <div class="seg intruso" style="left:0;width:64%">Tarea del intruso</div>
+              <div class="seg fin" style="left:64%"></div>
+              <div class="seg det" style="left:0;width:10%">Det.</div>
+              <div class="seg resp" style="left:10%;width:30%">Respuesta</div>
+            </div>
+          </div>
+          <div class="eje" aria-hidden="true"><span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span><span>12</span><span>14 min</span></div>
+        </div>
+      </div>
+      <p class="nota">ASIS International, <i>Protection of Assets</i>, Physical Security; Garcia, M. L., <i>Design and Evaluation of Physical Protection Systems</i>, Sandia National Laboratories. Minutos con fines ilustrativos.</p>
+      <div class="sustento"><span class="placa-s">Normas</span><span class="placa-s ilustrativo">Ejemplo ilustrativo</span></div>
+    </div>
+  </section>
+
+  <!-- Método -->
+  <section id="metodo">
+    <div class="envoltura">
+      <div class="cabeza">
+        <h2>Cada puesto se decide con dos preguntas</h2>
+        <p>¿Cubre un riesgo que nadie más cubre? ¿Solo observa y reporta, o decide, interactúa e interviene? Es el criterio de la metodología R.O.C.A.© de Corporativo Ultra, alineado al tratamiento de riesgos de ISO 31000:2018.</p>
+      </div>
+
+      <div class="cuadrante">
+        <div class="esquina"></div>
+        <div class="eje-col izq" style="grid-column:2">Observa y reporta</div>
+        <div class="eje-col" style="grid-column:3">Decide, interactúa, interviene</div>
+        <div class="eje-fila" style="grid-row:2">Cubre riesgo que nadie más cubre</div>
+        <div class="celda arriba izq" style="grid-column:2;grid-row:2"><span class="pos">Cubre riesgo único · observa</span><h3>Sustituir</h3><p>Función de observación con riesgo real. Tecnología con monitoreo remoto la cubre mejor.</p></div>
+        <div class="celda arriba reforzar" style="grid-column:3;grid-row:2"><span class="pos">Cubre riesgo único · decide</span><h3>Reforzar</h3><p>Riesgo real y juicio humano indispensable, o requisito del cliente o de su aseguradora. Se equipa, capacita y audita.</p></div>
+        <div class="eje-fila" style="grid-row:3">No cubre riesgo único</div>
+        <div class="celda izq" style="grid-column:2;grid-row:3"><span class="pos">No cubre riesgo único · observa</span><h3>Eliminar</h3><p>No mitiga un riesgo identificado o duplica otra capa. Se retira o se automatiza.</p></div>
+        <div class="celda" style="grid-column:3;grid-row:3"><span class="pos">No cubre riesgo único · decide</span><h3>Complementar</h3><p>Juicio humano útil en un área extensa o rutinaria. Con herramientas, un guardia cubre lo que antes cubrían dos.</p></div>
+      </div>
+      <div class="sustento"><span class="placa-s">Experiencia de campo</span><span class="placa-s">Normas</span></div>
+
+      <div class="plano-bloque">
+        <div>
+          <h3 style="margin-bottom:16px">En el CEDIS completo, 10 puestos pasan a 5</h3>
+          <div class="filtros" role="group" aria-label="Filtrar puestos por decisión">
+            <button type="button" class="filtro" data-filtro="reforzar" aria-pressed="false"><i style="background:var(--rojo)"></i>Reforzar</button>
+            <button type="button" class="filtro" data-filtro="complementar" aria-pressed="false"><i style="background:var(--amarillo)"></i>Complementar</button>
+            <button type="button" class="filtro" data-filtro="sustituir" aria-pressed="false"><i style="background:var(--tinta);outline:1px solid var(--linea)"></i>Sustituir</button>
+            <button type="button" class="filtro" data-filtro="eliminar" aria-pressed="false"><i style="border:2px dashed var(--tinta)"></i>Eliminar</button>
+          </div>
+          <div class="plano" id="plano">
+            <svg viewBox="0 0 640 420" role="img" aria-label="Plano ilustrativo de un CEDIS con diez puestos numerados, marcados según la decisión">
+              <rect class="muro" x="20" y="20" width="600" height="380" rx="2"/>
+              <rect class="zona" x="150" y="60" width="330" height="190"/>
+              <text class="etq-zona" x="315" y="160" text-anchor="middle">CEDIS</text>
+              <rect class="zona" x="150" y="250" width="330" height="60"/>
+              <text class="etq-zona" x="315" y="285" text-anchor="middle">ANDENES</text>
+              <g class="andenes-l"><line x1="180" y1="310" x2="210" y2="310"/><line x1="240" y1="310" x2="270" y2="310"/><line x1="300" y1="310" x2="330" y2="310"/><line x1="360" y1="310" x2="390" y2="310"/><line x1="420" y1="310" x2="450" y2="310"/></g>
+              <rect class="zona" x="500" y="60" width="100" height="250"/>
+              <text class="etq-zona" x="550" y="185" text-anchor="middle" transform="rotate(90 550 185)">ESTACIONAMIENTO</text>
+              <rect class="zona" x="40" y="330" width="130" height="50"/>
+              <text class="etq-zona" x="105" y="360" text-anchor="middle">ACCESO</text>
+              <path d="M20 90 H60" stroke="var(--placa-txt-2)" stroke-width="2" stroke-dasharray="2 5"/>
+
+              <g class="puesto reforzar" data-d="reforzar"><circle cx="105" cy="310" r="17"/><text x="105" y="311">1</text></g>
+              <g class="puesto reforzar" data-d="reforzar"><circle cx="315" cy="345" r="17"/><text x="315" y="346">2</text></g>
+              <g class="puesto reforzar" data-d="reforzar"><circle cx="95" cy="200" r="17"/><text x="95" y="201">3</text></g>
+              <g class="puesto complementar" data-d="complementar"><circle cx="60" cy="60" r="17"/><text x="60" y="61">4</text></g>
+              <g class="puesto complementar" data-d="complementar"><circle cx="580" cy="370" r="17"/><text x="580" y="371">4</text></g>
+              <g class="puesto complementar" data-d="complementar"><circle cx="230" cy="110" r="17"/><text x="230" y="111">5</text></g>
+              <g class="puesto sustituir" data-d="sustituir"><circle cx="315" cy="40" r="17"/><text x="315" y="41">6</text></g>
+              <g class="puesto sustituir" data-d="sustituir"><circle cx="550" cy="90" r="17"/><text x="550" y="91">7</text></g>
+              <g class="puesto sustituir" data-d="sustituir"><circle cx="410" cy="110" r="17"/><text x="410" y="111">8</text></g>
+              <g class="puesto eliminar" data-d="eliminar"><circle cx="150" cy="370" r="17"/><text x="150" y="371">9</text></g>
+            </svg>
+          </div>
+        </div>
+        <div>
+          <ul class="leyenda-plano">
+            <li><b style="color:var(--rojo-txt)">Reforzar</b><span>1 Caseta, 2 Andenes, 3 Supervisor de respuesta</span></li>
+            <li><b>Complementar</b><span>4 Rondín: dos puestos pasan a uno. 5 Almacén</span></li>
+            <li><b>Sustituir</b><span>6 Torre norte, 7 Estacionamiento, 8 Monitorista local</span></li>
+            <li><b>Eliminar</b><span>9 Recepción, que pasa a kiosco y pre-registro</span></li>
+          </ul>
+          <div class="antes-despues">
+            <div>42.0<small>Antes · 2030</small></div>
+            <span class="flecha" aria-hidden="true">→</span>
+            <div class="despues">21.0<small>Después · 2030</small></div>
+          </div>
+          <p class="nota">Guardias equivalentes: puestos × 4.2. Decisiones y cifras reales salen del levantamiento. Ahorro neto = nómina retirada − (tecnología amortizada + servicio de monitoreo).</p>
+          <div class="sustento"><span class="placa-s ilustrativo">Ejemplo ilustrativo</span><span class="placa-s">Cálculo propio</span></div>
+        </div>
+      </div>
+
+      <ol class="fases" aria-label="Las seis fases del análisis">
+        <li><div class="n">01 <span>R</span></div><h3>Levantamiento</h3><p>Recorrido diurno y nocturno, inventario de puestos y tecnología.</p></li>
+        <li><div class="n">02 <span>R</span></div><h3>Riesgo</h3><p>Activos críticos, amenazas e historial en una matriz ISO 31000.</p></li>
+        <li><div class="n">03 <span>A</span></div><h3>Capas</h3><p>Rutas de ataque y tiempos de detección, retardo y respuesta.</p></li>
+        <li><div class="n">04 <span>O</span></div><h3>Rediseño</h3><p>Decisión por puesto: eliminar, sustituir, complementar o reforzar.</p></li>
+        <li><div class="n">05 <span>O</span></div><h3>Caso de negocio</h3><p>Costo a 5 años, actual contra propuesto, de 2026 a 2030.</p></li>
+        <li><div class="n">06 <span>C</span></div><h3>Cumplimiento</h3><p>CTPAT, OEA, LFT y REPSE; plan por etapas e indicadores.</p></li>
+      </ol>
+      <div class="entregables">
+        <div><h3>Matriz de puestos</h3><p>Decisión y justificación técnica de cada puesto.</p></div>
+        <div><h3>Diseño de capas</h3><p>Especificación de tecnología y protocolos.</p></div>
+        <div><h3>Caso de negocio</h3><p>Inversión, renta mensual y retorno por año.</p></div>
+        <div><h3>Mapa de cumplimiento</h3><p>Evidencia para CTPAT, OEA y auditoría.</p></div>
+      </div>
+      <p class="nota">R.O.C.A.©: Risk, Optimization, Compliance, Assessment. Metodología de Corporativo Ultra.</p>
+    </div>
+  </section>
+
+  <!-- Servicio y renta -->
+  <section id="servicio">
+    <div class="envoltura">
+      <div class="cabeza">
+        <h2>Tecnología que vigila, guardias que cubren más</h2>
+        <p>El sitio detecta antes, retrasa más al intruso y responde a tiempo con menos horas-hombre. Estos son los servicios y herramientas del portafolio de Corporativo Ultra que entran al rediseño.</p>
+      </div>
+      <div class="servicio">
+        <div>
+          <h3>Tecnología activa</h3>
+          <p class="lema">La central Ultra vigila en tiempo real lo que ven las cámaras.</p>
+          <ul>
+            <li>Analítica de video monitoreada desde la central Ultra: intrusión por zona, merodeo, línea virtual</li>
+            <li>Detección perimetral con barrera IR, sensor en malla o radar, verificada por video</li>
+            <li>Control de acceso con biometría, QR, lectura de placas y pre-registro</li>
+            <li>Audio disuasivo: voz remota desde la central</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Guardia con capacidad aumentada</h3>
+          <p class="lema">Menos puestos, y cada uno cubre más.</p>
+          <ul>
+            <li>Rondín electrónico con NFC y GPS, con rutas variables y prueba de cumplimiento</li>
+            <li>Aplicación de incidentes con foto, hora y ubicación</li>
+            <li>Cámara corporal y botón de pánico con sensor de hombre caído</li>
+            <li>Radio sobre red celular, enlazado a central y supervisor</li>
+            <li>Inspección digital de unidades: andén, sellos y evidencia fotográfica</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Procesos que se miden</h3>
+          <p class="lema">Cada mes usted recibe los tiempos de detección y respuesta de su sitio.</p>
+          <ul>
+            <li>Supervisión móvil de respuesta</li>
+            <li>Revisión periódica de grabaciones con registro</li>
+            <li>Reporte mensual de tiempos de detección y respuesta</li>
+            <li>Reevaluación anual con metodología R.O.C.A.©</li>
+          </ul>
+        </div>
+      </div>
+      <p class="nota">Cada dispositivo IP entra al diseño con segmentación de red, credenciales únicas y actualización de firmware; CTPAT trata la ciberseguridad como categoría propia. Criterios de referencia: CBP, CTPAT Minimum Security Criteria (2019); ASIS International, <i>Protection of Assets</i>.</p>
+      <div class="sustento"><span class="placa-s">Experiencia de campo</span><span class="placa-s">Normas</span></div>
+
+      <div class="renta" style="margin-top:clamp(56px,8vw,96px)">
+        <div class="indice">
+          <p class="ttl">Costo mensual del servicio en 2030 · índice 2026 = 100</p>
+          <div class="col-indice" role="img" aria-label="Índice de costo: 2026 igual a 100; en 2030, solo guardias 120 y servicio optimizado 92">
+            <div><b>100</b><i style="height:calc(100% * 100 / 140)"></i></div>
+            <div class="caro"><b>120</b><i style="height:calc(100% * 120 / 140)"></i></div>
+            <div><b>92</b><i style="height:calc(100% * 92 / 140)"></i></div>
+          </div>
+          <div class="rotulos-indice"><span>2026, hoy</span><span>2030, solo guardias</span><span>2030, servicio optimizado</span></div>
+          <div class="sustento"><span class="placa-s ilustrativo">Ejemplo ilustrativo</span><span class="placa-s">Cálculo propio</span></div>
+        </div>
+        <div class="puntos-renta">
+          <h2 style="font-size:clamp(2rem,4.2vw,3.2rem)">Sustituir guardias por tecnología no sube el precio</h2>
+          <div><h3>Renta, no inversión</h3><p>Cámaras, analítica, control de acceso y detección perimetral se arriendan dentro del servicio. No hay desembolso inicial ni activo que depreciar.</p></div>
+          <div><h3>El precio se mantiene o baja</h3><p>Los puestos que se retiran liberan nómina, cuotas y exposición solidaria. Esa diferencia paga la renta del equipo desde el primer mes.</p></div>
+          <div><h3>Renovación con la misma renta</h3><p>Al término del contrato, el equipo se cambia por uno de generación más nueva con la misma renta mensual, y su sitio no se queda con tecnología obsoleta.</p></div>
+          <p class="nota">La curva real de cada sitio se calcula en el caso de negocio.</p>
+        </div>
+      </div>
+
+      <div class="ctpat">
+        <div class="fr">9<span>/12</span></div>
+        <div>
+          <h3>Si su operación está certificada, cada cambio queda documentado contra CTPAT y OEA</h3>
+          <p style="margin-top:10px">El análisis evalúa y documenta 9 de las 12 categorías de los criterios mínimos de CTPAT, repartidas en tres áreas: corporativa, transporte y física y de personas. Así la optimización no pone en riesgo su certificación.</p>
+          <p class="nota">CBP, CTPAT Minimum Security Criteria (2019). OEA: Reglas Generales de Comercio Exterior (SAT/ANAM). Arreglo de reconocimiento mutuo CTPAT-OEA México.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Por qué Ultra -->
+  <section id="ultra">
+    <div class="envoltura">
+      <div class="cabeza">
+        <h2>Ultra diseña, opera y monitorea el sistema, y responde por el resultado</h2>
+        <p>El mismo equipo que hace el análisis es el que después cuida su sitio. Este modelo ya opera con clientes de Ultra en entornos que van de centros penitenciarios a empresas AAA.</p>
+      </div>
+      <div class="tres">
+        <div><h3>Diseñamos</h3><p>Metodología R.O.C.A.©, consultoría CTPAT y OEA, dirección con credencial CPP de ASIS International.</p></div>
+        <div><h3>Operamos</h3><p>Guardias desde 1989. Los costos del análisis salen de la nómina que pagamos en cada puesto que operamos.</p></div>
+        <div><h3>Monitoreamos</h3><p>Central de monitoreo propia 24/7. La capa remota que sustituye presencia la opera Ultra con personal propio.</p></div>
+      </div>
+
+      <div class="sectores">
+        <div><h3>Centros penitenciarios de gobierno</h3><p>Operación bajo protocolos de autoridad y control estricto de accesos.</p></div>
+        <div><h3>Residenciales de alta gama</h3><p>Perímetros extensos, accesos vehiculares y exigencia alta de servicio.</p></div>
+        <div><h3>Empresas AAA</h3><p>Corporativos y sedes con auditoría interna y estándares globales.</p></div>
+        <div><h3>Parques industriales y manufactura</h3><p>Perímetro, andenes y evaluación para certificación de parques.</p></div>
+        <div><h3>Logística y comercio exterior</h3><p>Cadena de suministro bajo CTPAT y OEA.</p></div>
+        <div><h3>Sector financiero y retail</h3><p>Sucursales, centros de datos y prevención de pérdidas.</p></div>
+      </div>
+
+      <div class="clientes">
+        <h3 class="t">Clientes que confían en Ultra</h3>
+        <ul>
+          <li>Similares</li><li>CIBanco</li><li>Kavak</li><li>Banco Plata</li><li>Kia México</li><li>7-Eleven</li><li>Alpura</li><li>Infonavit</li>
+        </ul>
+      </div>
+
+      <div class="director">
+        <div class="gafete">
+          <span class="cpp">CPP</span>
+          <h3>Ángel S. Kociankowski Montelongo</h3>
+          <p>Director Regional · Corporativo Ultra</p>
+        </div>
+        <div>
+          <h2 style="font-size:clamp(2rem,4.2vw,3.2rem)">Cada proyecto lo revisa personalmente el Director Regional</h2>
+          <ul>
+            <li>Una de las 11 personas con certificación CPP activa en México, según la base de datos del capítulo México de ASIS International. El CPP (Certified Protection Professional) es la credencial internacional en gestión de seguridad.</li>
+            <li>Diplomado en auditoría interna CTPAT y BASC. Egresado del Tecnológico de Monterrey.</li>
+            <li>Autor de la metodología R.O.C.A.© con la que se realiza cada análisis.</li>
+            <li>Revisa y firma cada matriz de puestos y cada caso de negocio antes de entregarlos.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contacto -->
+  <div class="envoltura">
+    <div class="contacto" id="contacto">
+      <h2>Agende el levantamiento de su sitio piloto</h2>
+      <p>Una instalación, con recorrido diurno y nocturno. De ahí salen su matriz de decisión por puesto y su caso de negocio con cifras propias, y con eso usted decide si el modelo se replica en sus demás sitios.</p>
+      <ol class="pasos">
+        <li><b>01</b><span>Levantamiento</span><small>Recorrido y entrevistas en sitio</small></li>
+        <li><b>02</b><span>Matriz de puestos</span><small>Decisión técnica por cada puesto</small></li>
+        <li><b>03</b><span>Caso de negocio</span><small>Costo, renta y retorno año por año</small></li>
+      </ol>
+      <div class="canales">
+        <div class="canal">
+          <span class="t">Teléfono</span>
+          <span class="valor" id="v-tel">+52 55 4777 0300</span>
+          <div class="fila">
+            <a class="boton chico" href="tel:+525547770300"><svg aria-hidden="true"><use href="#i-tel"/></svg>Llamar</a>
+            <button type="button" class="boton chico fantasma" data-copiar="v-tel"><svg aria-hidden="true"><use href="#i-copiar"/></svg>Copiar número</button>
+          </div>
+          <span class="aviso" data-aviso="v-tel" aria-live="polite"></span>
+        </div>
+        <div class="canal">
+          <span class="t">Correo</span>
+          <span class="valor" id="v-correo">ventas@corporativoultra.com</span>
+          <div class="fila">
+            <a class="boton chico" href="mailto:ventas@corporativoultra.com?subject=Sitio%20piloto&amp;body=Ubicaci%C3%B3n%20de%20la%20instalaci%C3%B3n%20a%20evaluar%3A%20"><svg aria-hidden="true"><use href="#i-correo"/></svg>Escribir</a>
+            <button type="button" class="boton chico fantasma" data-copiar="v-correo"><svg aria-hidden="true"><use href="#i-copiar"/></svg>Copiar correo</button>
+          </div>
+          <span class="aviso" data-aviso="v-correo" aria-live="polite"></span>
+        </div>
+      </div>
+      <p class="asunto">Ponga como asunto <b>Sitio piloto</b> e indique la ubicación de la instalación que quiere evaluar.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="envoltura">
+    <p>Group Ultra Incorporate, S.A. de C.V. · Rtno. 2 Ingenieros Militares 36, Lomas de Sotelo, Naucalpan, Estado de México · <a href="https://corporativoultra.com">corporativoultra.com</a></p>
+    <div class="fuentes">
+      <div>
+        <h3>Cómo leer las placas</h3>
+        <p>La placa negra indica el sustento de cada dato: ley (Constitución, LFT, LSS y decretos del DOF), cálculo propio de Ultra sobre límites legales, estudios académicos y de la OCDE, normas (CTPAT, OEA, ASIS International, ISO) o experiencia de campo. El triángulo amarillo marca un ejemplo ilustrativo que explica el método; las cifras reales de su sitio salen del levantamiento.</p>
+      </div>
+      <div>
+        <h3>Marco de referencia</h3>
+        <p>ASIS POA y ESRM · ISO 31000:2018 · CTPAT MSC y OEA · ISO 28000:2022 · ISO 18788:2015 · ISO 22341:2021 (CPTED) · IEC 62676, EN 50131, EN 50518 · LFT, REPSE y LSS (DOF 03/03/2026 y 01/05/2026; Arts. 12 a 15, 59, 66, 68 y 132 fr. XXXIV). Salario mínimo general 2026: $315.04 diarios. Cuota patronal de cesantía y vejez en aumento anual hasta 2030 (DOF 16/12/2020).</p>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var reducir = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Puerta del héroe: 48 → 40, un año por paso
+  var cont = document.getElementById('contador');
+  var contAnio = document.getElementById('contador-anio');
+  var pasos = [[48,2026],[46,2027],[44,2028],[42,2029],[40,2030]];
+  var serie = document.querySelectorAll('.serie li');
+  function fija(i){ cont.textContent = pasos[i][0]; contAnio.textContent = pasos[i][1]; serie.forEach(function(li, k){ li.classList.toggle('activa', k === i); }); }
+  fija(0);
+  if (reducir) { fija(4); }
+  else {
+    var i = 0;
+    setTimeout(function tic(){ i++; fija(i); if (i < 4) setTimeout(tic, 520); }, 900);
+  }
+
+  // Calculadora de andenes (Anexo A)
+  var datos = {
+    hoy:  {g:2, gTxt:'guardias por puesto, en 24x24 o 12x12', extra:'', a:1.00, aS:'2.00', aTxt:'2 guardias en 24x24 o 12x12', aSub:'2 salarios. El 24x24 ya excede el límite legal de 12 horas diarias.', b:null,
+           etapa:'Hoy', plan:'La plantilla refleja el sitio de hace años y el reporte mide turnos cubiertos.'},
+    2026: {g:4, gTxt:'guardias por puesto, o 3 con horas extra', extra:'', a:2.00, aS:'4.00', aTxt:'4 guardias', aSub:'4.00 salarios.', b:2.00, bS:'4.00', bTxt:'3 guardias + horas extra', bSub:'4.00 salarios: en 2026 cuesta lo mismo que 4 guardias.',
+           etapa:'Diagnóstico', plan:'Levantamiento, matriz de puestos y caso de negocio.'},
+    2027: {g:4, gTxt:'guardias por puesto a 46 h', extra:'', a:2.00, aS:'4.00', aTxt:'4 guardias', aSub:'4.00 salarios.', b:2.18, bS:'4.37', bTxt:'3 guardias + horas extra', bSub:'4.37 salarios, con tope de 9 h extra por semana.',
+           etapa:'Etapa 1', plan:'Sustituciones de bajo riesgo, monitoreo remoto y registro electrónico de jornada.'},
+    2028: {g:4, gTxt:'guardias por puesto a 44 h', extra:'', a:2.00, aS:'4.00', aTxt:'4 guardias', aSub:'4.00 salarios.', b:2.39, bS:'4.77', bTxt:'3 guardias + horas extra', bSub:'4.77 salarios, con tope de 10 h extra por semana.',
+           etapa:'Etapa 2', plan:'Detección perimetral, acceso por zonas y complementos al guardia.'},
+    2029: {g:4, gTxt:'guardias por puesto a 42 h', extra:'', a:2.00, aS:'4.00', aTxt:'4 guardias', aSub:'4.00 salarios.', b:2.60, bS:'5.21', bTxt:'3 guardias + horas extra', bSub:'5.21 salarios, con tope de 11 h extra por semana.',
+           etapa:'Etapa 3', plan:'Ajuste con indicadores y revalidación de certificaciones.'},
+    2030: {g:4, gTxt:'guardias por puesto, más 8 h extra por semana', extra:'+ 8 h', a:2.20, aS:'4.40', aTxt:'4 guardias + 8 h extra al doble', aSub:'4.40 salarios. La forma más económica de cubrirlo en regla.', b:2.85, bS:'5.70', bTxt:'3 guardias + horas extra', bSub:'5.70 salarios. Cada guardia trabaja 56 h: 12 al doble y 4 al triple.',
+           etapa:'Modelo estable', plan:'Plantilla dimensionada a la jornada final.'}
+  };
+  var $ = function(id){ return document.getElementById(id); };
+  var bloques = [$('bloque-guardias'), $('bloque-costos')];
+  var costoB = $('r-b').closest('.costo');
+
+  function pintaFiguras(n, extra){
+    var html = '';
+    for (var k = 0; k < n; k++) html += '<svg viewBox="0 0 30 50"><use href="#guardia"/></svg>';
+    if (extra) html += '<span class="extra">' + extra + ' extra</span>';
+    $('r-figuras').innerHTML = html;
+  }
+  function pinta(clave){
+    var d = datos[clave];
+    $('r-guardias').textContent = d.g;
+    $('r-guardias-txt').textContent = d.gTxt;
+    pintaFiguras(d.g, d.extra);
+    $('r-etapa').textContent = d.etapa;
+    $('r-plan').textContent = d.plan;
+    $('r-a').textContent = d.a.toFixed(2) + '×';
+    $('r-a-txt').textContent = d.aTxt;
+    $('r-a-sub').textContent = d.aSub;
+    $('r-a-barra').style.transform = 'scaleX(' + (d.a / 3) + ')';
+    if (d.b === null) { costoB.hidden = true; }
+    else {
+      costoB.hidden = false;
+      $('r-b').textContent = d.b.toFixed(2) + '×';
+      $('r-b-txt').textContent = d.bTxt;
+      $('r-b-sub').textContent = d.bSub;
+      $('r-b-barra').style.transform = 'scaleX(' + (d.b / 3) + ')';
+    }
+  }
+  function cambia(clave){
+    if (reducir) { pinta(clave); return; }
+    bloques.forEach(function(b){ b.classList.add('borroso'); });
+    setTimeout(function(){
+      pinta(clave);
+      bloques.forEach(function(b){ b.classList.remove('borroso'); });
+    }, 140);
+  }
+  document.querySelectorAll('input[name="anio"]').forEach(function(r){
+    r.addEventListener('change', function(){ cambia(r.value); });
+  });
+  pinta('2030');
+
+  // Plano: filtros por decisión
+  var plano = $('plano');
+  var filtros = document.querySelectorAll('.filtro');
+  filtros.forEach(function(f){
+    f.addEventListener('click', function(){
+      var activo = f.getAttribute('aria-pressed') === 'true';
+      filtros.forEach(function(o){ o.setAttribute('aria-pressed','false'); });
+      plano.querySelectorAll('.puesto').forEach(function(p){ p.classList.remove('activo'); });
+      if (activo) { plano.classList.remove('filtrado'); return; }
+      f.setAttribute('aria-pressed','true');
+      plano.classList.add('filtrado');
+      plano.querySelectorAll('.puesto[data-d="' + f.dataset.filtro + '"]').forEach(function(p){ p.classList.add('activo'); });
+    });
+  });
+
+  // Copiar teléfono y correo
+  document.querySelectorAll('[data-copiar]').forEach(function(b){
+    b.addEventListener('click', function(){
+      var id = b.dataset.copiar, el = $(id), aviso = document.querySelector('[data-aviso="' + id + '"]');
+      var texto = el.textContent.trim();
+      function seleccionar(){
+        var r = document.createRange(); r.selectNodeContents(el);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        aviso.textContent = 'Seleccionado. Cópielo con Ctrl+C o ⌘C.';
+      }
+      try {
+        navigator.clipboard.writeText(texto).then(function(){ aviso.textContent = 'Copiado.'; }, seleccionar);
+      } catch (e) { seleccionar(); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
