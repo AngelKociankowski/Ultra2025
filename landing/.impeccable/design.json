@@ -1,0 +1,533 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-23T19:25:08+00:00",
+  "title": "Design System: Optimización de Seguridad Ultra",
+  "extensions": {
+    "colorMeta": {
+      "rojo": {
+        "role": "primary",
+        "displayName": "Ultra Red",
+        "canonical": "#E7342B",
+        "oklch": "oklch(60.7% 0.216 28.5)",
+        "tonalRamp": [
+          "#1F0000",
+          "#4B0403",
+          "#810103",
+          "#B7080B",
+          "#E7342B",
+          "#FD7666",
+          "#FCB4AA",
+          "#FFE9E5"
+        ]
+      },
+      "rojo-osc": {
+        "role": "primary",
+        "displayName": "Door Red",
+        "canonical": "#C3261E",
+        "oklch": "oklch(53.1% 0.193 28.7)",
+        "tonalRamp": [
+          "#1F0000",
+          "#4D0001",
+          "#7F0605",
+          "#B6120F",
+          "#DE4437",
+          "#FB7768",
+          "#FBB5AA",
+          "#FEE9E5"
+        ]
+      },
+      "rojo-txt": {
+        "role": "primary",
+        "displayName": "Signal Red Text",
+        "canonical": "#A81F18",
+        "oklch": "oklch(47.5% 0.173 28.8)",
+        "tonalRamp": [
+          "#1E0100",
+          "#4C0202",
+          "#7E0B08",
+          "#AE261E",
+          "#D64E41",
+          "#FF7363",
+          "#FEB4A8",
+          "#FEE9E6"
+        ],
+        "dark": "#FF6A5F"
+      },
+      "amarillo": {
+        "role": "tertiary",
+        "displayName": "Safety Yellow",
+        "canonical": "#F2C230",
+        "oklch": "oklch(83.4% 0.158 89.0)",
+        "tonalRamp": [
+          "#100A00",
+          "#302300",
+          "#523F04",
+          "#775E0D",
+          "#A07D03",
+          "#CA9F0A",
+          "#F3C331",
+          "#FEEDC3"
+        ]
+      },
+      "suelo": {
+        "role": "neutral",
+        "displayName": "Concrete",
+        "canonical": "#DAD8D3",
+        "oklch": "oklch(88.2% 0.007 88.6)",
+        "tonalRamp": [
+          "#0C0B08",
+          "#262521",
+          "#43423E",
+          "#63615D",
+          "#84827E",
+          "#A7A5A0",
+          "#CBC9C4",
+          "#F0EEE9"
+        ],
+        "dark": "#1A1917"
+      },
+      "suelo-2": {
+        "role": "neutral",
+        "displayName": "Worn Concrete",
+        "canonical": "#CECBC4",
+        "oklch": "oklch(84.3% 0.010 87.5)",
+        "tonalRamp": [
+          "#0D0B07",
+          "#272520",
+          "#44423C",
+          "#64615B",
+          "#85827C",
+          "#A8A59E",
+          "#CCC9C2",
+          "#F1EEE7"
+        ],
+        "dark": "#22211E"
+      },
+      "placa": {
+        "role": "neutral",
+        "displayName": "Carbón Plate",
+        "canonical": "#1D1D1B",
+        "oklch": "oklch(23.0% 0.004 106.7)",
+        "tonalRamp": [
+          "#0B0B09",
+          "#252523",
+          "#424240",
+          "#61615F",
+          "#828280",
+          "#A5A5A2",
+          "#C9C9C6",
+          "#EFEFEC"
+        ],
+        "dark": "#0E0D0B"
+      },
+      "placa-txt": {
+        "role": "neutral",
+        "displayName": "Plate White",
+        "canonical": "#F3F1EC",
+        "oklch": "oklch(95.8% 0.007 88.6)",
+        "tonalRamp": [
+          "#0C0B08",
+          "#262521",
+          "#43423E",
+          "#63615D",
+          "#84827E",
+          "#A7A5A0",
+          "#CBC9C4",
+          "#F0EEE9"
+        ],
+        "dark": "#F3F1EC"
+      },
+      "placa-txt-2": {
+        "role": "neutral",
+        "displayName": "Plate Gray",
+        "canonical": "#B9B4AA",
+        "oklch": "oklch(77.1% 0.015 84.6)",
+        "tonalRamp": [
+          "#0E0B05",
+          "#28251D",
+          "#464139",
+          "#656158",
+          "#868278",
+          "#A9A49B",
+          "#CEC9BE",
+          "#F3EEE3"
+        ],
+        "dark": "#A9A398"
+      },
+      "tinta": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#16130F",
+        "oklch": "oklch(18.9% 0.009 75.1)",
+        "tonalRamp": [
+          "#0D0B07",
+          "#282420",
+          "#45413D",
+          "#64615C",
+          "#86827C",
+          "#A8A49F",
+          "#CDC8C3",
+          "#F2EEE8"
+        ],
+        "dark": "#EEEBE5"
+      },
+      "tinta-2": {
+        "role": "neutral",
+        "displayName": "Worn Ink",
+        "canonical": "#48443D",
+        "oklch": "oklch(38.8% 0.013 81.8)",
+        "tonalRamp": [
+          "#0E0B06",
+          "#28251E",
+          "#45413A",
+          "#656159",
+          "#86827A",
+          "#A9A49C",
+          "#CDC8C0",
+          "#F3EEE5"
+        ],
+        "dark": "#B7B1A7"
+      },
+      "linea": {
+        "role": "neutral",
+        "displayName": "Floor Line",
+        "canonical": "#ADA9A1",
+        "oklch": "oklch(73.6% 0.012 84.6)",
+        "tonalRamp": [
+          "#0E0B06",
+          "#28251E",
+          "#45423B",
+          "#64615A",
+          "#86827A",
+          "#A9A59D",
+          "#CDC9C0",
+          "#F2EEE5"
+        ],
+        "dark": "#3F3C36"
+      },
+      "blanco": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "#FFFFFF",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero headline only, uppercase, one word in Signal Red Text."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section headlines, uppercase, balanced."
+      },
+      "headline-compact": {
+        "displayName": "Headline Compact",
+        "purpose": "Headlines set in a column beside other content."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Block and card titles, uppercase."
+      },
+      "numeral": {
+        "displayName": "Stencil Numeral",
+        "purpose": "Readouts, before/after figures, the equation, one-word verdicts."
+      },
+      "numeral-door": {
+        "displayName": "Door Numeral",
+        "purpose": "The stenciled hour count on the hero dock door; largest type on the page."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Reading text, 66ch max, tabular numerals."
+      },
+      "lead": {
+        "displayName": "Lead",
+        "purpose": "Hero subline, 52ch."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Plates, table headers, axis and lane labels, chips; uppercase, open tracking."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Button labels, uppercase display."
+      }
+    },
+    "shadows": [
+      {
+        "name": "mounted",
+        "value": "0 1px 1px rgba(22,19,15,.10), 0 8px 24px -8px rgba(22,19,15,.28)",
+        "dark": "0 1px 1px rgba(0,0,0,.4), 0 10px 28px -8px rgba(0,0,0,.7)",
+        "purpose": "Objects hung on the wall only: hero door, calculator panel, CEDIS plan, director badge."
+      },
+      {
+        "name": "button-lip",
+        "value": "inset 0 -3px 0 rgba(0,0,0,.22)",
+        "purpose": "Pressed-steel bottom edge of the primary button."
+      },
+      {
+        "name": "door-frame",
+        "value": "inset 0 0 0 10px #2A2724, inset 0 0 0 12px #4a4642",
+        "purpose": "Steel frame drawn around the hero door."
+      },
+      {
+        "name": "selected-door-ring",
+        "value": "inset 0 0 0 1px rgba(255,255,255,.2), 0 0 0 3px #1D1D1B, 0 0 0 5px #E7342B",
+        "purpose": "Selected year door: carbón gap and Ultra Red ring."
+      }
+    ],
+    "materials": [
+      {
+        "name": "door-slats",
+        "value": "repeating-linear-gradient(180deg, rgba(0,0,0,0) 0 26px, rgba(0,0,0,.16) 26px 28px, rgba(255,255,255,.08) 28px 29px)",
+        "purpose": "Horizontal slat bands on large red fields (hero door; contact field uses a 30/32/33px variant)."
+      },
+      {
+        "name": "door-paint",
+        "value": "linear-gradient(180deg, #D42C23, #BE241C)",
+        "purpose": "Sheet-metal paint of the hero door."
+      },
+      {
+        "name": "floor-line",
+        "value": "repeating-linear-gradient(90deg, var(--linea) 0 56px, transparent 56px 84px)",
+        "purpose": "5px painted dashed divider at the top of every section."
+      },
+      {
+        "name": "hazard-strip",
+        "value": "repeating-linear-gradient(-45deg, #F2C230 0 14px, #16130F 14px 28px)",
+        "purpose": "14px strip under the hero door; one per surface at most."
+      },
+      {
+        "name": "bolt",
+        "value": "radial-gradient(circle, var(--perno-c) 0 3px, transparent 3.5px)",
+        "purpose": "Corner bolts on sign plates (4) and the badge (2), 14px tiles inset 8px."
+      },
+      {
+        "name": "steel-door",
+        "value": "#34312C (hover #3F3B35)",
+        "purpose": "Unselected year doors on the carbón panel."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Press scale, bar fills, post-marker transforms."
+      },
+      {
+        "name": "press",
+        "value": "transform: scale(.97) over 160ms ease-out",
+        "purpose": "Active state of buttons, chips and year doors."
+      },
+      {
+        "name": "state-color",
+        "value": "160 to 240ms ease",
+        "purpose": "Hover and selection color changes."
+      },
+      {
+        "name": "value-swap",
+        "value": "filter: blur(3px); opacity: .35 over 220ms",
+        "purpose": "Readouts blur briefly while year-door values change."
+      },
+      {
+        "name": "bar-fill",
+        "value": "transform 420ms ease-out, origin left",
+        "purpose": "Cost bars in the calculator."
+      },
+      {
+        "name": "door-count",
+        "value": "48 to 40, one step per 520ms after a 900ms delay",
+        "purpose": "Hero door counts down the reform once on load; skipped under reduced motion."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "all transitions and animations 0ms; smooth scroll off",
+        "purpose": "prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "xs",
+        "value": "480px"
+      },
+      {
+        "name": "sm",
+        "value": "560px"
+      },
+      {
+        "name": "md",
+        "value": "720px"
+      },
+      {
+        "name": "lg",
+        "value": "860px"
+      },
+      {
+        "name": "xl",
+        "value": "980px"
+      }
+    ],
+    "focus": {
+      "value": "outline: 3px solid var(--amarillo); outline-offset: 3px; border-radius: 2px",
+      "note": "Ink outline on concrete; Safety Yellow outline inside carbón and red surfaces (10.08:1 on carbón)."
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Door Red pressed-steel button for the one action: book the pilot site.",
+      "html": "<a class=\"ds-btn\" href=\"#\">Agendar sitio piloto <svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\"><path fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" d=\"M5 12h13M13 6l6 6-6 6\"/></svg></a>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;gap:10px;font-family:\"Big Shoulders Display\",\"Arial Narrow\",sans-serif;font-weight:800;font-size:1.2rem;line-height:1;text-transform:uppercase;letter-spacing:.04em;padding:15px 22px 14px;border-radius:3px;border:0;text-decoration:none;background:var(--rojo-osc,#C3261E);color:#fff;box-shadow:inset 0 -3px 0 rgba(0,0,0,.22);transition:transform 160ms cubic-bezier(0.23,1,0.32,1),background-color 160ms ease}.ds-btn:hover{background:#A81F18}.ds-btn:active{transform:scale(.97)}.ds-btn:focus-visible{outline:3px solid #16130F;outline-offset:3px}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary action outlined in ink; fills with ink on hover.",
+      "html": "<a class=\"ds-btn-ghost\" href=\"#\">Copiar correo</a>",
+      "css": ".ds-btn-ghost{display:inline-flex;align-items:center;gap:10px;font-family:\"Big Shoulders Display\",\"Arial Narrow\",sans-serif;font-weight:800;font-size:1.2rem;line-height:1;text-transform:uppercase;letter-spacing:.04em;padding:15px 22px 14px;border-radius:3px;text-decoration:none;background:transparent;color:var(--tinta,#16130F);box-shadow:inset 0 0 0 2px var(--tinta,#16130F);transition:transform 160ms cubic-bezier(0.23,1,0.32,1),background-color 160ms ease,color 160ms ease}.ds-btn-ghost:hover{background:var(--tinta,#16130F);color:var(--suelo,#DAD8D3)}.ds-btn-ghost:active{transform:scale(.97)}.ds-btn-ghost:focus-visible{outline:3px solid #16130F;outline-offset:3px}"
+    },
+    {
+      "name": "Source and Illustrative Plates",
+      "kind": "chip",
+      "refersTo": "source-plate",
+      "description": "Every figure carries a plate: carbón with a square for a source, yellow with a triangle for an illustrative example.",
+      "html": "<div class=\"ds-plates\"><span class=\"ds-plate\">Ley</span><span class=\"ds-plate\">Cálculo propio</span><span class=\"ds-plate ds-ilus\">Ejemplo ilustrativo</span></div>",
+      "css": ".ds-plates{display:flex;flex-wrap:wrap;gap:8px}.ds-plate{display:inline-flex;align-items:center;gap:7px;font-family:\"Barlow\",\"Helvetica Neue\",Arial,sans-serif;font-weight:700;font-size:.74rem;line-height:1;text-transform:uppercase;letter-spacing:.09em;padding:6px 9px 6px 7px;background:#1D1D1B;color:#F3F1EC;border-radius:2px}.ds-plate::before{content:\"\";width:9px;height:9px;background:#F3F1EC;flex:none}.ds-plate.ds-ilus{background:#F2C230;color:#16130F}.ds-plate.ds-ilus::before{width:0;height:0;background:none;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid #16130F}"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "filter-chip",
+      "description": "Ink-outlined toggle for the CEDIS plan; pressed fills with ink.",
+      "html": "<div style=\"display:flex;gap:8px\"><button class=\"ds-chip\" aria-pressed=\"true\"><i style=\"background:#E7342B\"></i>Reforzar</button><button class=\"ds-chip\" aria-pressed=\"false\"><i style=\"background:#F2C230\"></i>Complementar</button></div>",
+      "css": ".ds-chip{font-family:\"Barlow\",\"Helvetica Neue\",Arial,sans-serif;font-weight:700;font-size:.82rem;line-height:1;text-transform:uppercase;letter-spacing:.08em;padding:10px 12px;border-radius:2px;border:2px solid #16130F;background:transparent;color:#16130F;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:transform 160ms cubic-bezier(0.23,1,0.32,1),background-color 160ms ease,color 160ms ease}.ds-chip i{width:12px;height:12px;border-radius:50%;display:inline-block}.ds-chip[aria-pressed=\"true\"]{background:#16130F;color:#DAD8D3}.ds-chip:active{transform:scale(.97)}.ds-chip:focus-visible{outline:3px solid #16130F;outline-offset:3px}"
+    },
+    {
+      "name": "Top Bar",
+      "kind": "nav",
+      "refersTo": "nav",
+      "description": "Sticky translucent concrete bar with logo mark, section links and the small CTA.",
+      "html": "<header class=\"ds-bar\"><a class=\"ds-mark\" href=\"#\"><span class=\"ds-logo\"></span>Corporativo Ultra</a><nav class=\"ds-nav\"><a href=\"#\">La reforma</a><a href=\"#\">Detección</a><a href=\"#\">Método</a></nav><a class=\"ds-btn-sm\" href=\"#\">Agendar sitio piloto</a></header>",
+      "css": ".ds-bar{display:flex;align-items:center;gap:20px;padding:10px 20px;background:color-mix(in srgb,#DAD8D3 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid #ADA9A1;color:#16130F}.ds-mark{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;font-family:\"Big Shoulders Display\",\"Arial Narrow\",sans-serif;font-weight:800;font-size:1.25rem;text-transform:uppercase;letter-spacing:.02em}.ds-logo{width:34px;height:34px;border-radius:50%;background:#E7342B}.ds-nav{display:flex;gap:22px;margin-left:auto;font-family:\"Barlow\",\"Helvetica Neue\",Arial,sans-serif;font-weight:600;font-size:.95rem}.ds-nav a{text-decoration:none;color:#48443D;transition:color 160ms ease}.ds-nav a:hover{color:#16130F}.ds-btn-sm{font-family:\"Big Shoulders Display\",\"Arial Narrow\",sans-serif;font-weight:800;font-size:1rem;line-height:1;text-transform:uppercase;letter-spacing:.04em;padding:11px 16px 10px;border-radius:3px;background:#C3261E;color:#fff;text-decoration:none;box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}.ds-btn-sm:hover{background:#A81F18}.ds-nav a:focus-visible,.ds-btn-sm:focus-visible{outline:3px solid #16130F;outline-offset:3px}"
+    },
+    {
+      "name": "Before / After Cards",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Worn concrete for the current scheme, carbón plate for the redesign; rows split by dashed lines.",
+      "html": "<div class=\"ds-cards\"><div class=\"ds-card\"><h3>Esquema actual</h3><div class=\"ds-row\"><time>02:14</time><p>Nadie ve la barda trasera.</p></div></div><div class=\"ds-card ds-new\"><h3>Con el rediseño</h3><div class=\"ds-row\"><time>02:14</time><p>La analítica detecta y la central avisa.</p></div></div></div>",
+      "css": ".ds-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}.ds-card{border-radius:3px;padding:22px 22px 18px;background:#CECBC4;color:#16130F;font-family:\"Barlow\",\"Helvetica Neue\",Arial,sans-serif;}.ds-card h3{font-family:\"Big Shoulders Display\",\"Arial Narrow\",sans-serif;font-weight:800;font-size:1.45rem;line-height:.98;text-transform:uppercase;margin:0 0 16px}.ds-row{display:grid;grid-template-columns:6rem 1fr;gap:14px;padding:12px 0;border-top:1px dashed #ADA9A1}.ds-row time{font-family:\"Big Shoulders Stencil Display\",\"Big Shoulders Display\",\"Arial Narrow\",sans-serif;font-weight:900;font-size:1.65rem;line-height:1;color:#48443D}.ds-row p{margin:0;font-size:.96rem}.ds-new{background:#1D1D1B;color:#F3F1EC}.ds-new .ds-row{border-top-color:rgba(255,255,255,.18)}.ds-new .ds-row time{color:#F3F1EC}"
+    },
+    {
+      "name": "Dock Door",
+      "kind": "custom",
+      "refersTo": "dock-door",
+      "description": "Signature hero object: slatted red roll-up door in a steel frame, stenciled hour count, one hazard strip below.",
+      "html": "<div class=\"ds-door-wrap\"><div class=\"ds-door\"><div class=\"ds-door-lbl\">Jornada legal semanal</div><div class=\"ds-door-num\">40<span>h</span></div><div class=\"ds-door-foot\"><b>2030</b><span>DOF 01/05/2026</span></div></div><div class=\"ds-hazard\"></div></div>",
+      "css": ".ds-door-wrap{max-width:320px}.ds-door{aspect-ratio:4/4.6;border-radius:3px;overflow:hidden;background:repeating-linear-gradient(180deg,rgba(0,0,0,0) 0 26px,rgba(0,0,0,.16) 26px 28px,rgba(255,255,255,.08) 28px 29px),linear-gradient(180deg,#D42C23,#BE241C);box-shadow:0 1px 1px rgba(22,19,15,.10),0 8px 24px -8px rgba(22,19,15,.28),inset 0 0 0 10px #2A2724,inset 0 0 0 12px #4a4642;color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:28px 28px 22px}.ds-door-lbl{font-family:\"Big Shoulders Display\",\"Arial Narrow\",sans-serif;font-weight:800;font-size:.85rem;letter-spacing:.2em;text-transform:uppercase;opacity:.92}.ds-door-num{font-family:\"Big Shoulders Stencil Display\",\"Big Shoulders Display\",\"Arial Narrow\",sans-serif;font-weight:900;font-size:8rem;line-height:.8;letter-spacing:-.02em;text-align:center}.ds-door-num span{font-size:.28em;margin-left:.06em}.ds-door-foot{display:flex;justify-content:space-between;align-items:end;font-family:\"Barlow\",\"Helvetica Neue\",Arial,sans-serif;font-weight:600;font-size:.85rem}.ds-door-foot b{font-family:\"Big Shoulders Display\",\"Arial Narrow\",sans-serif;font-weight:800;font-size:1.3rem}.ds-hazard{height:14px;margin-top:-14px;position:relative;background:repeating-linear-gradient(-45deg,#F2C230 0 14px,#16130F 14px 28px);border-radius:0 0 3px 3px}"
+    },
+    {
+      "name": "Year Doors",
+      "kind": "custom",
+      "refersTo": "year-door-selected",
+      "description": "Signature interaction: radio group of small dock doors on the carbón panel; the selected year turns Door Red with a ringed gap.",
+      "html": "<div class=\"ds-panel\"><div class=\"ds-years\"><label class=\"ds-yd\"><span class=\"ds-y\">2026</span><span class=\"ds-h\">48<small>h</small></span></label><label class=\"ds-yd ds-on\"><span class=\"ds-y\">2027</span><span class=\"ds-h\">46<small>h</small></span></label><label class=\"ds-yd\"><span class=\"ds-y\">2030</span><span class=\"ds-h\">40<small>h</small></span></label></div></div>",
+      "css": ".ds-panel{background:#1D1D1B;border-radius:4px;padding:20px;box-shadow:0 1px 1px rgba(22,19,15,.10),0 8px 24px -8px rgba(22,19,15,.28)}.ds-years{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.ds-yd{display:flex;flex-direction:column;justify-content:space-between;min-height:128px;padding:12px 10px 10px;border-radius:2px;cursor:pointer;background:repeating-linear-gradient(180deg,transparent 0 14px,rgba(0,0,0,.25) 14px 15px),#34312C;color:#F3F1EC;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);transition:transform 160ms cubic-bezier(0.23,1,0.32,1),background-color 200ms ease,box-shadow 200ms ease}.ds-yd:hover{background-color:#3F3B35}.ds-yd:active{transform:scale(.97)}.ds-y{font-family:\"Big Shoulders Display\",\"Arial Narrow\",sans-serif;font-weight:800;font-size:.95rem;letter-spacing:.14em}.ds-h{font-family:\"Big Shoulders Stencil Display\",\"Big Shoulders Display\",\"Arial Narrow\",sans-serif;font-weight:900;font-size:3rem;line-height:.85}.ds-h small{font-size:.38em;margin-left:2px}.ds-yd.ds-on{background:repeating-linear-gradient(180deg,transparent 0 14px,rgba(0,0,0,.16) 14px 15px),#C3261E;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2),0 0 0 3px #1D1D1B,0 0 0 5px #E7342B}.ds-yd:focus-visible{outline:3px solid #F2C230;outline-offset:4px}"
+    },
+    {
+      "name": "Bolted Sign Plate",
+      "kind": "card",
+      "refersTo": "sign-plate",
+      "description": "Carbón contact plate with four corner bolts, a label, a large selectable value and actions.",
+      "html": "<div class=\"ds-sign\"><span class=\"ds-sign-t\">Teléfono</span><span class=\"ds-sign-v\">+52 55 4777 0300</span></div>",
+      "css": ".ds-sign{background:radial-gradient(circle,#4a4640 0 3px,transparent 3.5px) 8px 8px/14px 14px no-repeat,radial-gradient(circle,#4a4640 0 3px,transparent 3.5px) calc(100% - 8px) 8px/14px 14px no-repeat,radial-gradient(circle,#4a4640 0 3px,transparent 3.5px) 8px calc(100% - 8px)/14px 14px no-repeat,radial-gradient(circle,#4a4640 0 3px,transparent 3.5px) calc(100% - 8px) calc(100% - 8px)/14px 14px no-repeat,#1D1D1B;color:#F3F1EC;border-radius:3px;padding:22px 26px;display:grid;gap:10px}.ds-sign-t{font-family:\"Barlow\",\"Helvetica Neue\",Arial,sans-serif;font-weight:700;font-size:.78rem;line-height:1;text-transform:uppercase;letter-spacing:.1em;color:#B9B4AA}.ds-sign-v{font-family:\"Big Shoulders Display\",\"Arial Narrow\",sans-serif;font-weight:800;font-size:1.9rem;line-height:1.05;letter-spacing:.02em;user-select:all}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Dock Wall",
+    "overview": "The page is the loading-dock wall of a CEDIS, read left to right as an argument. Concrete gray is the ground; everything placed on it is something you would find bolted, painted or stenciled on that wall: roll-up doors painted Ultra red with horizontal slats, carbón sign plates with bolts in the corners, stenciled numerals, painted floor lines between bays, and a single yellow-and-black hazard strip under the main door. Nothing glows and nothing floats. Depth comes from paint and mounting, not light.\n\nDensity is high but orderly, the way signage is: condensed uppercase display type, tabular numbers everywhere, and every figure paired with a small plate that says where it came from. The system is light-first (concrete by day) with a full dark theme that reads as the same wall at night: ground drops to near-black, plates go darker still, red text brightens.\n\nConfirmed rejections from the direction: the dark control-room hero with a glowing accent, and the stock-photo consulting page. There are no photographs in the system.",
+    "keyCharacteristics": [
+      "Concrete ground, red painted door fields, carbón bolted plates.",
+      "Condensed signage sans for words, stencil for numerals and one-word verdicts, Barlow for reading.",
+      "Square markers, painted dashed floor lines, 2 to 4px corners.",
+      "Every number carries a source plate; illustrative figures carry a yellow triangle plate.",
+      "Motion is mechanical: doors count, bars fill, buttons press. Nothing drifts."
+    ],
+    "rules": [
+      {
+        "name": "The Painted Field Rule",
+        "body": "Red at scale is always a painted surface in Door Red, never a glow, gradient halo or tint. Large red fields carry horizontal slat lines (repeating dark and light 1 to 2px bands) so they read as a door.",
+        "section": "colors"
+      },
+      {
+        "name": "The Plate Honesty Rule",
+        "body": "A number on this wall is never bare. A carbón plate with a square marks a sourced figure (Ley, Cálculo propio, Estudios, Normas, Experiencia de campo); a yellow plate with a triangle marks an illustrative example. Yellow is spent on this distinction first.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Grays Rule",
+        "body": "Surfaces separate by stepping between Concrete and Worn Concrete, or by switching to a carbón plate. There is no third gray surface and no white card.",
+        "section": "colors"
+      },
+      {
+        "name": "The Stencil Is Paint Rule",
+        "body": "Stencil is for numerals and single-word verdicts (Sustituir, Reforzar, Eliminar, Complementar; Diseñamos, Operamos, Monitoreamos). Never for sentences or body copy.",
+        "section": "typography"
+      },
+      {
+        "name": "The Uppercase Signage Rule",
+        "body": "Display-face headings and titles are uppercase; Barlow is only uppercase at label size with open tracking. A person's name is the one display-face exception set in sentence case.",
+        "section": "typography"
+      },
+      {
+        "name": "The Floor Line Rule",
+        "body": "Sections are separated by a painted dashed floor line, not by alternating background bands.",
+        "section": "layout"
+      },
+      {
+        "name": "The Mounted Only Rule",
+        "body": "A shadow means \"bolted to the wall\". Blocks, cards and plates that are painted on do not get one.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Square Marker Rule",
+        "body": "List bullets, timeline nodes and phase markers are squares. A circle on this wall is an object, never a bullet.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** paint large red areas in Door Red (#C3261E) with slat bands, and keep Ultra Red (#E7342B) for small markers.",
+      "**Do** attach a source plate to every figure, and a yellow triangle plate to every illustrative one.",
+      "**Do** separate sections with the painted dashed floor line (5px, 56px dash, 28px gap).",
+      "**Do** set numerals and one-word verdicts in the stencil face, words in Big Shoulders Display uppercase, and reading text in Barlow at 17px/1.6 with tabular numerals.",
+      "**Do** keep corners at 2, 3 or 4px and markers square.",
+      "**Do** keep the Mounted shadow for objects hung on the wall (door, calculator, plan, badge).",
+      "**Do** gate hover styles to fine pointers, press-scale interactive elements to 0.97, and drop all motion under reduced motion.",
+      "**Do** draw icons as inline stroked SVG symbols (2.2px stroke, round joins)."
+    ],
+    "donts": [
+      "**Don't** build a dark control-room hero with a glowing accent, or a stock-photo consulting page.",
+      "**Don't** use photographs; the wall is made of paint, plates and diagrams.",
+      "**Don't** add more than one hazard strip to a surface.",
+      "**Don't** set yellow text or a yellow-only indicator on concrete; yellow belongs on carbón or red.",
+      "**Don't** put white text smaller than bold 17px on Ultra Red (#E7342B); use Door Red.",
+      "**Don't** add kickers or eyebrow labels above headlines; the headline itself is the sign.",
+      "**Don't** use glyph or emoji icons, or round pill buttons.",
+      "**Don't** introduce a third surface gray or a white card."
+    ]
+  }
+}
