@@ -493,7 +493,8 @@ OUTAGE_STREAK: 3, // corte de la corrida: errores reintentables seguidos (direct
 SUSPECT_STREAK: 12, SUSPECT_MIN: 10, SUSPECT_RATIO: 0.25, // "posible límite" con texto desconocido (07 §E5)
 COVERAGE_MIN: 0.6, // corrida con menos filas que esta fracción de lo planeado → parcial "cobertura baja" (director, E4)
 SIGNAL_BUY_PCT: 52, SIGNAL_AVOID_PCT: 48, PROB_BAR_SPAN: 15, // señal gobernada por la probabilidad mostrada (07 §1)
-SYNC: { LOAD_TIMEOUT_MS: 4000, DOC_MAX_BYTES: 200000, COUNTER_DEBOUNCE_MS: 5000, LIVE_DEBOUNCE_MS: 3000, LIVE_SET_DEBOUNCE_MS: 10000, RUN_LEASE_MS: 30000, RUN_STALE_MIN: 15, KEEP_DAYS: 2, LIVE_GRACE_MS: 300000, COUNTER_MAX: 100000 },
+SYNC: { LOAD_TIMEOUT_MS: 4000, DOC_MAX_BYTES: 200000, COUNTER_DEBOUNCE_MS: 5000, LIVE_DEBOUNCE_MS: 3000, LIVE_SET_DEBOUNCE_MS: 10000, RUN_LEASE_MS: 30000, RUN_STALE_MIN: 15, KEEP_DAYS: 2, LIVE_GRACE_MS: 300000, COUNTER_MAX: 100000, BEAT_MS: 20000, BEAT_STALE_MS: 75000 },
+RESUME_MAX: 3, RUN_CACHE_LS_MAX: 1500000, // corrida que se retoma: reanudaciones automáticas por día y tope del respaldo local
 STAGE1_MIN_FREE: 77, // cribado recortable solo sobre la muestra Free nominal
 RUN_CAP_FREE: 193,
 COLD_CAP_FREE: 215,
@@ -1710,6 +1711,9 @@ return example && isNonStock ? "EJ-" + sym : sym;
 },
 };
 
+// Corrida "running" viva: último latido (o inicio) hace < BEAT_STALE_MS y empezó hace < RUN_STALE_MIN (corrección de producción)
+const runAlive = (r, nowMs) => !!r && r.state === "running" && nowMs - (isNum(r.beatAt) ? r.beatAt : r.startedAt) < CONFIG.SYNC.BEAT_STALE_MS && nowMs - r.startedAt < CONFIG.SYNC.RUN_STALE_MIN * 60000;
+
 // Frases del detalle (director, E1): cada una cita la probabilidad de la que sale. Precio ← P(sube); S&P 500 ← P(>S&P).
 function detailPhrases(r) {
 const out = [], stock = r.ref === "sp500", pUp = stock ? r.pUpStock : r.pUp;
@@ -1739,7 +1743,7 @@ etParts, etWallToMs, isTradingDay, prevTradingDay, nextTradingDay, lastTradingDa
 makeError, classifyText, asArray, normalizeEod, riskSeries, filterFloatUniverse, filterQuotes, isJunkListing,
 stage1Select, regimeFrom, stockFeatures, infoFeatures, stockScore, stockCaps, stockPrediction,
 nonStockScore, displayPct, signalFromProb, stockUpProb, retStats, cleanZeros, extractRows, splitDay, joinDay, bytesOf, explainStock, explainNonStock, technicals, fundamentalsOf, analyze,
-planRun, liveIntervalMs, canAuto, fmt, detailPhrases,
+planRun, liveIntervalMs, canAuto, fmt, detailPhrases, runAlive,
 };
 root.RadarCore = Object.freeze(RadarCore);
 })(globalThis);
@@ -2285,7 +2289,7 @@ pump();
 const CATS = ["sonda", "arranque", "franja", "mercado", "macro", "corrida", "detalle", "manual"];
 const COUNTED = new Set(["tool_error", "server_unavailable", "upstream_error"]);
 
-function create({ mcp, storage, now, plan = "FREE", concurrency = CFG.CONCURRENCY, onBudget, onLog }) {
+function create({ mcp, storage, now, plan = "FREE", concurrency = CFG.CONCURRENCY, onBudget, onLog, locks }) {
 const store = storage || makeStorage(null);
 const clock = typeof now === "function" ? now : () => 0;
 const bornAt = clock();
@@ -2327,7 +2331,10 @@ const emptyCats = () => Object.fromEntries(CATS.map(c => [c, 0]));
 const fresh = (today, runDay) => ({ dateET: today, used: 0, limit: limitOf(), limitHit: false, byCat: emptyCats(), runDay, suspect: null });
 // remote: lo que suman los otros dispositivos + el ajuste de "Restablecer" (07 §5.6); 0 sin sincronización
 let remote = { dateET: null, used: 0, limitHit: false, suspect: false };
-let st = load();
+// Un solo contador por navegador: cada cambio es una operación que se aplica sobre el registro recién leído. Con Web Locks
+// (`locks`) la lectura-modificación-escritura es atómica entre pestañas y no se pierden llamadas; sin ellos, es directa.
+const ops = [];
+let base = load(), st = base, flushing = false;
 function load(v = persist() ? store.get("budget") : null) {
 const today = C.etParts(clock()).date;
 const runDay = v && typeof v.runDay === "string" ? v.runDay : null;
@@ -2338,17 +2345,30 @@ return { dateET: today, used: count(v.used) ? v.used : 0, limit: limitOf(), limi
 }
 return fresh(today, runDay);
 }
-function save() {
-if (persist()) store.set("budget", { dateET: st.dateET, used: st.used, limit: isFinite(st.limit) ? st.limit : null, limitHit: st.limitHit, byCat: st.byCat, runDay: st.runDay, suspect: st.suspect });
-if (onBudget) { try { onBudget(budget.get()); } catch (e) { /* el observador no debe romper la capa de datos */ } }
+const copy = v => Object.assign({}, v, { byCat: Object.assign({}, v.byCat) });
+function baseNow() { // lo guardado por cualquier pestaña; sin registro de hoy (almacenamiento bloqueado), lo de esta
+const v = persist() ? store.get("budget") : null, today = C.etParts(clock()).date;
+if (v && v.dateET === today) return load(v);
+if (base.dateET === today) return copy(base);
+return load(v); // día nuevo: contador en 0, conserva runDay
 }
-// un solo contador por navegador: se relee por si otra pestaña lo escribió (ALTO E2)
-function roll() {
-const today = C.etParts(clock()).date, v = persist() ? store.get("budget") : null;
-if (v && v.dateET === today) st = load(v);
-else if (today !== st.dateET) { st = fresh(today, st.runDay); save(); }
-st.limit = limitOf();
+function roll() { st = baseNow(); ops.forEach(f => f(st)); st.limit = limitOf(); }
+const emit = () => { if (onBudget) { try { onBudget(budget.get()); } catch (e) { /* el observador no debe romper la capa de datos */ } } };
+function flush() {
+const run = () => {
+flushing = false;
+if (!ops.length) return;
+const cur = baseNow();
+ops.splice(0).forEach(f => f(cur)); cur.limit = limitOf(); base = cur;
+if (persist()) store.set("budget", { dateET: cur.dateET, used: cur.used, limit: isFinite(cur.limit) ? cur.limit : null, limitHit: cur.limitHit, byCat: cur.byCat, runDay: cur.runDay, suspect: cur.suspect });
+emit();
+};
+if (!locks || !persist()) return run();
+if (flushing) return;
+flushing = true;
+try { Promise.resolve(locks.request("radar.v1.budget", run)).catch(run); } catch (e) { run(); }
 }
+function mutate(fn) { ops.push(fn); flush(); if (ops.length) emit(); }
 const rem = () => (remote.dateET === st.dateET ? remote : { used: 0, limitHit: false, suspect: false });
 const budget = {
 get() {
@@ -2358,17 +2378,16 @@ ranToday: st.runDay === st.dateET, suspect: st.suspect === st.dateET || r.suspec
 },
 remaining() { const b = budget.get(); return b.limitHit ? 0 : b.limit - b.used; },
 local() { roll(); return { dateET: st.dateET, used: st.used, byCat: Object.assign({}, st.byCat), limitHit: st.limitHit, suspect: st.suspect === st.dateET ? st.dateET : null }; },
-setRemote(r) { remote = Object.assign({ used: 0, limitHit: false, suspect: false }, r); if (onBudget) { try { onBudget(budget.get()); } catch (e) { /* idem */ } } },
-markSuspect() { roll(); st.suspect = st.dateET; save(); },
-clearLimit() { roll(); st.limitHit = false; save(); },
+setRemote(r) { remote = Object.assign({ used: 0, limitHit: false, suspect: false }, r); emit(); },
+markSuspect() { mutate(v => { v.suspect = v.dateET; }); },
+clearLimit() { mutate(v => { v.limitHit = false; }); },
 note(n, cat) {
-roll(); st.used += n; const c = CATS.includes(cat) ? cat : "manual"; st.byCat[c] = (st.byCat[c] || 0) + n;
-if (c === "corrida") st.runDay = st.dateET; // una corrida que cruza la medianoche ET también marca el día en que gastó
-save();
+const c = CATS.includes(cat) ? cat : "manual";
+mutate(v => { v.used += n; v.byCat[c] = (v.byCat[c] || 0) + n; if (c === "corrida") v.runDay = v.dateET; }); // la que cruza la medianoche marca el día en que gastó
 },
-markLimitHit() { roll(); if (isFinite(st.limit)) st.used = Math.max(st.used, st.limit); st.limitHit = true; save(); },
-reset() { roll(); st = fresh(st.dateET, st.runDay); save(); },
-markRun() { roll(); st.runDay = st.dateET; save(); },
+markLimitHit() { mutate(v => { const lim = limitOf(); if (isFinite(lim)) v.used = Math.max(v.used, lim); v.limitHit = true; }); },
+reset() { mutate(v => { Object.assign(v, fresh(v.dateET, v.runDay)); }); },
+markRun() { mutate(v => { v.runDay = v.dateET; }); },
 };
 const log = r => { if (onLog) { try { onLog(Object.assign({ t: clock() }, r)); } catch (e) { /* idem */ } } };
 
@@ -2531,7 +2550,7 @@ return { tier, source, probes, error: lastErr };
 function setPlan(p) {
 if (!CFG.K[p]) return;
 tier = p; bucket = makeBucket({ perMin: CFG.PLAN_PER_MIN[p], now: clock });
-st = load(); save();
+base = load(); mutate(() => {}); // reescribe el registro con el límite del plan
 }
 
 return Object.freeze({ plan: () => tier, setPlan, budget, call, watch, runQueue, detectPlan, identity });
@@ -2562,8 +2581,8 @@ try { return await fn(); } catch (e) { if (e && e.code === "unavailable") { awai
 const ref = id => col.doc(id);
 const read = async id => { const d = await verb(() => ref(id).get()); return d.exists ? d.data() : null; };
 // un documento de `db` sin forma se trata como inexistente (MEDIO E7)
-const RUN_STATES = new Set(["running", "done", "partial", "error", "aborted"]);
-const cleanRun = d => (isObj(d) && isStr(d.dateET) && RUN_STATES.has(d.state) && isNum(d.startedAt) && isStr(d.runId) ? d : null);
+const RUN_STATES = new Set(["running", "done", "partial", "error", "aborted", "interrumpida"]);
+const cleanRun = d => (isObj(d) && isStr(d.dateET) && RUN_STATES.has(d.state) && isNum(d.startedAt) && isStr(d.runId) && (d.beatAt == null || isNum(d.beatAt)) ? d : null);
 const isCnt = n => Number.isInteger(n) && n >= 0 && n <= S.COUNTER_MAX;
 function cleanCounter(d) {
 if (!isObj(d) || !isStr(d.dateET)) return null;
@@ -2614,24 +2633,31 @@ st.status = "ok"; st.statusText = "Sincronizado entre tus dispositivos";
 return res;
 }
 // Reclamo de la corrida: acquire (arrendamiento corto) + get + set (receta "claim a slot" del contrato)
-async function claimRun({ dayET, plan, auto }) {
+// resume: retomar una corrida interrumpida (la automática puede, aunque ya haya corrida hoy); takeover: la "running" es de
+// ESTE dispositivo y la pestaña que la corría ya no existe (lo comprobó el candado local)
+async function claimRun({ dayET, plan, auto, resume, takeover }) {
 if (!st.active) return { ok: false, reason: "error" };
 try {
 const r = ref("corrida"), lease = await verb(() => r.acquire({ holder, ttlMs: S.RUN_LEASE_MS }));
 if (!lease.acquired) return { ok: false, reason: "busy", expiresAt: lease.expiresAt };
 const cur = cleanRun(await read("corrida")), t = now();
 if (cur && cur.dateET === dayET) {
-if (cur.state === "running" && t - cur.startedAt < S.RUN_STALE_MIN * 60000) return { ok: false, reason: "running", run: cur };
-if (auto) return { ok: false, reason: "already", run: cur };
+if (C.runAlive(cur, t) && !(takeover && cur.dev === dev)) return { ok: false, reason: "running", run: cur };
+if (auto && !resume) return { ok: false, reason: "already", run: cur };
 }
 const runId = holder.replace(":", "-") + "-" + t;
-await verb(() => r.set({ kind: "corrida", v: 1, dateET: dayET, plan, state: "running", auto: !!auto, dev, runId, startedAt: t, finishedAt: null, reason: null }));
+await verb(() => r.set({ kind: "corrida", v: 1, dateET: dayET, plan, state: "running", auto: !!auto, dev, runId, startedAt: t, beatAt: t, finishedAt: null, reason: null }));
 return { ok: true, runId };
 } catch (e) { fail(e); return { ok: false, reason: "error" }; }
 }
 async function finishRun({ runId, state, reason }) {
 if (!st.active || !runId) return;
 try { const cur = await read("corrida"); if (cur && cur.runId === runId) await verb(() => ref("corrida").update({ state, finishedAt: now(), reason: reason || null })); } catch (e) { fail(e); }
+}
+// latido de la corrida en curso (cada BEAT_MS): sin él durante BEAT_STALE_MS, los demás la dan por interrumpida
+async function beat(runId) {
+if (!st.active || !runId) return false;
+try { const cur = await read("corrida"); if (!cur || cur.runId !== runId) return false; await verb(() => ref("corrida").update({ beatAt: now(), state: "running" })); return true; } catch (e) { fail(e); return false; }
 }
 async function saveDay(output, dayET, runId) {
 if (!st.active || !dayWrites) return false;
@@ -2731,12 +2757,73 @@ await verb(() => ref("feriados-" + (Number(today.slice(0, 4)) - 1)).delete());
 }
 return {
 get active() { return st.active; }, get status() { return st.status; }, get statusText() { return st.statusText; },
-load, claimRun, finishRun, saveDay, writeCounter, flush, writeAdjust, writePlan, writeHolidays, patchLive, subscribe, prune,
+get dev() { return dev; },
+load, claimRun, finishRun, beat, saveDay, writeCounter, flush, writeAdjust, writePlan, writeHolidays, patchLive, subscribe, prune,
 globalCounter,
 };
 }
 
-root.RadarData = Object.freeze({ create, createSync, makeStorage, classifyError, makeBucket, ENDPOINTS, stable });
+// Caché de respuestas de la corrida por día ET (corrección de producción): una corrida interrumpida se retoma sin repetir
+// llamadas. Clave `dateET|gen|identidad`; `gen` es la tanda del día: queda abierta hasta que una corrida termina el análisis.
+// IndexedDB si se puede; si no, el almacenamiento local con tope RUN_CACHE_LS_MAX; si tampoco, todo devuelve null (como antes).
+function createRunCache({ idb, storage, now }) {
+const day = () => C.etParts(now()).date, metaOf = () => { const m = storage.get("rc.meta"); return isObj(m) && isStr(m.dateET) && Number.isInteger(m.gen) ? m : null; };
+let dbp = null;
+function open() {
+if (!dbp) dbp = new Promise(res => {
+try {
+if (!idb) return res(null);
+const r = idb.open("radar-corrida", 1);
+r.onupgradeneeded = () => { try { r.result.createObjectStore("r"); } catch (e) { /* ya existe */ } };
+r.onsuccess = () => res(r.result); r.onerror = r.onblocked = () => res(null);
+} catch (e) { res(null); }
+});
+return dbp;
+}
+const req = (db, mode, fn) => new Promise(res => {
+try { const t = db.transaction("r", mode), q = fn(t.objectStore("r")); t.oncomplete = () => res(q ? q.result : true); t.onerror = t.onabort = () => res(null); } catch (e) { res(null); }
+});
+const lsKey = (k) => { let h = 2166136261; for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 16777619); return "rc." + k.slice(0, 10) + "." + (h >>> 0).toString(36); };
+// estado de la tanda de hoy (síncrono, para el botón): abierta, respuestas guardadas y reanudaciones automáticas
+function status() { const m = metaOf(); return m && m.dateET === day() ? { open: !!m.open, entries: m.open ? m.entries || 0 : 0, resumes: m.resumes || 0, held: !!m.held, gen: m.gen } : { open: false, entries: 0, resumes: 0, held: false, gen: 0 }; }
+// una corrida empieza: retoma la tanda abierta de hoy o abre otra
+function begin({ autoResume } = {}) {
+const m = metaOf(), d = day(), cur = m && m.dateET === d ? m : { dateET: d, gen: 0, open: false, entries: 0, bytes: 0, resumes: 0 };
+const next = cur.open ? Object.assign({}, cur, { held: false, resumes: (cur.resumes || 0) + (autoResume ? 1 : 0) }) : Object.assign({}, cur, { gen: Math.max(cur.gen + 1, Date.now()), open: true, held: false, entries: 0, bytes: 0 }); // gen único: "Borrar datos" no reutiliza una tanda vieja
+storage.set("rc.meta", next);
+return { gen: next.gen, resumed: cur.open && (cur.entries || 0) > 0, entries: cur.open ? cur.entries || 0 : 0 };
+}
+function close() { const m = metaOf(); if (m && m.open) storage.set("rc.meta", Object.assign({}, m, { open: false })); }
+// "Detener": la tanda queda para una corrida manual, pero no se retoma sola
+function hold() { const m = metaOf(); if (m && m.open) storage.set("rc.meta", Object.assign({}, m, { held: true })); }
+const keyOf = id => { const m = status(); return m.open ? `${day()}|${m.gen}|${id}` : null; };
+async function get(id) {
+const k = keyOf(id); if (!k) return null;
+const db = await open();
+const v = db ? await req(db, "readonly", st => st.get(k)) : storage.get(lsKey(k));
+return isObj(v) && v.id === k && Array.isArray(v.rows) ? v.rows : null;
+}
+async function put(id, rows) {
+const k = keyOf(id); if (!k || !Array.isArray(rows) || !rows.length) return false;
+const db = await open(), v = { id: k, rows };
+let ok = false, n = 0;
+if (db) ok = !!(await req(db, "readwrite", st => st.put(v, k)));
+else { const m = metaOf(); n = C.bytesOf(v); ok = !!m && (m.bytes || 0) + n <= CFG.RUN_CACHE_LS_MAX && storage.set(lsKey(k), v); }
+const m = metaOf();
+if (ok && m && m.open && m.dateET === day()) storage.set("rc.meta", Object.assign({}, m, { entries: (m.entries || 0) + 1, bytes: (m.bytes || 0) + n }));
+return ok;
+}
+// días viejos fuera (una vez al abrir)
+async function purge() {
+const d = day();
+for (const k of storage.keys("rc.")) if (k !== "rc.meta" && !k.startsWith("rc." + d)) storage.remove(k);
+const db = await open(); if (!db) return;
+await req(db, "readwrite", st => { const c = st.openCursor(); c.onsuccess = () => { const x = c.result; if (!x) return; if (!String(x.key).startsWith(d + "|")) x.delete(); x.continue(); }; return null; });
+}
+return Object.freeze({ status, begin, close, hold, get, put, purge });
+}
+
+root.RadarData = Object.freeze({ create, createSync, createRunCache, makeStorage, classifyError, makeBucket, ENDPOINTS, stable });
 })(globalThis);
 </script>
 <script id="radar-ui">
@@ -2763,10 +2850,64 @@ const id = "d" + Array.from({ length: 10 }, () => Math.floor(Math.random() * 36)
 store.set("device", { id });
 return id;
 }
+// Dos pestañas que abren a la vez pueden crear dos ids: se espera un momento y se usa el que quedó guardado (gana la última
+// escritura). Si no, cada pestaña publicaría el contador del navegador con su id y la suma saldría doble (corrección de producción).
+async function settledDeviceId() { const a = deviceId(); await new Promise(r => setTimeout(r, 300)); const c = store.get("device"); return c && typeof c.id === "string" ? c.id : a; }
+
+// ---- Corrida interrumpida (corrección de producción): candado local, latido, caché de respuestas y reanudación ----
+const TAB = Math.random().toString(36).slice(2, 10), STALE = CFG.SYNC.BEAT_STALE_MS;
+const TAB_RUNNING = "Se está analizando en otra ventana de este dispositivo; aparecerá aquí al terminar.";
+const RESUMED_TXT = "El análisis anterior se interrumpió; se retoma sin repetir las llamadas ya hechas.";
+const RESUME_WAIT = "El análisis anterior se interrumpió; se retoma en unos segundos sin repetir las llamadas ya hechas.";
+const RC = D.createRunCache({ idb: (() => { try { return root.indexedDB || null; } catch (e) { return null; } })(), storage: store, now: App.now });
+// candado del navegador en el almacenamiento local, con hora real (las pestañas comparten reloj): { holder, dateET, beatAt, state }
+const lockGet = () => { const l = store.get("runlock"); return l && typeof l.holder === "string" && isNum(l.beatAt) ? l : null; };
+const lockMine = l => !!l && l.holder === TAB;
+const lockLive = l => !!l && !lockMine(l) && l.state === "running" && l.dateET === todayET() && Date.now() - l.beatAt < STALE;
+function lockMark(l, state) { if (l) store.set("runlock", Object.assign({}, l, { state, beatAt: Date.now() })); }
+function lockDrop() { const l = lockGet(); if (lockMine(l)) store.remove("runlock"); }
+// ¿sigue viva la pestaña del candado? Le pregunta por BroadcastChannel; si el canal no funciona aquí, vale el latido.
+let bcOk = false;
+const BC = (() => { try { return root.BroadcastChannel ? new root.BroadcastChannel("radar.v1.corrida") : null; } catch (e) { return null; } })();
+if (BC) {
+BC.onmessage = e => { const m = e.data || {}; if (m.type === "ping" && App.state && App.state.run.status === "running" && lockMine(lockGet())) BC.postMessage({ type: "pong", holder: TAB }); if (m.type === "probe" && m.tab === TAB) bcOk = true; };
+try { const pr = new root.BroadcastChannel("radar.v1.corrida"); pr.postMessage({ type: "probe", tab: TAB }); setTimeout(() => pr.close(), 2000); } catch (e) { /* sin canal: solo latido */ }
+}
+function tabAlive(l) {
+if (!BC || !bcOk) return Promise.resolve(lockLive(l));
+return new Promise(res => {
+const t = setTimeout(() => { BC.removeEventListener("message", f); res(false); }, 500);
+const f = e => { if (e.data && e.data.type === "pong" && e.data.holder === l.holder) { clearTimeout(t); BC.removeEventListener("message", f); res(true); } };
+BC.addEventListener("message", f); BC.postMessage({ type: "ping" });
+});
+}
+// escribe el candado y confirma tras un instante (dos pestañas a la vez: gana la última escritura; la otra se retira)
+async function lockClaim() {
+const l = lockGet();
+let takeover = !!l && !lockMine(l) && l.dateET === todayET();
+if (lockLive(l)) { if (await tabAlive(l)) return { ok: false }; lockMark(l, "interrumpida"); }
+if (!store.set("runlock", { holder: TAB, dateET: todayET(), beatAt: Date.now(), state: "running" })) return { ok: true, takeover: false }; // sin almacenamiento: como antes
+await new Promise(r => setTimeout(r, 150));
+const m = lockGet();
+return m && !lockMine(m) ? { ok: false } : { ok: true, takeover };
+}
+// algo de hoy que retomar en este navegador: candado de otra pestaña que ya no corre, `corrida` propia interrumpida o tanda en caché
+function interruptedHere() {
+const l = lockGet(), r = App.state.syncRun, today = todayET();
+const lockInt = !!l && !lockMine(l) && l.dateET === today && !lockLive(l);
+const docInt = !!r && r.dateET === today && !!Sync.dev && r.dev === Sync.dev && (r.state === "interrumpida" || r.state === "aborted" || (r.state === "running" && !C.runAlive(r, App.now())));
+const rc = RC.status();
+return lockInt || docInt || (rc.entries > 0 && !rc.held);
+}
 // 07 §E4 (N10): los botones manuales esperan a que termine la corrida
 const busyRun = () => App.state.run.status === "running", WAIT_TXT = "Espera a que termine el análisis";
 const OTHER_RUNNING = "Otro dispositivo está corriendo el análisis de hoy; aparecerá aquí al terminar.";
-const RUNNING_TXT = "Analizando; el ranking aparece aquí al terminar.";
+// durante la corrida: que no se apague la pantalla, con los minutos que faltan según la velocidad medida (corrección de producción)
+function runningText() {
+const r = App.state.run, secs = Math.max(1, (Date.now() - (r.t0 || Date.now())) / 1000), rate = r.net >= 10 ? r.net / secs : 2;
+const min = Math.max(1, Math.ceil(Math.max(0, (r.total || 0) - (r.done || 0)) / rate / 60));
+return (r.resumed ? RESUMED_TXT + " " : "") + `Mantén esta pantalla abierta mientras se analiza (≈ ${min} min).`;
+}
 // el aviso de un parcial dice su causa verdadera (MEDIO E3)
 const PARTIAL_TXT = {
 "límite": "Análisis parcial: se agotó el límite diario de FMP. Las filas con menos datos tienen confianza menor.",
@@ -2987,11 +3128,16 @@ const pr = estPlan();
 if (!pr.fits) return 0;
 return minimal ? estPlan(0, 0).cost : pr.cost;
 }
+// lo que ya está en la caché de la tanda de hoy no se vuelve a pedir: el costo (botón, guarda, reserva) es lo que falta.
+// El tope solo sube por lo ya guardado hasta el de una corrida nueva: el plan nunca crece por estar reanudando.
+const withCached = (cap, cached) => (cap >= CFG.RUN_CAP_FREE ? cap : Math.min(CFG.RUN_CAP_FREE, cap + cached));
 function estPlan(remainingOverride, capOverride) {
 const s = App.state, cl = App.client, tier = cl ? cl.plan() : "FREE";
 const eligible = (s.result && s.result.counts && s.result.counts.eligible) || (tier === "EXAMPLE" ? 40 : 77);
-return C.planRun({ plan: tier, eligible, have: { spx: !!s.macro.spxDesc, treasury: !!s.macro.treasuryDesc, universe: false }, nonStock: RANKED, etfs: [],
-remaining: remainingOverride !== undefined ? remainingOverride : cl ? cl.budget.remaining() : 250, cap: capOverride !== undefined ? capOverride : runCapNow(false) });
+const cached = remainingOverride === undefined && s.mode === "live" && !hasTodayRun() ? RC.status().entries : 0;
+const pr = C.planRun({ plan: tier, eligible, have: { spx: !!s.macro.spxDesc, treasury: !!s.macro.treasuryDesc, universe: false }, nonStock: RANKED, etfs: [],
+remaining: (remainingOverride !== undefined ? remainingOverride : cl ? cl.budget.remaining() : 250) + cached, cap: withCached(capOverride !== undefined ? capOverride : runCapNow(false), cached) });
+return cached ? Object.assign({}, pr, { cost: Math.max(0, pr.cost - cached), fullCost: pr.cost, cached }) : pr;
 }
 // motivo verdadero: el número es el del plan que no cupo (el mismo que muestra el botón)
 function fitReason(pr, remaining, cap) {
@@ -3587,16 +3733,26 @@ return !s.macro.spxDesc || stripBad * 2 >= STRIP.length || bad(s.plan.error);
 }
 function maybeAutoRun() {
 const s = App.state;
-if (s.mode !== "live" || !App.client || hasTodayRun()) { renderRanking(); return; }
+if (s.mode !== "live" || !App.client || hasTodayRun() || s.run.status === "running") { renderRanking(); return; }
+// otra pestaña de este navegador tiene el candado: si responde, se espera; si no (recarga, cierre), se retoma aquí
+const l = lockGet();
+if (lockLive(l)) {
+s.localOther = { state: "tab" }; renderRanking();
+tabAlive(l).then(alive => { if (alive) { watchLock(); return; } lockMark(l, "interrumpida"); s.localOther = null; maybeAutoRun(); });
+return;
+}
+s.localOther = null;
 const tier = App.client.plan(), today = todayET(), b = App.client.budget.get();
+// reanudación automática: excepción a "una automática por día", con tope de RESUME_MAX al día (corrección de producción)
+const resume = interruptedHere() && !b.suspect && RC.status().resumes < CFG.RESUME_MAX;
 let attempted;
 if (Sync.active || s.syncLoaded === false && Sync.status === "degraded") {
 // con sync (07 §5.5); el reclamo va en runAnalysis
 if (!s.syncLoaded) { renderRanking(); return; }
 const r = s.syncRun;
-if (r && r.dateET === today) { setOther(otherFrom(r)); renderRanking(); return; }
+if (!resume && r && r.dateET === today) { setOther(otherFrom(r)); renderRanking(); return; }
 attempted = b.suspect;
-} else attempted = (b.byCat.corrida || 0) > 0 || runMarkedToday() || b.suspect; // rondas 1–2 + sospecha de límite (07 §E5)
+} else attempted = !resume && ((b.byCat.corrida || 0) > 0 || runMarkedToday() || b.suspect); // rondas 1–2 + sospecha de límite (07 §E5)
 const wants = tier === "FREE" ? CFG.AUTO_RUN_FREE && storageWorks() && !attempted : !b.suspect;
 if (!wants || !runGuard(true).ok) { renderRanking(); return; }
 if (s.shapeErrors >= 3) { formatNotice(); renderRanking(); return; }
@@ -3604,16 +3760,17 @@ if (fmpDownAtBoot()) {
 s.run = Object.assign({}, s.run, { status: "blocked", message: "FMP no respondió al abrir. No se lanzó la corrida automática para no gastar tu límite; córrela cuando FMP responda." });
 renderRanking(); return;
 }
-runAnalysis({ auto: true });
+runAnalysis({ auto: true, resume });
 }
 // Marca "corrida lanzada hoy" (N3)
 const runMarkedToday = () => App.client.budget.get().ranToday;
 function localAutoOk() { const b = App.client.budget.get(); return storageWorks() && !(b.byCat.corrida > 0) && !b.ranToday && !b.suspect; }
-// Corrida de otro dispositivo (07 §5.4): "running" vence a los RUN_STALE_MIN; error o abortada → se ofrece aquí (MEDIO E8)
+// Corrida de otro dispositivo (07 §5.4): "running" vence sin latido en 75 s (o a los RUN_STALE_MIN); error o abortada → se ofrece aquí
 function otherFrom(r) {
-if (!r || r.dateET !== todayET() || r.state === "done" || r.state === "partial") return null;
-const until = r.startedAt + CFG.SYNC.RUN_STALE_MIN * 60000;
-return r.state === "running" && App.now() < until ? { state: "running", until } : { state: "failed" };
+if (!r || r.dateET !== todayET() || r.state === "done" || r.state === "partial" || (Sync.dev && r.dev === Sync.dev)) return null; // la propia la ve el candado local
+if (!C.runAlive(r, App.now())) return { state: "failed" };
+const until = Math.min(r.startedAt + CFG.SYNC.RUN_STALE_MIN * 60000, (isNum(r.beatAt) ? r.beatAt : r.startedAt) + STALE); // sin latido en 75 s: interrumpida
+return { state: "running", until };
 }
 let otherT = null;
 function setOther(o) {
@@ -3636,13 +3793,14 @@ renderRanking();
 }
 // Una sola fuente para botón, motivo y texto vacío (07 §E2, N11)
 function runExplain(auto) {
-const s = App.state, cl = App.client, verb = hasTodayRun() ? "Volver a correr" : "Correr análisis";
-if (s.run.status === "running") return { label: "Analizando…", enabled: false, reason: RUNNING_TXT, empty: RUNNING_TXT }; // la etapa va en #progreso
+const s = App.state, cl = App.client, verb = hasTodayRun() ? "Volver a correr" : s.mode === "live" && RC.status().entries > 0 ? "Reanudar análisis" : "Correr análisis";
+if (s.run.status === "running") { const t = runningText(); return { label: "Analizando…", enabled: false, reason: t, empty: t }; } // la etapa va en #progreso
 if (s.mode === "example") return { label: "Correr análisis de ejemplo", enabled: true, reason: "", empty: "Datos de ejemplo: corre el análisis de ejemplo." };
 if (s.mode !== "live" || !cl) return { label: "Correr análisis", enabled: false, reason: "Conectando con FMP…", empty: "Conectando con FMP…" };
 const g = runGuard(auto), cost = g.plan && Number.isInteger(g.plan.cost) && g.plan.cost > 0 ? g.plan.cost : null;
 const label = g.limit ? "Límite diario agotado" : cost ? `${verb} (≈ ${cost} llamadas)` : verb;
 const other = s.syncOther && s.syncOther.state;
+if (s.localOther) { const t = s.localOther.state === "resume" ? RESUME_WAIT : TAB_RUNNING; return { label, enabled: false, reason: t, empty: t }; } // nunca "otro dispositivo" si es este
 if (other === "running") return { label, enabled: false, reason: OTHER_RUNNING, empty: OTHER_RUNNING };
 if (!g.ok) { const why = (other === "failed" ? "La corrida de hoy no terminó en el otro dispositivo. " : "") + g.reason; return { label, enabled: false, reason: why, empty: why }; } // E8: lo dice aunque no quepa
 const rem = cl.budget.remaining();
@@ -3653,40 +3811,56 @@ const why = other === "failed" ? `La corrida de hoy no terminó en el otro dispo
 return { label, enabled: true, reason: why, empty: (why ? why + " " : "Aún no hay análisis de hoy. ") + uses };
 }
 async function runAnalysis(opts) {
-const s = App.state, auto = !!(opts && opts.auto);
+const s = App.state, auto = !!(opts && opts.auto), resume = !!(opts && opts.resume);
 if (s.run.status === "running") return; // ráfaga de clics: la primera ya marcó "running" (ALTO E2)
 const g = runGuard(auto);
 if (!g.ok) { s.run.message = g.reason; renderRanking(); return; }
 const prev = s.run, ac = new AbortController(), dayET = auto ? App.bootDay : todayET(); // BAJO N6: la automática es del día ET en que se abrió la página; la manual, del día del clic
-const claiming = s.mode === "live" && Sync.active;
+const live = s.mode === "live";
 // "running" en el mismo tick del clic, antes de cualquier await (ALTO E2)
-s.run = { status: "running", stage: claiming ? "claim" : "universe", stageLabel: claiming ? "Reservando la corrida…" : "1/4 · Universo", done: 0, total: g.plan.cost, plan: g.plan, startedAt: App.now(), finishedAt: null, abort: ac, message: null, auto, cap: runCapNow(auto), outage: null, cut: null,
-runId: null, dayET, claiming };
+s.run = { status: "running", stage: "claim", stageLabel: "Reservando la corrida…", done: 0, total: g.plan.fullCost || g.plan.cost, plan: g.plan, startedAt: App.now(), t0: Date.now(), net: 0, finishedAt: null, abort: ac, message: null, auto, cap: withCached(runCapNow(auto), live ? RC.status().entries : 0), outage: null, cut: null,
+runId: null, dayET, claiming: live, resumed: false, cachedAtStart: 0 };
 renderRunControls();
-let runId = null, unlocked = false; // reclamo entre dispositivos (07 §5.4)
-if (claiming) {
-const cl = await Sync.claimRun({ dayET, plan: App.client.plan(), auto });
 const back = () => { s.run = prev; renderRunControls(); };
+let runId = null, unlocked = false, takeover = false;
+if (live) { // 1) candado del navegador (pestañas); 2) reclamo entre dispositivos (07 §5.4)
+const lk = await lockClaim();
+if (!lk.ok) { back(); s.localOther = { state: "tab" }; watchLock(); renderRanking(); return; }
+takeover = lk.takeover || !!(opts && opts.takeover);
+if (Sync.active) {
+const cl = await Sync.claimRun({ dayET, plan: App.client.plan(), auto, resume: resume || takeover, takeover });
 if (cl.ok) runId = cl.runId;
-else if (cl.reason === "error" && !Sync.active) { if (auto && !localAutoOk()) { back(); renderRanking(); return; } } // sync se apagó: ruta del almacenamiento local
+else if (cl.reason === "error" && !Sync.active) { if (auto && !resume && !localAutoOk()) { lockDrop(); back(); renderRanking(); return; } } // sync se apagó: ruta del almacenamiento local
 else if (cl.reason === "error" && !auto) unlocked = true; // la manual corre igual, sin candado
-else { back(); onClaimRefused(cl, auto); return; }
+else if (cl.reason === "busy" && takeover) { // el arrendamiento es todavía de la pestaña de este navegador que se cerró
+lockDrop(); back(); s.localOther = { state: "resume" }; renderRanking();
+const at = Date.parse(cl.expiresAt);
+App.timer(() => { if (App.state.localOther && App.state.localOther.state === "resume") { App.state.localOther = null; runAnalysis({ auto, resume: true, takeover: true }); } }, (isNum(at) ? at - App.now() : CFG.SYNC.RUN_LEASE_MS) + 1000);
+return;
 }
-const startUsed = s.mode === "live" ? App.client.budget.get().byCat.corrida || 0 : 0; // solo llamadas de la corrida
-Object.assign(s.run, { stage: "universe", stageLabel: "1/4 · Universo", claiming: false, runId, message: unlocked ? "Corriendo sin candado entre dispositivos." : null });
-if (s.mode === "live") App.client.budget.markRun();
+else { lockDrop(); back(); onClaimRefused(cl, auto); return; }
+}
+}
+const rcb = live ? RC.begin({ autoResume: auto && resume }) : { resumed: false, entries: 0 };
+const startUsed = live ? App.client.budget.get().byCat.corrida || 0 : 0; // solo llamadas de la corrida
+Object.assign(s.run, { stage: "universe", stageLabel: "1/4 · Universo", claiming: false, runId, resumed: rcb.resumed || takeover, cachedAtStart: rcb.entries, message: unlocked ? "Corriendo sin candado entre dispositivos." : null });
+s.localOther = null;
+if (live) { App.client.budget.markRun(); runBeat(); wakeOn(); }
 s.sections.ranking.err = null;
 if (s.sections.ranking.state === "blocked") s.sections.ranking.state = "loading";
 renderAll();
 try {
 const tier = App.client.plan();
 const out = tier === "FREE" || tier === "EXAMPLE" ? await runFree(ac, startUsed, []) : await runPaid(ac, startUsed);
+if (s.run.handoff) { finishRun("idle", "El análisis siguió en otra ventana de este dispositivo."); return; }
 if (s.run.outage) { outageRun(); return; }
 if (!out) { syncFinish("error"); return; }
 if (!out.rows.length) { finishRun("error", s.run.cut ? `La corrida se cortó (${s.run.cut}) antes de tener resultados; no se guardó nada.` : "La corrida no produjo resultados; no se guardó nada."); syncFinish("error"); return; }
 s.result = out; s.resultSource = s.mode === "example" ? "example" : "run"; s.resultSavedAt = App.now();
 saveDay(out, s.run.dayET);
-if (s.mode === "live" && Sync.active && runId) await Sync.saveDay(out, s.run.dayET, runId);
+if (live && Sync.active && runId) await Sync.saveDay(out, s.run.dayET, runId);
+// la tanda de respuestas queda para retomar si se cortó por límite o el usuario la detuvo; si no, se cierra
+if (live) { if (s.run.cut === "detenida") RC.hold(); else if (!["límite", "posible límite"].includes(s.run.cut)) RC.close(); }
 finishRun(out.partial ? "partial" : "done", null);
 syncFinish(out.partial ? "partial" : "done", out.partialReason);
 if (["PREMIUM", "ULTIMATE"].includes(out.plan)) watchRankingPrices();
@@ -3694,11 +3868,44 @@ if (s.ui.selected && !out.rows.some(r => r.symbol === s.ui.selected) && !out.res
 renderAll();
 } catch (raw) {
 const e = D.classifyError(raw);
+if (s.run.handoff) { finishRun("idle", "El análisis siguió en otra ventana de este dispositivo."); return; }
 if (s.run.outage) { outageRun(); return; }
 finishRun("error", errText(e));
 if (e.kind !== "cancelled") handleError("ranking", e);
 syncFinish("error", e.kind);
 }
+}
+// Latido (cada BEAT_MS mientras corre): candado local y `corrida.beatAt`. Si otra pestaña o dispositivo tomó la corrida
+// (por ejemplo, tras marcarla interrumpida al ocultarse esta), esta se retira sin guardar nada.
+let beatT = null;
+function runBeat() {
+clearTimeout(beatT); beatT = null;
+const s = App.state, run = s.run;
+if (run.status !== "running" || s.mode !== "live") return;
+const l = lockGet();
+if (l && !lockMine(l) && l.state === "running") { handoff(); return; }
+store.set("runlock", { holder: TAB, dateET: run.dayET || todayET(), beatAt: Date.now(), state: "running" });
+if (run.runId) Sync.beat(run.runId).then(ok => { if (!ok && Sync.active && s.run === run && run.status === "running") handoff(); });
+beatT = App.timer(runBeat, CFG.SYNC.BEAT_MS);
+}
+function handoff() { const s = App.state; if (s.run.abort) { s.run.handoff = true; s.run.abort.abort(); } }
+// Pantalla despierta durante la corrida (se tolera el rechazo)
+let wake = null;
+function wakeOn() { try { const w = root.navigator && root.navigator.wakeLock; if (w && !wake && !doc.hidden) w.request("screen").then(x => { wake = x; if (App.state.run.status !== "running") wakeOff(); }, () => {}); } catch (e) { /* sin wake lock */ } }
+function wakeOff() { const w = wake; wake = null; if (w) { try { w.release().catch(() => {}); } catch (e) { /* ya liberado */ } } }
+// al ocultarse o cerrarse con la corrida en curso: se marca interrumpida (best effort) para que otra pestaña o la recarga la retome
+function markInterrupted() {
+const s = App.state;
+if (!s || s.run.status !== "running" || s.mode !== "live") return;
+const l = lockGet(); if (lockMine(l)) lockMark(l, "interrumpida");
+if (s.run.runId) { Sync.finishRun({ runId: s.run.runId, state: "interrumpida", reason: "pantalla" }); Sync.flush(); }
+}
+// otra pestaña tiene el candado: se vuelve a mirar cuando cambie o venza
+let lockT = null;
+function watchLock() {
+clearTimeout(lockT);
+const l = lockGet(); if (!l || lockMine(l)) return;
+lockT = setTimeout(() => { if (App.state.localOther) { App.state.localOther = null; maybeAutoRun(); } }, Math.max(1000, l.beatAt + STALE - Date.now() + 500));
 }
 function syncFinish(state, reason) { const s = App.state; if (s.mode === "live" && s.run.runId) { Sync.finishRun({ runId: s.run.runId, state, reason: reason || null }); Sync.flush(); } }
 // Corte por fallas (ronda 2): no se guarda nada parcial.
@@ -3712,6 +3919,7 @@ syncFinish("error", "fallas");
 function finishRun(status, message) {
 const s = App.state;
 s.run.status = status; s.run.message = message; s.run.finishedAt = App.now(); s.run.abort = null;
+clearTimeout(beatT); beatT = null; wakeOff(); if (s.mode === "live") lockDrop();
 refreshSectionState("ranking");
 renderAll(); evaluateLive();
 }
@@ -3725,7 +3933,7 @@ const OUTAGE_CODES = new Set(["server_unavailable", "upstream_error"]);
 function runCtx(ac) {
 const s = App.state, today = todayET(), cl = App.client, opt = { section: "ranking", cat: "corrida", signal: ac.signal };
 let streak = 0, anyOk = false, issued = 0, okSeq = 0, rejSeqs = [];
-const okKeys = new Set(), tally = { calls: 0, rejected: 0 };
+const okKeys = new Set(), tally = { calls: 0, rejected: 0, cached: 0 }, useRC = s.mode === "live";
 const cut = why => { if (!s.run.cut && !s.run.outage) s.run.cut = why; }; // la cola se detiene; lo que ya está en vuelo termina
 // Racha de E5 en orden de emisión: un éxito borra los rechazos emitidos antes que él (D-E-9)
 const answered = seq => { if (seq > okSeq) { okSeq = seq; rejSeqs = rejSeqs.filter(f => f > seq); } };
@@ -3734,9 +3942,12 @@ const suspicious = seq => {
 if (seq > okSeq) rejSeqs.push(seq);
 if (rejSeqs.length >= CFG.SUSPECT_STREAK && anyOk && !s.run.outage && !s.run.cut) { if (s.mode === "live") cl.budget.markSuspect(); cut("posible límite"); }
 };
-const call = (key, args) => { const seq = ++issued; return cl.call(key, args, opt).then(v => {
-tally.calls++; streak = 0;
-if (Array.isArray(v) && !v.length) suspicious(seq); else { answered(seq); anyOk = true; okKeys.add(key); }
+// lo ya traído hoy por una corrida que no terminó sale de la caché: 0 llamadas, no cuenta (corrección de producción)
+const call = (key, args) => { const seq = ++issued, id = cl.identity(key, args); return (useRC ? RC.get(id) : Promise.resolve(null)).then(hit => {
+if (hit) { tally.cached++; answered(seq); anyOk = true; okKeys.add(key); return hit; }
+return cl.call(key, args, opt).then(v => {
+tally.calls++; streak = 0; s.run.net++;
+if (Array.isArray(v) && !v.length) suspicious(seq); else { answered(seq); anyOk = true; okKeys.add(key); if (useRC) RC.put(id, v); }
 return v;
 }, raw => {
 const e = D.classifyError(raw);
@@ -3747,7 +3958,7 @@ if (failed || e.kind === "unexpected_shape") { tally.rejected++; suspicious(seq)
 if (!down && !rejected) streak = 0;
 else if (++streak >= CFG.OUTAGE_STREAK && !s.run.outage && !s.run.cut) { s.run.outage = down ? "down" : "rejected"; ac.abort(); }
 throw e;
-}); };
+}); }); };
 return {
 s, cl, call, cut, tally, sig: ac.signal, today, from: C.addDays(today, -CFG.HIST_DAYS),
 live: () => !s.run.cut && !s.run.outage,
@@ -3777,10 +3988,11 @@ if (s.run.outage) return null;
 const uni = C.filterFloatUniverse(floatRows, { nowMs, etfList: s.mode === "example" ? [] : C.ETF_FREE.slice() });
 if (!uni.stocks.length) notes = notes.concat([uniFailed ? "No se pudo obtener la muestra de acciones de FMP; el ranking incluye solo materias primas, cripto, divisas e índices." : "FMP no devolvió acciones en la muestra de hoy; el ranking incluye solo materias primas, cripto, divisas e índices."]);
 // R2 plan exacto; la automática descuenta todo lo gastado hoy (MEDIO 3)
-const b = cl.budget.get(), spent = s.mode === "live" ? (b.byCat.corrida || 0) - startUsed : 0;
-const cap = s.mode !== "live" ? Infinity : s.run.auto ? Math.min(s.run.cap - spent, CFG.COLD_CAP_FREE - b.used) : s.run.cap - spent;
+const extra = Math.max(0, (s.run.cachedAtStart || 0) - rc.tally.cached); // lo de la caché que aún no se leyó no cuesta
+const b = cl.budget.get(), spent = s.mode === "live" ? (b.byCat.corrida || 0) - startUsed + rc.tally.cached : 0; // lo leído de la caché ocupa plan como lo gastado
+const cap = s.mode !== "live" ? Infinity : s.run.auto ? Math.min(s.run.cap - spent, CFG.COLD_CAP_FREE - b.used + extra) : s.run.cap - spent;
 const planIn = { plan: cl.plan(), eligible: uni.stocks.length, have: { spx: !!s.macro.spxDesc, treasury: !!s.macro.treasuryDesc, universe: true }, nonStock: RANKED, etfs: uni.etfs };
-const pr = C.planRun(Object.assign({ remaining: cl.budget.remaining(), cap }, planIn));
+const pr = C.planRun(Object.assign({ remaining: cl.budget.remaining() + extra, cap }, planIn));
 if (!pr.fits) { finishRun("blocked", fitReason(pr, cl.budget.remaining(), cap)); return null; }
 s.run.plan = pr; s.run.total = s.run.done + pr.cost - pr.calls.universe;
 // MEDIO 5: cribado recortado → las de mayor flotante
@@ -3964,6 +4176,8 @@ if (txt.textContent !== s.run.stageLabel) txt.textContent = s.run.stageLabel || 
 let num = $(".prog-num", el);
 if (!num) { num = h("span", { class: "prog-num", "aria-hidden": "true" }); el.append(num); }
 num.textContent = `${done}/${total}`;
+const mot = $("#correr-motivo"), t = runningText(); // el aviso de pantalla y sus minutos siguen el avance
+if (mot && mot.textContent !== t) { mot.textContent = t; if (!s.result) renderVacio({ empty: t }); }
 }
 function renderRankingSub() {
 const s = App.state, el = $("#ranking-sub"), r = s.result;
@@ -4514,6 +4728,7 @@ initState();
 applyTheme();
 bindEvents();
 root.RadarApp = Object.freeze({ get state() { return App.state; }, version: "1" });
+RC.purge(); // respuestas de corridas de días anteriores fuera
 try { paintFromCaches(); tickClock(true); renderAll(); } // A1
 catch (e) { // caché que no se puede pintar: se descarta
 if (root.console) root.console.error("[radar] caché local descartada", e);
@@ -4543,7 +4758,7 @@ const within = (p, ms) => Promise.race([Promise.resolve(p).catch(() => null), ne
 async function initSync() {
 const [db, user] = await Promise.all([within(root.claude.use("db"), 10500), within(root.claude.use("user"), 10500)]);
 const uid = user ? await within(user.id(), 10500) : null;
-Sync = D.createSync({ db, uid, dev: db && uid ? deviceId() : null, now: App.now, storage: store, timer: App.timer });
+Sync = D.createSync({ db, uid, dev: db && uid ? await settledDeviceId() : null, now: App.now, storage: store, timer: App.timer });
 }
 // A2b: lo de `db` gana si es más nuevo; se copia al almacenamiento local (espejo)
 function applySynced(L) {
@@ -4589,7 +4804,8 @@ s.syncLoaded = L.ok;
 if (L.ok) applySynced(L);
 const cached = store.get("plan");
 const tier0 = cached && cached.dateET === todayET() && CFG.K[cached.tier] && cached.tier !== "EXAMPLE" ? cached.tier : "FREE";
-App.client = D.create({ mcp, storage: store, now: App.now, plan: tier0, onBudget });
+const locks = (() => { try { const l = root.navigator && root.navigator.locks; return l && typeof l.request === "function" ? l : null; } catch (e) { return null; } })();
+App.client = D.create({ mcp, storage: store, now: App.now, plan: tier0, onBudget, locks }); // locks: contador sin pérdidas entre pestañas
 if (L.ok) {
 App.client.budget.setRemote(L.counters);
 Sync.subscribe(todayET(), {
@@ -4650,7 +4866,23 @@ $("#btn-permisos").addEventListener("click", openPermissions);
 $("#resto").addEventListener("toggle", ev => { App.state.ui.showRest = ev.target.open; savePrefs(); });
 $("#btn-junk").addEventListener("click", () => { App.state.breadth.showAll = !App.state.breadth.showAll; renderBreadth(); });
 $("#btn-actualizar-mercado").addEventListener("click", refreshBreadth);
-doc.addEventListener("visibilitychange", () => { if (!doc.hidden) { tickClock(false); evaluateLive(); } });
+doc.addEventListener("visibilitychange", () => {
+if (doc.hidden) { markInterrupted(); return; } // best effort: si el sistema la congela, otra pestaña o la recarga la retoman
+tickClock(false); evaluateLive();
+if (App.state.run.status === "running") { runBeat(); wakeOn(); } // de vuelta: latido (vuelve a "running") y pantalla despierta
+});
+root.addEventListener("pagehide", markInterrupted);
+// otra pestaña de este navegador: soltó el candado o guardó el análisis del día
+root.addEventListener("storage", e => {
+const s = App.state, k = String(e.key || "");
+if (!s || s.mode !== "live" || !k.startsWith(CFG.LS_PREFIX)) return;
+if (k.startsWith(CFG.LS_PREFIX + "day." + todayET() + ".") && s.run.status !== "running" && !hasTodayRun()) {
+const v = store.get(k.slice(CFG.LS_PREFIX.length));
+if (v && validOutput(v.output) && isNum(v.savedAt)) { Object.assign(s, { result: v.output, resultSource: "cache", resultSavedAt: v.savedAt, localOther: null }); renderAll(); return; }
+}
+if (k === CFG.LS_PREFIX + "runlock" && s.localOther && !lockLive(lockGet())) { s.localOther = null; maybeAutoRun(); }
+if (k === CFG.LS_PREFIX + "budget" && App.client) onBudget(App.client.budget.get()); // lo que gastó la otra pestaña
+});
 }
 
 const start = () => boot().catch(e => { // nunca quedarse en "Conectando…"
