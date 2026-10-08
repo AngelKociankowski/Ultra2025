@@ -465,6 +465,7 @@ LS_PREFIX: "radar.v1.",
 PLAN_DAILY_LIMIT: { FREE: 250, STARTER: Infinity, PREMIUM: Infinity, ULTIMATE: Infinity, EXAMPLE: Infinity },
 PLAN_PER_MIN: { FREE: 250, STARTER: 250, PREMIUM: 700, ULTIMATE: 2500, EXAMPLE: Infinity }, // no verificado (pagados)
 RESERVE_CALLS: 10,
+OUTAGE_STREAK: 3, // corte de la corrida: errores reintentables seguidos (director, ronda 2)
 STAGE1_MIN_FREE: 77, // cribado recortable solo sobre la muestra Free nominal
 RUN_CAP_FREE: 193,
 COLD_CAP_FREE: 215,
@@ -2051,6 +2052,7 @@ if (v && typeof v === "object") return "{" + Object.keys(v).sort().map(k => JSON
 return JSON.stringify(v);
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const count = v => Number.isInteger(v) && v >= 0; // conteo válido de la caché
 
 // Único acceso al almacenamiento. Nunca lanza.
 function makeStorage(ls) {
@@ -2166,32 +2168,45 @@ let tier = plan;
 let bucket = makeBucket({ perMin: CFG.PLAN_PER_MIN[tier], now: clock });
 const gate = makeGate(Math.max(1, concurrency));
 const lastCounted = new Map(), lastSeen = new Map();
+// N1: llamadas con caché en vuelo por identidad. El shell entrega su resultado también a los watches de esa identidad,
+// a veces antes de resolver la llamada: esa entrega es la MISMA ejecución y la cuenta la llamada, no el watch.
+const inCall = new Map();
+const callBusy = id => (inCall.get(id) || 0) > 0;
+const recentOf = (id, t) => lastCounted.has(id) && t - lastCounted.get(id) < 5000; // la llamada ya contó esta ejecución
 const persist = () => tier !== "EXAMPLE";
 const limitOf = () => CFG.PLAN_DAILY_LIMIT[tier];
 const emptyCats = () => Object.fromEntries(CATS.map(c => [c, 0]));
 
+// runDay: marca "corrida lanzada hoy (fecha ET)", aparte del contador: no la borran reset() ni el cambio de día (director, ronda 2)
+const fresh = (today, runDay) => ({ dateET: today, used: 0, limit: limitOf(), limitHit: false, byCat: emptyCats(), runDay });
 let st = load();
 function load() {
 const today = C.etParts(clock()).date;
 const v = persist() ? store.get("budget") : null;
-if (v && v.dateET === today) return { dateET: today, used: Number(v.used) || 0, limit: limitOf(), limitHit: !!v.limitHit, byCat: Object.assign(emptyCats(), v.byCat || {}) };
-return { dateET: today, used: 0, limit: limitOf(), limitHit: false, byCat: emptyCats() };
+const runDay = v && typeof v.runDay === "string" ? v.runDay : null;
+if (v && v.dateET === today) {
+const byCat = emptyCats();
+for (const c of CATS) if (v.byCat && count(v.byCat[c])) byCat[c] = v.byCat[c];
+return { dateET: today, used: count(v.used) ? v.used : 0, limit: limitOf(), limitHit: !!v.limitHit, byCat, runDay };
+}
+return fresh(today, runDay);
 }
 function save() {
-if (persist()) store.set("budget", { dateET: st.dateET, used: st.used, limit: isFinite(st.limit) ? st.limit : null, limitHit: st.limitHit, byCat: st.byCat });
+if (persist()) store.set("budget", { dateET: st.dateET, used: st.used, limit: isFinite(st.limit) ? st.limit : null, limitHit: st.limitHit, byCat: st.byCat, runDay: st.runDay });
 if (onBudget) { try { onBudget(budget.get()); } catch (e) { /* el observador no debe romper la capa de datos */ } }
 }
 function roll() {
 const today = C.etParts(clock()).date;
-if (today !== st.dateET) { st = { dateET: today, used: 0, limit: limitOf(), limitHit: false, byCat: emptyCats() }; save(); }
+if (today !== st.dateET) { st = fresh(today, st.runDay); save(); }
 st.limit = limitOf();
 }
 const budget = {
-get() { roll(); return { dateET: st.dateET, used: st.used, limit: st.limit, limitHit: st.limitHit, byCat: Object.assign({}, st.byCat) }; },
+get() { roll(); return { dateET: st.dateET, used: st.used, limit: st.limit, limitHit: st.limitHit, byCat: Object.assign({}, st.byCat), ranToday: st.runDay === st.dateET }; },
 remaining() { roll(); return st.limitHit ? 0 : st.limit - st.used; },
 note(n, cat) { roll(); st.used += n; const c = CATS.includes(cat) ? cat : "manual"; st.byCat[c] = (st.byCat[c] || 0) + n; save(); },
 markLimitHit() { roll(); if (isFinite(st.limit)) st.used = Math.max(st.used, st.limit); st.limitHit = true; save(); },
-reset() { st = { dateET: C.etParts(clock()).date, used: 0, limit: limitOf(), limitHit: false, byCat: emptyCats() }; save(); },
+reset() { st = fresh(C.etParts(clock()).date, st.runDay); save(); },
+markRun() { roll(); st.runDay = st.dateET; save(); },
 };
 const log = r => { if (onLog) { try { onLog(Object.assign({ t: clock() }, r)); } catch (e) { /* idem */ } } };
 
@@ -2207,6 +2222,8 @@ if (o.signal && o.signal.aborted) throw C.makeError("cancelled", "cancelled", { 
 let w; while ((w = bucket.take()) > 0) await sleep(Math.min(w, 250)); // sondeo corto: el reloj inyectado puede ir más rápido
 const release = await gate.acquire();
 let res;
+const feeds = cache !== false; // solo las llamadas con caché alimentan a los watches
+if (feeds) inCall.set(id, (inCall.get(id) || 0) + 1);
 try {
 if (o.signal && o.signal.aborted) throw { code: "cancelled", message: "cancelled" };
 const opts = { cache }; if (o.signal) opts.signal = o.signal;
@@ -2218,11 +2235,13 @@ const e = Object.assign({}, classifyError(raw), { section: o.section });
 if (COUNTED.has(e.code)) { budget.note(1, cat); lastCounted.set(id, clock()); }
 if (e.kind === "limit_reached") budget.markLimitHit();
 log({ key, cat, section: o.section, ok: false, code: e.code, kind: e.kind });
+if (feeds) inCall.set(id, inCall.get(id) - 1);
 if (e.retryable && !o.noRetry && attempt === 0) { await sleep(Math.min(60000, isNum(e.retryAfterMs) ? e.retryAfterMs : 500 + Math.random() * 1000)); continue; }
 throw e;
 }
 const cached = !!(res && res.cache);
 if (!cached) { budget.note(1, cat); lastCounted.set(id, clock()); lastSeen.set(id, clock()); }
+if (feeds) inCall.set(id, inCall.get(id) - 1); // ya contada: una entrega posterior al watch cae en `recent`
 log({ key, cat, section: o.section, ok: true, cached });
 const pe = classifyPayload(res ? res.payload : undefined);
 if (pe) { if (pe.kind === "limit_reached") budget.markLimitHit(); throw Object.assign(pe, { section: o.section }); }
@@ -2253,9 +2272,8 @@ free();
 if (!active || !ev) return;
 if (ev.type === "data") {
 const res = ev.result || {}, mark = res.cache, t = clock();
-const recent = lastCounted.has(id) && t - lastCounted.get(id) < 5000;
 const newer = mark && isNum(mark.storedAt) && mark.storedAt > bornAt && mark.storedAt > (lastSeen.get(id) || 0) + 1000;
-if ((!mark || newer) && !recent) { budget.note(1, cat); lastCounted.set(id, t); }
+if ((!mark || newer) && !recentOf(id, t) && !callBusy(id)) { budget.note(1, cat); lastCounted.set(id, t); }
 lastSeen.set(id, Math.max(lastSeen.get(id) || 0, mark && isNum(mark.storedAt) ? mark.storedAt : t));
 log({ key, cat, section: o.section, ok: true, cached: !!mark, watch: true });
 const pe = classifyPayload(res.payload);
@@ -2265,7 +2283,7 @@ try { rows = C.asArray(res.payload); } catch (err) { emit({ type: "error", error
 emit({ type: "data", rows, storedAt: mark && isNum(mark.storedAt) ? mark.storedAt : t, fresh: !mark });
 } else if (ev.type === "error") {
 const e = Object.assign({}, classifyError(ev.error), { section: o.section });
-if (COUNTED.has(e.code)) budget.note(1, cat); // misma regla que call() (S3)
+if (COUNTED.has(e.code) && !callBusy(id) && !recentOf(id, clock())) budget.note(1, cat); // misma regla que call() (S3); la llamada en vuelo cuenta su propio fallo
 if (e.kind === "limit_reached") budget.markLimitHit();
 log({ key, cat, section: o.section, ok: false, code: e.code, kind: e.kind, watch: true });
 emit({ type: "error", error: e });
@@ -2361,7 +2379,7 @@ if (!doc || !C || !D || !Syn) return;
 const App = {
 now: () => (typeof root.__RADAR_NOW__ === "function" ? root.__RADAR_NOW__() : Date.now()),
 timer: (fn, ms) => setTimeout(fn, Math.max(0, ms) / (Number(root.__RADAR_TIMESCALE__) || 1)),
-state: null, client: null, perm: null, pageAbort: new AbortController(),
+state: null, client: null, perm: null, pageAbort: new AbortController(), bootDay: null,
 };
 const pageSig = () => App.pageAbort.signal; // stopAll() la aborta tras un error de página
 function browserStore() { try { return root.localStorage; } catch (e) { return null; } }
@@ -2382,6 +2400,7 @@ const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "
 const PLAN_NAME = { FREE: "Free", STARTER: "Starter", PREMIUM: "Premium", ULTIMATE: "Ultimate", EXAMPLE: "Ejemplo" };
 const CAT_NAME = { sonda: "Detección de plan", arranque: "Arranque", franja: "Franja en vivo", mercado: "Mercado completo", macro: "Régimen macro", corrida: "Corrida de análisis", detalle: "Detalle", manual: "Manual" };
 const TRANSIENT_FINAL = "FMP no respondió; se reintentará en el próximo refresco.";
+const OUTAGE_TEXT = "FMP falló 3 veces seguidas (servicio no disponible). Se detuvo la corrida para no gastar tu límite y no se guardó nada; vuelve a correrla cuando FMP responda.";
 
 // DOM: nodos y textContent, nunca HTML en cadenas
 const $ = (sel, r) => (r || doc).querySelector(sel);
@@ -2459,9 +2478,9 @@ macro: { spxDesc: s.macro.spxDesc, treasuryDesc: s.macro.treasuryDesc, storedAt:
 };
 if (!store.set("live", val)) { val.macro = Object.assign({}, val.macro, { spxDesc: null }); store.set("live", val); }
 }
-function saveDay(out) {
+function saveDay(out, dateET) {
 if (!persistOk()) return;
-const key = `day.${todayET()}.${out.plan}`;
+const key = `day.${dateET}.${out.plan}`;
 const savedAt = App.now();
 if (!store.set(key, { savedAt, output: out })) {
 const lean = Object.assign({}, out, { rows: out.rows.map(r => Object.assign({}, r, { series: [] })) });
@@ -2471,6 +2490,7 @@ const live = store.get("live"); if (live && live.macro) { live.macro.spxDesc = n
 store.keys("day.").sort().reverse().slice(2).forEach(k => store.remove(k));
 }
 // Forma completa de AnalysisOutput (§6.2): una caché que no cuadra se borra y la página sigue como sin ella.
+const isCount = v => Number.isInteger(v) && v >= 0;
 const isStr = v => typeof v === "string", numOrNull = v => v === null || isNum(v), isObj = v => !!v && typeof v === "object";
 const arrOf = f => a => Array.isArray(a) && a.every(f), strs = arrOf(isStr);
 const shape = spec => o => isObj(o) && Object.keys(spec).every(k => spec[k](o[k]));
@@ -2486,7 +2506,7 @@ series: arrOf(x => Array.isArray(x) && isNum(x[0]) && isNum(x[1])),
 const validOutput = shape({
 asOf: v => isStr(v) && /^\d{4}-\d{2}-\d{2}$/.test(v), plan: v => !!CFG.K[v], nowMs: isNum, rows: arrOf(validRow), notes: strs,
 excluded: arrOf(shape({ symbol: isStr, reason: isStr })), rest: arrOf(shape({ symbol: isStr, display: isStr, name: isStr, reason: isStr, S1: numOrNull, price: numOrNull, changePct: numOrNull })),
-counts: shape({ eligible: v => v === undefined || isNum(v) }), regime: shape({ state: isStr, label: isStr, weights: arrOf(isNum) }),
+counts: shape(Object.fromEntries(["universe", "eligible", "quoted", "finalists", "ranked", "nonStock"].map(k => [k, v => v === undefined || isCount(v)]))), regime: shape({ state: isStr, label: isStr, weights: arrOf(isNum) }),
 });
 function paintFromCaches() {
 const s = App.state, today = todayET();
@@ -2507,7 +2527,7 @@ for (const ex of ["NASDAQ", "NYSE"]) { const x = b.sectors && b.sectors[ex]; if 
 if (live.macro && Array.isArray(live.macro.spxDesc)) { s.macro.spxDesc = live.macro.spxDesc; s.macro.treasuryDesc = live.macro.treasuryDesc || null; s.macro.storedAt = live.macro.storedAt; }
 }
 const bud = store.get("budget");
-if (bud && bud.dateET === today) Object.assign(s.budget, { dateET: today, used: bud.used, limitHit: !!bud.limitHit, byCat: bud.byCat || {} });
+if (bud && bud.dateET === today) Object.assign(s.budget, { dateET: today, used: isCount(bud.used) ? bud.used : 0, limitHit: !!bud.limitHit, byCat: Object.fromEntries(Object.entries(isObj(bud.byCat) ? bud.byCat : {}).filter(([, v]) => isCount(v))) });
 const year = today.slice(0, 4), hol = store.get("holidays." + year);
 if (hol && Array.isArray(hol.rows)) s.clock.holidays = hol.rows.filter(r => r && isStr(r.date));
 }
@@ -2524,29 +2544,33 @@ if (s.run.status === "running") return true;
 if (hasTodayRun()) return false;
 return !(App.client && (App.client.budget.get().byCat.corrida || 0) > 0);
 }
-// MEDIO 3: 1.ª corrida del día: gastado + corrida ≤ COLD_CAP_FREE
-function runCapNow() {
+// MEDIO 3: solo la corrida AUTOMÁTICA (arranque en frío) cumple gastado + corrida ≤ COLD_CAP_FREE.
+// Una corrida manual usa la guarda del plan (§7.2): lo que queda del límite, con tope 193 (ronda 2, N2).
+function runCapNow(auto) {
 const cl = App.client;
-if (!cl || cl.plan() !== "FREE") return CFG.RUN_CAP_FREE;
-const b = cl.budget.get();
-return (b.byCat.corrida || 0) === 0 ? Math.min(CFG.RUN_CAP_FREE, CFG.COLD_CAP_FREE - b.used) : CFG.RUN_CAP_FREE;
+if (!auto || !cl || cl.plan() !== "FREE") return CFG.RUN_CAP_FREE;
+return Math.min(CFG.RUN_CAP_FREE, CFG.COLD_CAP_FREE - cl.budget.get().used);
 }
-function runCostLeft() {
+// Reserva de la corrida pendiente (Free). Solo se reserva una corrida que de verdad cabe: si no cabe, no bloquea nada.
+// El intervalo de la franja protege la corrida que se lanzaría ahora; una consulta suelta solo se niega si después
+// ya no cabría ni la corrida mínima.
+function runReserve(minimal) {
 const s = App.state;
 if (s.run.status === "running") return Math.max(0, s.run.total - s.run.done);
-return runCostNominal(); // reserva nominal: no se encoge con lo que gasta la franja
+const pr = estPlan();
+if (!pr.fits) return 0;
+return minimal ? estPlan(0, 0).cost : pr.cost;
 }
-const runCostNominal = () => estPlan(Infinity, CFG.RUN_CAP_FREE).cost;
 function estPlan(remainingOverride, capOverride) {
 const s = App.state, cl = App.client, tier = cl ? cl.plan() : "FREE";
 const eligible = (s.result && s.result.counts && s.result.counts.eligible) || (tier === "EXAMPLE" ? 40 : 77);
 return C.planRun({ plan: tier, eligible, have: { spx: !!s.macro.spxDesc, treasury: !!s.macro.treasuryDesc, universe: false }, nonStock: RANKED, etfs: [],
-remaining: remainingOverride !== undefined ? remainingOverride : cl ? cl.budget.remaining() : 250, cap: capOverride !== undefined ? capOverride : runCapNow() });
+remaining: remainingOverride !== undefined ? remainingOverride : cl ? cl.budget.remaining() : 250, cap: capOverride !== undefined ? capOverride : runCapNow(false) });
 }
-// motivo verdadero: límite diario o tope de la corrida
-function fitReason(pr, need, remaining, cap) {
-if (pr.cost > remaining) return `Te quedan ≈ ${Math.max(0, remaining)} llamadas hoy y la corrida necesita ≈ ${need}. FMP reinicia el límite mañana.`;
-return `El tope de la corrida de hoy es ≈ ${Math.max(0, cap)} llamadas para cuidar tu límite diario y la corrida necesita al menos ≈ ${pr.cost}.`;
+// motivo verdadero: el número es el del plan que no cupo (el mismo que muestra el botón)
+function fitReason(pr, remaining, cap) {
+if (pr.cost > remaining) return `Te quedan ≈ ${Math.max(0, remaining)} llamadas hoy y la corrida necesita al menos ≈ ${pr.cost}. FMP reinicia el límite mañana.`;
+return `La corrida automática se limita a ≈ ${Math.max(0, cap)} llamadas (arranque + corrida ≤ ${CFG.COLD_CAP_FREE}) y necesita al menos ≈ ${pr.cost}; puedes correrla a mano.`; // solo la automática tiene un tope menor
 }
 function canAutoNow(cost) {
 const s = App.state;
@@ -2555,7 +2579,7 @@ if (s.mode !== "live" || !App.client || s.stopped) return false;
 const cl = App.client, b = cl.budget.get();
 if (b.limitHit) return false;
 if (cl.plan() !== "FREE") return true;
-return C.canAuto({ remaining: cl.budget.remaining(), runPending: runPendingToday(), runCost: runCostLeft() }, cost);
+return C.canAuto({ remaining: cl.budget.remaining(), runPending: runPendingToday(), runCost: runReserve(true) }, cost);
 }
 let budgetFlag = false;
 function onBudget(b) {
@@ -2747,7 +2771,7 @@ if (s.mode !== "live" || !App.client || s.live.paused || s.stopped) return null;
 const cl = App.client;
 if (cl.budget.get().limitHit) return null;
 return C.liveIntervalMs({ plan: cl.plan(), market: s.clock.market, group: groupOf(d.cls), remaining: cl.budget.remaining(),
-runPending: cl.plan() === "FREE" && runPendingToday(), runCost: runCostLeft(), nCore: STRIP.filter(x => x.core).length });
+runPending: cl.plan() === "FREE" && runPendingToday(), runCost: runReserve(false), nCore: STRIP.filter(x => x.core).length });
 }
 const visible = () => !doc.hidden;
 function registerQuoteWatch(sym, iv) {
@@ -3098,15 +3122,14 @@ h("span", "val " + dirCls(i.value), i.text));
 }
 
 // corrida
-function runGuard() {
+function runGuard(auto) {
 const s = App.state, cl = App.client;
 if (!cl || !(s.mode === "live" || s.mode === "example")) return { ok: false, reason: "Conectando con FMP…" };
 if (s.run.status === "running") return { ok: false, reason: "La corrida ya está en curso." };
 if (s.stopped) return { ok: false, reason: (s.page.banner && s.page.banner.text) || "Conexión con FMP detenida." };
-if (s.mode === "live" && cl.budget.get().limitHit) return { ok: false, reason: "Límite diario agotado" };
-const pr = estPlan(), need = runCostNominal(); // need: lo que gasta con el tope normal (mismo número en botón y motivo)
-if (!pr.fits) return { ok: false, plan: pr, need, reason: fitReason(pr, need, cl.budget.remaining(), runCapNow()) };
-return { ok: true, plan: pr, need };
+if (s.mode === "live" && cl.budget.get().limitHit) return { ok: false, limit: true, reason: "Límite diario agotado; FMP lo reinicia mañana." };
+const cap = runCapNow(auto), pr = estPlan(undefined, cap);
+return pr.fits ? { ok: true, plan: pr } : { ok: false, plan: pr, reason: fitReason(pr, cl.budget.remaining(), cap) };
 }
 // MEDIO 4: espera la 1.ª entrega (o falla) de lo arrancado, con tope, antes de la corrida automática
 async function bootSettled(maxMs) {
@@ -3125,43 +3148,55 @@ function maybeAutoRun() {
 const s = App.state;
 if (s.mode !== "live" || !App.client || hasTodayRun()) { renderRanking(); return; }
 const tier = App.client.plan();
-// 4.ª condición (director, ronda 1): sin llamadas de corrida hoy
-const attempted = (App.client.budget.get().byCat.corrida || 0) > 0;
+// 4.ª condición (director, ronda 1): sin llamadas de corrida hoy; 5.ª (director, ronda 2): sin marca de corrida lanzada hoy
+const attempted = (App.client.budget.get().byCat.corrida || 0) > 0 || runMarkedToday();
 const wants = tier === "FREE" ? CFG.AUTO_RUN_FREE && storageWorks() && !attempted : true;
-if (!wants || !runGuard().ok) { renderRanking(); return; }
+if (!wants || !runGuard(true).ok) { renderRanking(); return; }
 if (fmpDownAtBoot()) {
 s.run = Object.assign({}, s.run, { status: "blocked", message: "FMP no respondió al abrir. No se lanzó la corrida automática para no gastar tu límite; córrela cuando FMP responda." });
 renderRanking(); return;
 }
 runAnalysis({ auto: true });
 }
+// Marca "corrida lanzada hoy (fecha ET)" (va con el contador, pero no la borran "Restablecer contador" ni "Borrar datos").
+const runMarkedToday = () => App.client.budget.get().ranToday;
 async function runAnalysis(opts) {
-const s = App.state;
-const g = runGuard();
+const s = App.state, auto = !!(opts && opts.auto);
+const g = runGuard(auto);
 if (!g.ok) { s.run.message = g.reason; renderRanking(); return; }
 const ac = new AbortController();
 const startUsed = s.mode === "live" ? App.client.budget.get().byCat.corrida || 0 : 0; // solo llamadas de la corrida
-s.run = { status: "running", stage: "universe", stageLabel: "1/4 · Universo", done: 0, total: g.plan.cost, plan: g.plan, startedAt: App.now(), finishedAt: null, abort: ac, message: null, auto: !!(opts && opts.auto), cap: runCapNow(), firstOfDay: startUsed === 0 };
+s.run = { status: "running", stage: "universe", stageLabel: "1/4 · Universo", done: 0, total: g.plan.cost, plan: g.plan, startedAt: App.now(), finishedAt: null, abort: ac, message: null, auto, cap: runCapNow(auto), outage: false,
+dayET: auto ? App.bootDay : todayET() }; // BAJO N6: la automática es del día ET en que se abrió la página; la manual, del día del clic
+if (s.mode === "live") App.client.budget.markRun();
 s.sections.ranking.err = null;
 if (s.sections.ranking.state === "blocked") s.sections.ranking.state = "loading";
 renderRanking(); renderStatus();
 try {
 const tier = App.client.plan();
 const out = tier === "FREE" || tier === "EXAMPLE" ? await runFree(ac, startUsed, []) : await runPaid(ac, startUsed);
-if (ac.signal.aborted) { finishRun("aborted", "Detenida"); return; }
+if (ac.signal.aborted) { abortedRun(); return; }
 if (!out) return;
 s.result = out; s.resultSource = s.mode === "example" ? "example" : "run"; s.resultSavedAt = App.now();
-saveDay(out);
+saveDay(out, s.run.dayET);
 finishRun(out.partial ? "partial" : "done", null);
 if (["PREMIUM", "ULTIMATE"].includes(out.plan)) watchRankingPrices();
 if (s.ui.selected && !out.rows.some(r => r.symbol === s.ui.selected) && !out.rest.some(r => r.symbol === s.ui.selected)) s.ui.selected = null;
 renderAll();
 } catch (raw) {
 const e = D.classifyError(raw);
-if (ac.signal.aborted || e.kind === "cancelled") { finishRun("aborted", "Detenida"); return; }
+if (ac.signal.aborted || e.kind === "cancelled") { abortedRun(); return; }
 finishRun("error", errText(e));
 handleError("ranking", e);
 }
+}
+// Detenida por el usuario o por el corte de fallas (nada parcial se guarda en ninguno de los dos casos).
+function abortedRun() {
+const s = App.state;
+if (!s.run.outage) { finishRun("aborted", "Detenida"); return; }
+const e = C.makeError("server_unavailable", "outage", { userText: OUTAGE_TEXT });
+finishRun("error", e.userText);
+handleError("ranking", e);
 }
 function finishRun(status, message) {
 const s = App.state;
@@ -3173,24 +3208,32 @@ function stopRun() { const a = App.state.run.abort; if (a) a.abort(); }
 const nextFrame = () => new Promise(r => setTimeout(r, 0));
 
 const DEEP_KEYS = ["eodLight", "keyMetrics", "scores", "ratios", "earnings", "ptSummary", "grades", "ptConsensus"];
+// Corte por fallas (ronda 2): 3 errores reintentables seguidos (ya con su reintento) abortan la corrida.
+const OUTAGE_CODES = new Set(["server_unavailable", "upstream_error"]);
 function runCtx(ac) {
-const s = App.state, today = todayET();
+const s = App.state, today = todayET(), cl = App.client, opt = { section: "ranking", cat: "corrida", signal: ac.signal };
+let streak = 0;
+const call = (key, args) => cl.call(key, args, opt).then(v => { streak = 0; return v; }, raw => {
+const e = D.classifyError(raw);
+if (!OUTAGE_CODES.has(e.code)) streak = 0;
+else if (++streak >= CFG.OUTAGE_STREAK && !s.run.outage) { s.run.outage = true; ac.abort(); }
+throw e;
+});
 return {
-s, cl: App.client, sig: ac.signal, today, from: C.addDays(today, -CFG.HIST_DAYS),
-opt: { section: "ranking", cat: "corrida", signal: ac.signal },
+s, cl, call, sig: ac.signal, today, from: C.addDays(today, -CFG.HIST_DAYS),
 stage: (k, label) => { s.run.stage = k; s.run.stageLabel = label; renderProgress(); },
 tick: () => { s.run.done++; renderProgress(); },
 stopOn: e => e.kind === "limit_reached",
 };
 }
 async function runFree(ac, startUsed, notes) {
-const rc = runCtx(ac), { s, cl, sig, opt } = rc, nowMs = App.now();
+const rc = runCtx(ac), { s, cl, sig } = rc, nowMs = App.now();
 // R1 universo
 rc.stage("universe", "1/4 · Universo");
 let floatRows = [], uniFailed = false;
 try {
 for (let page = 0; page < 3; page++) {
-const rows = await cl.call("floatAll", { page }, opt); rc.tick();
+const rows = await rc.call("floatAll", { page }); rc.tick();
 floatRows = floatRows.concat(rows);
 if (rows.length < 100) break;
 }
@@ -3202,12 +3245,12 @@ uniFailed = true;
 if (sig.aborted) return null;
 const uni = C.filterFloatUniverse(floatRows, { nowMs, etfList: s.mode === "example" ? [] : C.ETF_FREE.slice() });
 if (!uni.stocks.length) notes = notes.concat([uniFailed ? "No se pudo obtener la muestra de acciones de FMP; el ranking incluye solo materias primas, cripto, divisas e índices." : "FMP no devolvió acciones en la muestra de hoy; el ranking incluye solo materias primas, cripto, divisas e índices."]);
-// R2 plan exacto; en la 1.ª corrida del día el tope descuenta todo lo gastado hoy (MEDIO 3)
+// R2 plan exacto; la automática descuenta todo lo gastado hoy (MEDIO 3)
 const b = cl.budget.get(), spent = s.mode === "live" ? (b.byCat.corrida || 0) - startUsed : 0;
-const cap = s.mode !== "live" ? Infinity : s.run.firstOfDay ? Math.min(s.run.cap - spent, CFG.COLD_CAP_FREE - b.used) : s.run.cap - spent;
+const cap = s.mode !== "live" ? Infinity : s.run.auto ? Math.min(s.run.cap - spent, CFG.COLD_CAP_FREE - b.used) : s.run.cap - spent;
 const planIn = { plan: cl.plan(), eligible: uni.stocks.length, have: { spx: !!s.macro.spxDesc, treasury: !!s.macro.treasuryDesc, universe: true }, nonStock: RANKED, etfs: uni.etfs };
 const pr = C.planRun(Object.assign({ remaining: cl.budget.remaining(), cap }, planIn));
-if (!pr.fits) { finishRun("blocked", fitReason(pr, C.planRun(Object.assign({ remaining: Infinity, cap: CFG.RUN_CAP_FREE }, planIn)).cost, cl.budget.remaining(), cap)); return null; }
+if (!pr.fits) { finishRun("blocked", fitReason(pr, cl.budget.remaining(), cap)); return null; }
 s.run.plan = pr; s.run.total = s.run.done + pr.cost - pr.calls.universe;
 // MEDIO 5: cribado recortado → las de mayor flotante
 let screen = uni.stocks;
@@ -3221,7 +3264,7 @@ if (!s.macro.spxDesc || !s.macro.treasuryDesc) { await loadMacro(true); s.run.do
 if (!s.macro.spxDesc) throw C.makeError("tool_error", "tool_failed");
 // R4 cribado
 rc.stage("stage1", `2/4 · Cribando ${screen.length} acciones`);
-const qres = await cl.runQueue(screen.map(sym => () => cl.call("quote", { symbol: sym }, opt)), { signal: sig, stopOn: rc.stopOn, onProgress: rc.tick });
+const qres = await cl.runQueue(screen.map(sym => () => rc.call("quote", { symbol: sym })), { signal: sig, stopOn: rc.stopOn, onProgress: rc.tick });
 if (sig.aborted) return null;
 const quotes = [], excluded = uni.excluded.concat(unscreened);
 let limitHit = false;
@@ -3242,12 +3285,12 @@ meta: { universe: floatRows.length, eligible: uni.stocks.length, quoted: quotes.
 }
 // R5–R7 (todos los planes): no acciones (+ETF), finalistas y cálculo
 async function deepSteps(rc, { pr, st, quotes, finOf, notes, meta }) {
-const { s, cl, sig, opt, from, today } = rc;
+const { s, cl, sig, from, today } = rc;
 rc.stage("nonstock", "3/4 · Materias primas, cripto, divisas e índices");
 const nsDefs = RANKED.filter(d => d.symbol === "^GSPC" || pr.nonStockHist.includes(d.symbol));
 const nsFetch = nsDefs.filter(d => d.symbol !== "^GSPC");
-const tasks = nsFetch.map(d => () => cl.call(d.key, { symbol: d.symbol, from, to: today }, opt))
-.concat(pr.etfs.flatMap(e => [() => cl.call("quote", { symbol: e }, opt), () => cl.call("eodLight", { symbol: e, from, to: today }, opt)]));
+const tasks = nsFetch.map(d => () => rc.call(d.key, { symbol: d.symbol, from, to: today }))
+.concat(pr.etfs.flatMap(e => [() => rc.call("quote", { symbol: e }), () => rc.call("eodLight", { symbol: e, from, to: today })]));
 const res = await cl.runQueue(tasks, { signal: sig, stopOn: rc.stopOn, onProgress: rc.tick });
 if (sig.aborted) return null;
 let limitHit = res.some(r => !r.ok && r.error.kind === "limit_reached");
@@ -3283,7 +3326,7 @@ return null;
 async function fetchFinalists(symbols, keys, rc) {
 const cl = rc.cl, tasks = [], idx = [];
 for (const k of keys) for (const sym of symbols) {
-tasks.push(() => cl.call(k, k === "eodLight" ? { symbol: sym, from: rc.from, to: rc.today } : { symbol: sym }, rc.opt));
+tasks.push(() => rc.call(k, k === "eodLight" ? { symbol: sym, from: rc.from, to: rc.today } : { symbol: sym }));
 idx.push([k, sym]);
 }
 const res = await cl.runQueue(tasks, { signal: rc.sig, stopOn: rc.stopOn, onProgress: rc.tick });
@@ -3300,7 +3343,7 @@ return { list: symbols.map(sym => by[sym]), limitHit };
 }
 async function runPaid(ac, startUsed) {
 // Ramas pagadas: NO VERIFICADO CON DATOS REALES.
-const rc = runCtx(ac), { s, cl, sig, opt } = rc, tier = cl.plan();
+const rc = runCtx(ac), { s, cl, sig } = rc, tier = cl.plan();
 const fallback = () => {
 cl.setPlan("FREE");
 s.plan = Object.assign({}, s.plan, { tier: "FREE", note: "Modo Free por compatibilidad" });
@@ -3310,7 +3353,7 @@ return runFree(ac, startUsed, ["Modo Free por compatibilidad"]);
 const incompatible = e => e && (e.kind === "plan_denied" || e.code === "bad_request");
 rc.stage("universe", "1/4 · Universo");
 let screen;
-try { screen = await cl.call("screener", {}, opt); rc.tick(); } catch (e) { if (incompatible(e)) return fallback(); throw e; }
+try { screen = await rc.call("screener", {}); rc.tick(); } catch (e) { if (incompatible(e)) return fallback(); throw e; }
 const universe = screen.filter(r => r && ["NASDAQ", "NYSE", "AMEX"].includes(r.exchangeShortName) && isNum(r.volume) && isNum(r.price) && r.volume * r.price >= 2e7)
 .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0)).slice(0, CFG.UNIVERSE_CAP[tier] || 250);
 const sectorOf = Object.fromEntries(universe.map(r => [r.symbol, r.sector]));
@@ -3321,18 +3364,18 @@ rc.stage("stage1", `2/4 · Cribando ${universe.length} acciones`);
 const syms = universe.map(r => r.symbol);
 let quotes = [];
 if (tier === "STARTER") {
-const res = await cl.runQueue(syms.map(sym => () => cl.call("quote", { symbol: sym }, opt)), { signal: sig, stopOn: rc.stopOn, onProgress: rc.tick });
+const res = await cl.runQueue(syms.map(sym => () => rc.call("quote", { symbol: sym })), { signal: sig, stopOn: rc.stopOn, onProgress: rc.tick });
 if (res.some(r => !r.ok && incompatible(r.error)) && !res.some(r => r.ok)) return fallback();
 res.forEach(r => { if (r.ok && r.value[0]) quotes.push(r.value[0]); });
 } else {
 for (let i = 0; i < syms.length; i += CFG.BATCH_CHUNK) {
 const chunk = syms.slice(i, i + CFG.BATCH_CHUNK);
-try { quotes = quotes.concat(await cl.call("batchQuote", { symbols: chunk }, opt)); rc.tick(); }
+try { quotes = quotes.concat(await rc.call("batchQuote", { symbols: chunk })); rc.tick(); }
 catch (e) {
 if (incompatible(e)) return fallback();
 const half = Math.ceil(chunk.length / 2); // si falla, mitad de lote una vez
 for (const part of [chunk.slice(0, half), chunk.slice(half)]) {
-try { quotes = quotes.concat(await cl.call("batchQuote", { symbols: part }, opt)); } catch (e2) { if (incompatible(e2)) return fallback(); }
+try { quotes = quotes.concat(await rc.call("batchQuote", { symbols: part })); } catch (e2) { if (incompatible(e2)) return fallback(); }
 rc.tick();
 }
 }
@@ -3371,9 +3414,10 @@ let label;
 if (running) label = "Analizando…";
 else if (s.mode === "example") label = "Correr análisis de ejemplo";
 else if (s.mode !== "live") label = "Correr análisis";
+else if (g.limit) label = "Límite diario agotado";
 else {
-const cost = g.ok ? g.plan.cost : g.need;
-label = `${hasTodayRun() ? "Volver a correr" : "Correr análisis"} (≈ ${cost} llamadas)`;
+const verb = hasTodayRun() ? "Volver a correr" : "Correr análisis", cost = g.plan && g.plan.cost; // N4: nunca "≈ undefined"
+label = Number.isInteger(cost) && cost > 0 ? `${verb} (≈ ${cost} llamadas)` : verb;
 }
 btn.textContent = label;
 btn.disabled = running || !g.ok;
@@ -3813,7 +3857,7 @@ if (s.ui.selected === r.symbol) renderDetail();
 }
 
 // estado del plan y presupuesto
-let clearArmed = false;
+let clearArmed = false, resetArmed = false;
 function renderStatus() {
 const s = App.state, cont = $("#estado-cont");
 if (!cont) return;
@@ -3836,7 +3880,7 @@ h("p", { id: "presupuesto", class: "num", text: finite ? `≈ ${b.used} de ${b.l
 finite ? h("div", { class: "medidor" + (frac > 0.85 ? " alto" : ""), role: "meter", "aria-valuemin": "0", "aria-valuemax": String(b.limit), "aria-valuenow": String(b.used), "aria-label": "Llamadas usadas hoy" }, h("div", { style: `width:${(frac * 100).toFixed(1)}%` })) : null,
 b.limitHit ? nota("Límite diario agotado: FMP lo reinicia mañana.") : null,
 h("div", { class: "desglose", id: "desglose" }, Object.keys(CAT_NAME).flatMap(k => [h("span", null, CAT_NAME[k]), h("span", null, String((b.byCat && b.byCat[k]) || 0))])),
-h("div", "acciones", h("button", { class: "btn", id: "btn-reset-contador", onclick: resetCounter, text: "Restablecer contador" })));
+h("div", "acciones", h("button", { class: "btn", id: "btn-reset-contador", onclick: resetCounter, text: resetArmed ? "Toca otra vez para confirmar" : "Restablecer contador" })));
 }
 const m = s.clock.market;
 const policy = ex ? "Sin actualización automática en el modo ejemplo." : tier === "FREE"
@@ -3861,6 +3905,8 @@ if (dp.error) handleIfPage(dp.error);
 renderAll();
 }
 function resetCounter() {
+if (!resetArmed) { resetArmed = true; renderStatus(); App.timer(() => { resetArmed = false; renderStatus(); }, 4000); return; }
+resetArmed = false;
 if (App.client && App.state.mode === "live") App.client.budget.reset();
 App.state.page.banner = App.state.page.banner && App.state.page.banner.kind === "limit_reached" ? null : App.state.page.banner;
 App.state.live.paused = false;
@@ -3873,7 +3919,7 @@ App.timer(() => { clearArmed = false; renderStatus(); }, 4000);
 return;
 }
 clearArmed = false;
-store.keys("").filter(k => k !== "budget").forEach(k => store.remove(k)); // el contador del día ET se conserva (director)
+store.keys("").filter(k => k !== "budget").forEach(k => store.remove(k)); // contador y marca de corrida del día se conservan (director)
 renderAll();
 }
 
@@ -3918,6 +3964,7 @@ await runAnalysis({ auto: true });
 // arranque
 function dropCaches() { store.keys("day.").concat(["live"]).forEach(k => store.remove(k)); }
 async function boot() {
+App.bootDay = todayET();
 initState();
 applyTheme();
 bindEvents();
