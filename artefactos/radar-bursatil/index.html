@@ -2477,7 +2477,8 @@ if (!tasks.length) { resolve(results); return; }
 const finish = () => { if (done >= tasks.length && active === 0) resolve(results); };
 const pump = () => {
 while (active < conc && next < tasks.length) {
-if (stopped || (o.signal && o.signal.aborted)) { while (next < tasks.length) { results[next++] = cancelled(); done++; } break; }
+// stopOn(null) antes de cada tarea: un corte decidido por una respuesta buena (p. ej. vacía) también detiene la cola
+if (stopped || (o.stopOn && o.stopOn(null)) || (o.signal && o.signal.aborted)) { while (next < tasks.length) { results[next++] = cancelled(); done++; } break; }
 const i = next++; active++;
 Promise.resolve().then(tasks[i]).then(
 v => { results[i] = { ok: true, value: v }; },
@@ -3762,7 +3763,7 @@ s, cl, call, cut, tally, sig: ac.signal, today, from: C.addDays(today, -CFG.HIST
 live: () => !s.run.cut && !s.run.outage,
 stage: (k, label) => { s.run.stage = k; s.run.stageLabel = label; renderProgress(); },
 tick: () => { s.run.done++; renderProgress(); },
-stopOn: e => { if (e.kind === "limit_reached") cut("límite"); return !!s.run.cut || !!s.run.outage; },
+stopOn: e => { if (e && e.kind === "limit_reached") cut("límite"); return !!s.run.cut || !!s.run.outage; }, // sin e: "¿se cortó?"
 };
 }
 async function runFree(ac, startUsed, notes) {
