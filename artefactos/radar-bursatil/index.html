@@ -1716,12 +1716,12 @@ if (stock && isNum(r.pBeat)) {
 const d = displayPct(r.pBeat), q = `Con ${fmt.prob(r.pBeat)} de probabilidad de ganarle al S&P 500, `;
 out.push({ ref: "sp500", p: r.pBeat, text: q + (d > 50 ? "lo más probable es que rinda más que el índice."
 : d < 50 ? "lo más probable es que rinda menos que el índice" + (r.signal === 1 ? "; si quieres bolsa, el índice es mejor apuesta." : ".")
-: "rendir más o menos que el índice es casi una moneda al aire.") });
+: "ganarle o no al índice es casi una moneda al aire.") });
 }
 if (isNum(pUp)) {
 const d = displayPct(pUp), q = `Con ${fmt.prob(pUp)} de probabilidad de subir, `;
 let text = q + (d > 50 ? "lo más probable es que el precio suba en 3 meses." : d < 50 ? "lo más probable es que el precio baje en 3 meses."
-: "que el precio suba o baje en 3 meses es casi una moneda al aire.");
+: "la dirección del precio en 3 meses es casi una moneda al aire.");
 if (isNum(r.expRet) && r.expRet > 0 && pUp < 0.5) text += " El promedio es positivo porque las ganancias se concentran en pocos escenarios grandes" + (stock ? "." : "; por eso la señal no es Compra.");
 out.push({ ref: "sube", p: pUp, text });
 }
