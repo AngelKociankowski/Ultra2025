@@ -114,7 +114,7 @@ button{font:inherit;color:inherit;}
 
 /* franja */
 .franja-scroll{display:flex;gap:var(--sp-5);overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:var(--sp-2);}
-.grupo{display:flex;flex-direction:column;gap:var(--sp-2);flex:none;}
+#franja .grupo{display:flex;flex-direction:column;gap:var(--sp-2);flex:none;}
 .grupo-rot{font:600 var(--fs-xs)/1 var(--font-display);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);}
 .grupo-tiles{display:flex;gap:var(--sp-2);}
 .tile{flex:0 0 152px;width:152px;scroll-snap-align:start;display:grid;gap:2px;padding:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-2);}
@@ -145,8 +145,6 @@ button{font:inherit;color:inherit;}
 .seg{display:flex;gap:4px;overflow-x:auto;max-width:100%;padding-bottom:2px;}
 .seg button{flex:none;font:500 var(--fs-xs)/1 var(--font-body);padding:7px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer;}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink);}
-.orden{display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--ink-3);}
-.orden select{font:500 var(--fs-xs)/1 var(--font-body);padding:6px 8px;border-radius:var(--r-1);border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);}
 .tabla-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-2);background:var(--surface);}
 .tabla-scroll.atenuada table{opacity:.45;}
 table{border-collapse:collapse;width:100%;font-size:var(--fs-sm);line-height:var(--lh-table);}
@@ -163,14 +161,28 @@ td.n{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-
 .activo-btn .nom{font-size:var(--fs-xs);color:var(--ink-2);max-width:13rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .activo-btn .sub-clase{display:none;font-size:11px;color:var(--ink-3);}
 .pill{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font:600 var(--fs-xs)/1.2 var(--font-body);white-space:nowrap;}
-.pill.s4{background:var(--up);color:var(--on-up);}
 .pill.s3{background:var(--up-soft);color:var(--up);}
 .pill.s2{background:var(--neutral-soft);color:var(--ink-2);}
 .pill.s1{background:var(--down-soft);color:var(--down);}
 .pill.vacia{background:var(--surface-2);color:var(--ink-3);}
-.abar{display:flex;align-items:center;justify-content:flex-end;gap:8px;}
-.abar-track{width:64px;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;flex:none;}
-.abar-fill{display:block;height:100%;background:var(--bar-fill);border-radius:0 3px 3px 0;}
+.leyenda-senal{list-style:none;margin:0 0 var(--sp-3);padding:0;display:grid;gap:6px;font-size:var(--fs-xs);color:var(--ink-2);}
+.leyenda-senal li{display:grid;grid-template-columns:7.5rem minmax(0,1fr);align-items:baseline;gap:var(--sp-2);}
+.leyenda-senal .pill{justify-self:start;}
+/* probabilidad:número + barra centrada en 50 % (media barra = 15 pp,07 §3.1) */
+.prob{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end;}
+.pbar{position:relative;width:64px;height:6px;border-radius:3px;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line);flex:none;}
+.pbar::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line-strong);}
+.pbar-fill{position:absolute;top:0;bottom:0;border-radius:3px;}
+.pbar-fill.up{background:var(--up);}
+.pbar-fill.down{background:var(--down);}
+.pbar.grande{width:160px;height:8px;}
+.tope{display:block;margin-top:3px;font-size:var(--fs-xs);color:var(--ink-3);white-space:nowrap;}
+#tabla-ranking tr.grupo th{white-space:normal;background:var(--surface-2);color:var(--ink);padding:12px 10px;border-bottom:1px solid var(--line-strong);}
+#tabla-ranking tbody + tbody tr.grupo th{border-top:1px solid var(--line-strong);}
+#tabla-ranking tr.grupo:hover{background:none;}
+.grupo-tit{display:block;font:600 var(--fs-sm)/1.3 var(--font-display);}
+.grupo-nota{display:block;margin-top:3px;font:400 var(--fs-xs)/1.4 var(--font-body);color:var(--ink-2);max-width:72ch;}
+.grupo-vacio{display:block;margin-top:6px;font:500 var(--fs-xs)/1.3 var(--font-body);color:var(--ink-3);}
 .precio-num{display:block;color:var(--ink);}
 .var-mini{display:block;font-size:var(--fs-xs);}
 .tags{display:flex;flex-wrap:wrap;gap:4px;max-width:22rem;}
@@ -197,9 +209,12 @@ summary{cursor:pointer;font-weight:600;font-size:var(--fs-sm);color:var(--ink);p
 .det-nombre{color:var(--ink-2);font-size:var(--fs-sm);}
 .det-precio{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2) var(--sp-3);}
 .det-precio .grande{font:500 var(--fs-xl)/1.1 var(--font-mono);}
-.det-atractivo{display:flex;align-items:center;gap:var(--sp-3);}
-.det-atractivo .cifra{font:500 var(--fs-2xl)/1 var(--font-mono);}
-.det-atractivo .abar-track{width:140px;height:8px;}
+.det-prob{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2) var(--sp-3);}
+.det-prob .cifra{font:500 var(--fs-2xl)/1 var(--font-mono);}
+.det-prob .nota{flex-basis:100%;}
+.frase{margin-top:var(--sp-2);font-size:var(--fs-sm);color:var(--ink);}
+details.calculo{margin-top:var(--sp-3);font-size:var(--fs-sm);}
+details.calculo summary{cursor:pointer;color:var(--ink-2);}
 .volver{justify-self:start;}
 #grafica-detalle{position:relative;margin-block:var(--sp-2) var(--sp-4);min-height:200px;}
 #grafica-detalle svg{display:block;width:100%;overflow:visible;}
@@ -278,12 +293,15 @@ dl{margin:0;}
 .c-ancha{display:none;}
 .activo-btn .sub-clase{display:block;}
 .precio-num{display:none;}
-.abar-track{width:36px;}
-.activo-btn,.activo-btn .nom{max-width:8.5rem;}
+.pbar{width:44px;}
+.prob{flex-direction:column;align-items:flex-end;gap:4px;}
+#tabla-ranking th{white-space:normal;}
+.leyenda-senal li{grid-template-columns:6.5rem minmax(0,1fr);}
+.activo-btn,.activo-btn .nom{max-width:7.5rem;}
 .mercado-grid{grid-template-columns:minmax(0,1fr);}
 .filtros{flex-direction:column;align-items:stretch;}
 .div-fila{grid-template-columns:6.5rem minmax(0,1fr) 3rem;}
-th,td{padding-inline:8px;}}
+th,td{padding-inline:6px;}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none !important;transition:none !important;scroll-behavior:auto !important;}}
 </style>
 <header id="cabecera">
@@ -320,7 +338,7 @@ th,td{padding-inline:8px;}}
 <section id="ranking" data-state="loading" aria-labelledby="ranking-h">
 <div class="sec-cab">
 <div><span class="rotulo">Ranking de compra</span><h2 id="ranking-h">Qué comprar ahora</h2>
-<p id="ranking-sub" class="sub">Ranking por Atractivo · horizonte 3 meses</p></div>
+<p id="ranking-sub" class="sub">Ordenado por probabilidad a 3 meses</p></div>
 </div>
 <div class="barra-accion">
 <button id="btn-correr" type="button" class="btn btn-primario">Correr análisis</button>
@@ -333,28 +351,23 @@ th,td{padding-inline:8px;}}
 <div class="filtros">
 <div id="filtro-clase" class="seg" role="group" aria-label="Filtrar por clase"></div>
 <div id="filtro-senal" class="seg" role="group" aria-label="Filtrar por señal"></div>
-<label class="orden" for="orden">Ordenar por
-<select id="orden">
-<option value="A">Atractivo</option>
-<option value="p">Prob. de superar al S&amp;P</option>
-<option value="S">Score de factores</option>
-<option value="chg">Var. del día</option>
-</select>
-</label>
 </div>
+<ul class="leyenda-senal" id="leyenda-senal" aria-label="Qué significa cada señal">
+<li><span class="pill s3">▲ Compra</span><span>la probabilidad mostrada es de 52 % o más y no hay tope de riesgo.</span></li>
+<li><span class="pill s2">■ Mantener</span><span>entre 49 % y 51 % (casi una moneda al aire) o con un tope de riesgo que se indica.</span></li>
+<li><span class="pill s1">▼ Evitar</span><span>48 % o menos; lo más probable es quedar por debajo de la referencia.</span></li>
+</ul>
 <div class="tabla-scroll" id="tabla-cont">
 <table id="tabla-ranking">
-<caption class="vh">Ranking de activos ordenado por Atractivo</caption>
+<caption class="vh">Activos en dos grupos, cada uno ordenado por su probabilidad a 3 meses</caption>
 <thead><tr>
 <th scope="col" class="n">#</th>
 <th scope="col">Activo</th>
 <th scope="col" class="c-ancha">Clase</th>
 <th scope="col">Señal</th>
-<th scope="col" class="n">Atractivo</th>
-<th scope="col" class="n c-ancha">Score de factores</th>
-<th scope="col" class="n">Precio</th>
-<th scope="col" class="n c-ancha">Prob. &gt; S&amp;P 500 (3 m)</th>
-<th scope="col" class="n c-ancha">Prob. de subir (3 m)</th>
+<th scope="col" class="n">Probabilidad (3 m)</th>
+<th scope="col" class="n c-ancha" title="Qué tan bien puntúa en factores con evidencia académica. No es una probabilidad.">Factores (percentil)</th>
+<th scope="col" class="n c-ancha">Precio</th>
 <th scope="col" class="n c-ancha">Rango 80 % (3 m)</th>
 <th scope="col" class="c-ancha">Confianza</th>
 <th scope="col" class="c-ancha">Qué lo mueve</th>
@@ -364,10 +377,6 @@ th,td{padding-inline:8px;}}
 </table>
 <div id="ranking-vacio" class="vacio-ranking"><p class="estado-carga">Preparando el ranking…</p></div>
 </div>
-<div class="leyenda" aria-label="Leyenda de señales">
-<span class="pill s4">▲▲ Compra fuerte</span><span class="pill s3">▲ Compra</span><span class="pill s2">■ Mantener</span><span class="pill s1">▼ Evitar</span>
-</div>
-<p class="nota" style="margin-top:8px">El Atractivo compara la fuerza de la evidencia por unidad de riesgo. Una materia prima puede tener señal fuerte y aun así menor probabilidad de superar al S&amp;P 500, porque las acciones tienen una prima de riesgo que el oro o las cripto no tienen.</p>
 <details id="resto">
 <summary id="resto-sum">Resto del universo (solo cribado) · 0</summary>
 <div id="resto-cont"></div>
@@ -386,6 +395,7 @@ th,td{padding-inline:8px;}}
 <div class="acciones">
 <button id="btn-junk" type="button" class="btn" aria-pressed="false">Ver lista completa (incluye SPAC, warrants, apalancados)</button>
 <button id="btn-actualizar-mercado" type="button" class="btn">Actualizar mercado <span class="costo">· 5 llamadas</span></button>
+<span id="mercado-espera" class="nota" hidden>Espera a que termine el análisis</span>
 </div>
 </div>
 <div id="mercado-msg" class="sec-msg" hidden></div>
@@ -397,15 +407,15 @@ th,td{padding-inline:8px;}}
 <div class="sec-cab"><div><span class="rotulo">Contexto</span><h2 id="regimen-h">Régimen macro</h2></div></div>
 <div id="regimen-msg" class="sec-msg" hidden></div>
 <div id="regimen-cont"><p class="estado-carga">Calculando el régimen de mercado…</p></div>
-<p class="nota" style="margin-top:12px">El régimen cambia pesos y umbrales; no cambia el retorno esperado del índice.</p>
+<p class="nota" style="margin-top:12px">El régimen cambia los pesos de los factores; no cambia los umbrales de la señal ni el retorno esperado del índice.</p>
 </section>
 
 <section id="metodo" data-state="ok" aria-labelledby="metodo-h">
 <div class="sec-cab"><div><span class="rotulo">Metodología</span><h2 id="metodo-h">Cómo se calcula y qué no promete</h2></div></div>
-<details><summary>Cómo se calcula el Atractivo</summary><div class="texto">
-<p>Cada activo recibe un <strong>Atractivo de 0 a 100</strong>: la razón de información esperada (exceso de rendimiento esperado entre riesgo activo) contra su referencia natural. Para acciones la referencia es el S&amp;P 500; para materias primas, cripto, divisas e índices es el efectivo, como posición táctica de tendencia. En ambas clases una desviación estándar de señal equivale a una razón de información de 0.10, así que ninguna clase domina por construcción.</p>
-<p>Las acciones pasan por dos etapas: un cribado de todo el universo disponible solo con la cotización (cercanía al máximo de 52 semanas, distancia a las medias de 50 y 200 días y rango de 52 semanas) y un análisis profundo de los finalistas con historial diario, fundamentales y resultados. Los bloques pesan, en régimen neutral, momentum 35 %, calidad 25 %, valor 15 %, bajo riesgo 15 % e información 10 %; el régimen de mercado los ajusta.</p>
-<p>La señal sale del Atractivo: Compra fuerte desde 80 (85 en régimen de riesgo, 90 en pánico) con cobertura de datos de al menos 75 % y probabilidad de al menos 50 %; Compra desde 65 (70 en pánico); Mantener de 40 a 65; Evitar por debajo de 40. Los datos faltantes no se rellenan: se re-pondera y se informa la cobertura.</p>
+<details><summary>Cómo se decide la señal</summary><div class="texto">
+<p>Cada fila tiene una sola probabilidad a 3 meses, la que se muestra, y la señal sale de ese mismo número redondeado. <strong>Compra</strong>: la probabilidad mostrada es de 52 % o más y no hay tope de riesgo. <strong>Mantener</strong>: entre 49 % y 51 % (casi una moneda al aire) o con un tope de riesgo que se indica. <strong>Evitar</strong>: 48 % o menos; lo más probable es quedar por debajo de la referencia.</p>
+<p>La tabla tiene dos grupos porque no hay una medida común honesta. En acciones manda la probabilidad de ganarle al S&amp;P 500, que es lo que aportan los factores; en índices, ETF, materias primas, cripto y divisas, la probabilidad de que el precio suba. Aplicada a las acciones, la de subir mediría sobre todo su volatilidad; aplicada a las materias primas, la del S&amp;P las hundiría por la prima de riesgo de las acciones, y eso no es señal.</p>
+<p>Las acciones pasan por dos etapas: un cribado de todo el universo disponible solo con la cotización (cercanía al máximo de 52 semanas, distancia a las medias de 50 y 200 días y rango de 52 semanas) y un análisis profundo de los finalistas con historial diario, fundamentales y resultados. Los bloques pesan, en régimen neutral, momentum 35 %, calidad 25 %, valor 15 %, bajo riesgo 15 % e información 10 %; el régimen de mercado los ajusta. El resultado se muestra como "Factores (percentil)": qué tan bien puntúa en factores con evidencia académica; no es una probabilidad. Los datos faltantes no se rellenan: se re-pondera y se informa la cobertura.</p>
 </div></details>
 <details><summary>Factores y evidencia</summary><div class="tabla-ev">
 <table>
@@ -461,11 +471,15 @@ return Object.freeze(o);
 const CONFIG = deepFreeze({
 SERVER: "FMP",
 SCHEMA_VERSION: 1,
+DAY_SCHEMA_VERSION: 2, // caché del día (enmienda 07: RankRow v2)
 LS_PREFIX: "radar.v1.",
 PLAN_DAILY_LIMIT: { FREE: 250, STARTER: Infinity, PREMIUM: Infinity, ULTIMATE: Infinity, EXAMPLE: Infinity },
 PLAN_PER_MIN: { FREE: 250, STARTER: 250, PREMIUM: 700, ULTIMATE: 2500, EXAMPLE: Infinity }, // no verificado (pagados)
 RESERVE_CALLS: 10,
 OUTAGE_STREAK: 3, // corte de la corrida: errores reintentables seguidos (director, ronda 2)
+SUSPECT_STREAK: 12, SUSPECT_MIN: 10, SUSPECT_RATIO: 0.25, // "posible límite" con texto desconocido (07 §E5)
+SIGNAL_BUY_PCT: 52, SIGNAL_AVOID_PCT: 48, PROB_BAR_SPAN: 15, // señal gobernada por la probabilidad mostrada (07 §1)
+SYNC: { LOAD_TIMEOUT_MS: 4000, DOC_MAX_BYTES: 200000, COUNTER_DEBOUNCE_MS: 5000, LIVE_DEBOUNCE_MS: 3000, LIVE_SET_DEBOUNCE_MS: 10000, RUN_LEASE_MS: 30000, RUN_STALE_MIN: 15, KEEP_DAYS: 2, LIVE_GRACE_MS: 300000 },
 STAGE1_MIN_FREE: 77, // cribado recortable solo sobre la muestra Free nominal
 RUN_CAP_FREE: 193,
 COLD_CAP_FREE: 215,
@@ -525,9 +539,7 @@ rhoWithin: { mom: 0.5, risk: 0.6, qual: 0.4, val: 0.6, info: 0.2 }, rhoBlocks: 0
 weightsByRegime: {
 FAVORABLE: [0.40, 0.22, 0.13, 0.15, 0.10], NEUTRAL: [0.35, 0.25, 0.15, 0.15, 0.10],
 RIESGO: [0.25, 0.30, 0.15, 0.20, 0.10], PANICO: [0.10, 0.35, 0.15, 0.30, 0.10] },
-strongBuy: { FAVORABLE: 80, NEUTRAL: 80, RIESGO: 85, PANICO: 90 },
-buy: { FAVORABLE: 65, NEUTRAL: 65, RIESGO: 65, PANICO: 70 }, avoid: 40,
-kappa: 0.10, irScale: 0.10,
+kappa: 0.10,
 });
 
 // Base numérica (01 §C)
@@ -894,6 +906,45 @@ return asArray(parsed);
 throw makeError("tool_error", "unexpected_shape", { raw: String(payload) });
 }
 
+// Respuesta de una tool → filas (07 §E1): payload, structuredContent o el primer texto JSON; el primero que da arreglo gana.
+const WRAP_KEYS = ["data", "results", "result", "items", "historical", "rows", "content"];
+function unwrap(x) {
+if (Array.isArray(x)) return x;
+if (typeof x === "string") {
+let v; try { v = JSON.parse(x); } catch (e) { const t = classifyText(x); if (t) throw t; return null; }
+return unwrap(v); // incluye texto codificado dos veces
+}
+if (!x || typeof x !== "object") return null;
+for (const k of ["Error Message", "error", "message"]) if (typeof x[k] === "string") {
+const t = classifyText(x[k]); if (t) throw t;
+if (k !== "message") throw makeError("tool_error", "tool_failed", { raw: x[k].slice(0, 200) }); // error de FMP sin sub-rama conocida
+}
+for (const k of WRAP_KEYS) if (Array.isArray(x[k])) return x[k];
+const arrs = Object.values(x).filter(Array.isArray);
+if (arrs.length === 1) return arrs[0];
+if ("symbol" in x || "date" in x) return [x];
+return null;
+}
+function extractRows(result) {
+const r = result && typeof result === "object" ? result : {};
+const text = Array.isArray(r.content) ? (r.content.find(b => b && b.type === "text" && typeof b.text === "string") || {}).text : undefined;
+for (const x of [r.payload, r.structuredContent, text]) { const rows = unwrap(x); if (rows) return rows; }
+throw makeError("tool_error", "unexpected_shape", { raw: String(text || "").slice(0, 200) });
+}
+// Ceros de FMP que significan "sin dato" → null (07 §E6). dividendYieldTTM, volume y changePercentage no se tocan.
+const ZERO_NULL = {
+quote: ["yearHigh", "yearLow", "priceAvg50", "priceAvg200", "marketCap", "price"],
+km: ["evToEBITDATTM", "netDebtToEBITDATTM", "returnOnInvestedCapitalTTM", "returnOnEquityTTM", "returnOnAssetsTTM", "incomeQualityTTM", "earningsYieldTTM", "freeCashFlowYieldTTM"],
+rt: ["grossProfitMarginTTM", "assetTurnoverTTM", "priceToBookRatioTTM", "interestCoverageRatioTTM", "priceToEarningsRatioTTM"],
+fs: ["altmanZScore", "piotroskiScore"], pts: ["lastMonthAvgPriceTarget", "lastQuarterAvgPriceTarget"], ptc: ["targetConsensus"],
+};
+function cleanZeros(kind, obj) {
+if (!obj || typeof obj !== "object") return obj;
+const o = Object.assign({}, obj);
+for (const k of ZERO_NULL[kind] || []) if (o[k] === 0) o[k] = null;
+return o;
+}
+
 // Normalización de datos de FMP
 function normalizeEod(rowsDesc, { asOf, dropDate = null } = {}) {
 const byDate = new Map();
@@ -979,7 +1030,7 @@ return null;
 
 // Etapa 1
 function stage1Select({ quotes, K }) {
-const rows = (Array.isArray(quotes) ? quotes : []).filter(q => q && typeof q.symbol === "string" && isNum(q.price) && q.price > 0);
+const rows = (Array.isArray(quotes) ? quotes : []).map(q => cleanZeros("quote", q)).filter(q => q && typeof q.symbol === "string" && isNum(q.price) && q.price > 0);
 const f1 = rows.map(r => (r.yearHigh > 0 ? r.price / r.yearHigh : null));
 const f2 = rows.map(r => (r.priceAvg200 > 0 ? Math.log(r.price / r.priceAvg200) : null));
 const f3 = rows.map(r => (r.priceAvg50 > 0 && r.priceAvg200 > 0 ? Math.log(r.priceAvg50 / r.priceAvg200) : null));
@@ -1106,10 +1157,10 @@ if (isNum(fs?.piotroskiScore)) { raw.Q3 = fs.piotroskiScore; f.Q3 = clamp((fs.pi
 if (isNum(km?.returnOnAssetsTTM) && isNum(km?.incomeQualityTTM)) { raw.Q4 = clamp(km.returnOnAssetsTTM * (1 - km.incomeQualityTTM), -0.3, 0.3); f.Q4 = anchorZ(raw.Q4, -0.10, -0.035, 0.03, false); }
 if (!isFinancial) {
 const nd = km?.netDebtToEBITDATTM, ev = km?.evToEBITDATTM;
-const zLev = isNum(ev) && ev <= 0 ? -2 : anchorZ(nd, -0.5, 1.5, 4.0, false);
+const zLev = isNum(ev) && ev < 0 ? -2 : anchorZ(nd, -0.5, 1.5, 4.0, false);
 const zAlt = isNum(fs?.altmanZScore) ? anchorZ(Math.min(fs.altmanZScore, 10), 1.5, 3.5, 7.0) : null;
 const parts = [zLev, zAlt].filter(isNum); if (parts.length) { f.Q5 = mean(parts); raw.Q5 = fin(fs?.altmanZScore); }
-if (isNum(ev)) { raw.V1 = ev; f.V1 = ev <= 0 ? -2 : anchorZ(1 / ev, 0.025, 0.07, 0.13); }
+if (isNum(ev)) { raw.V1 = ev; f.V1 = ev < 0 ? -2 : anchorZ(1 / ev, 0.025, 0.07, 0.13); }
 raw.V2 = fin(km?.freeCashFlowYieldTTM); f.V2 = anchorZ(km?.freeCashFlowYieldTTM, -0.01, 0.04, 0.09);
 } else if (isNum(rt?.priceToBookRatioTTM) && rt.priceToBookRatioTTM > 0) { raw.V2 = 1 / rt.priceToBookRatioTTM; f.V2 = anchorZ(raw.V2, 0.15, 0.45, 0.95); }
 raw.V3 = fin(km?.earningsYieldTTM); f.V3 = anchorZ(km?.earningsYieldTTM, -0.01, 0.045, 0.085);
@@ -1196,25 +1247,34 @@ function stockPrediction({ S, coverage, beta, te, volF, rf, erp, sigM, divYield 
 const a = alphaFromScore(S, coverage); const sig = Math.max(isNum(volF) ? volF : 0.12, 0.12);
 const muA = rf + erp * (1 + 0.5 * ((isNum(beta) ? beta : 1) - 1)) + a, muM = rf + erp;
 const okTe = isNum(te) && te > 0;
-const ir = okTe ? a / te : 0, A = 100 * normCdf(ir / P.irScale);
+const ir = okTe ? a / te : 0;
 const pBeat = okTe ? probBeat({ muA, sigA: sig, muM, sigM, te, h }) : null;
 const pBase = okTe ? probBeat({ muA: muA - a, sigA: sig, muM, sigM, te, h }) : null;
 const dy = isNum(divYield) ? divYield : 0;
-return { alpha: a, ir, A, pBeat, pBase, cone: priceCone({ p0, mu: muA, divYield: dy, sig, h }), expRet: (muA - dy) * h, muAnn: muA, sigAnn: sig };
+return Object.assign({ alpha: a, ir, pBeat, pBase, cone: priceCone({ p0, mu: muA, divYield: dy, sig, h }), muAnn: muA, sigAnn: sig,
+pUpStock: stockUpProb({ muAnn: muA, divYield: dy, sigAnn: sig, h }) }, retStats({ muPrice: muA - dy, sig, h }));
 }
-const SIGNAL_LABEL = ["", "Evitar", "Mantener", "Compra", "Compra fuerte"];
-function signalDetail({ A, regime, coverage, pGate, caps = [], capReasons = [] }) {
-const st = P.strongBuy[regime] ? regime : "NEUTRAL";
-const base = A >= P.strongBuy[st] ? 4 : A >= P.buy[st] ? 3 : A >= P.avoid ? 2 : 1;
-let s = base; const reasons = [];
-if (s === 4 && coverage < 0.75) { s = 3; reasons.push("Cobertura de datos < 75 %"); }
-if (s === 4 && !(isNum(pGate) && pGate >= 0.50)) { s = 3; reasons.push("Probabilidad < 50 %"); }
-caps.forEach((c, i) => { if (c < s) { s = c; if (capReasons[i]) reasons.push(capReasons[i]); } else if (c < base && capReasons[i]) reasons.push(capReasons[i]); });
-if (coverage < 0.60 && s > 2) { s = 2; reasons.push("Cobertura de datos < 60 %"); }
-return { code: s, label: SIGNAL_LABEL[s], reasons: Array.from(new Set(reasons)) };
+// Señal gobernada por la probabilidad MOSTRADA (07 §1): el entero visible decide; los topes solo bajan Compra a Mantener.
+const displayPct = p => clamp(Math.round(p * 100), 35, 65);
+const SIGNAL_LABEL = ["", "Evitar", "Mantener", "Compra"];
+const CAP_SHORT = {
+"Altman Z en zona de riesgo": "riesgo financiero", "Movimiento de hoy ≥ 15 %": "movimiento brusco hoy",
+"Bajo su media de 200 días y momentum negativo": "tendencia rota", "Cobertura de datos < 60 %": "datos incompletos",
+"Caída > 50 % desde su máximo de 12 meses": "caída > 50 %",
+};
+function signalFromProb({ p, coverage, caps = [], capReasons = [] }) {
+const pct = displayPct(p);
+let code = pct >= CONFIG.SIGNAL_BUY_PCT ? 3 : pct <= CONFIG.SIGNAL_AVOID_PCT ? 1 : 2, capReason = null;
+if (code === 3) {
+const i = caps.indexOf(2);
+capReason = i >= 0 ? capReasons[i] || "Tope de riesgo" : coverage < 0.60 ? "Cobertura de datos < 60 %" : null;
+if (capReason) code = 2;
 }
-function signalOf(o) { return signalDetail(o).label; }
-function signalCode(label) { const i = SIGNAL_LABEL.indexOf(label); return i > 0 ? i : 1; }
+return { code, label: SIGNAL_LABEL[code], pct, capReason, capShort: capReason ? CAP_SHORT[capReason] || capReason : null };
+}
+// P(precio a 3 m > hoy) de una acción, misma forma que pUp de B.10
+function stockUpProb({ muAnn, divYield, sigAnn, h = 0.25 }) { return normCdf(((muAnn - divYield - sigAnn * sigAnn / 2) * h) / (sigAnn * Math.sqrt(h))); }
+function retStats({ muPrice, sig, h = 0.25 }) { return { expRet: Math.exp(muPrice * h) - 1, medRet: Math.exp((muPrice - sig * sig / 2) * h) - 1 }; }
 
 // No acciones
 function nonStockScore({ series, priceLive, asOf, cls, spx, rf, erp, sigM, h = 0.25, divYieldIdx = CONFIG.IDX_DIV_YIELD, isBenchmark = false }) {
@@ -1229,15 +1289,16 @@ const pen = [];
 if (sig > 1.2) pen.push(["Volatilidad > 120 %", 0.4]); else if (sig > 0.8) pen.push(["Volatilidad > 80 %", 0.2]);
 const z = clamp(t.z, -2.5, 2.5), zAdj = C.lambda * z - pen.reduce((s, p) => s + p[1], 0);
 const alpha = P.kappa * sig * zAdj * (0.5 + 0.5 * t.coverage);
-const ir = alpha / sig, A = 100 * normCdf(ir / P.irScale);
+const ir = alpha / sig;
 const muTot = (C.carryRf ? rf : 0) + (C.erp ? erp : 0) + alpha;
 const al = alignedLogReturns(rsHist.bars, spx), te = trackingErrorAnn(al, 252, 252);
 const pBeat = isBenchmark || cls === "fx" || !(te > 0) ? null : probBeat({ muA: muTot, sigA: sig, muM: rf + erp, sigM, te, h });
 const drift = (C.erp ? rf + erp - divYieldIdx : 0) + alpha;
-const pUp = normCdf(((drift - sig * sig / 2) * h) / (sig * Math.sqrt(h)));
+const up = d => normCdf(((d - sig * sig / 2) * h) / (sig * Math.sqrt(h)));
+const pUp = up(drift), pBase = up(drift - alpha); // pBase: la misma fórmula con α = 0 (07 §1.1)
 const dd = maxDrawdown(closes.slice(-253)).current; const caps = [], capReasons = [];
-if (dd < -0.5 && t.z < 0) { caps.push(2); capReasons.push("Caída > 50 % desde su máximo y tendencia negativa"); }
-return { zT: t.z, parts: t.parts, tsm: t, sig, alpha, ir, A, pBeat, pUp, cone: priceCone({ p0: priceLive, mu: drift, sig, h }), pen, caps, capReasons, coverage: t.coverage, muAnn: drift, te: fin(te), outlierFlag: rs.flag || rsHist.flag, lambda: C.lambda };
+if (dd < -0.5 && t.z < 0) { caps.push(2); capReasons.push("Caída > 50 % desde su máximo de 12 meses"); }
+return { zT: t.z, parts: t.parts, tsm: t, sig, alpha, ir, pBeat, pUp, pBase, ...retStats({ muPrice: drift, sig, h }), cone: priceCone({ p0: priceLive, mu: drift, sig, h }), pen, caps, capReasons, coverage: t.coverage, muAnn: drift, te: fin(te), outlierFlag: rs.flag || rsHist.flag, lambda: C.lambda };
 }
 
 // Explicabilidad (B.12 / §9.3)
@@ -1331,6 +1392,7 @@ out.atr14 = fin(last(atrWilder(hl.high, hl.low, c, 14)));
 return out;
 }
 function fundamentalsOf({ km, rt, fs, quote, ec, isFinancial }) {
+km = cleanZeros("km", km); rt = cleanZeros("rt", rt); fs = cleanZeros("fs", fs); quote = cleanZeros("quote", quote);
 const next = Array.isArray(ec) ? ec.filter(r => r && r.epsActual === null).sort((a, b) => (a.date > b.date ? 1 : -1))[0] : null;
 return {
 roic: fin(km?.returnOnInvestedCapitalTTM), roe: fin(km?.returnOnEquityTTM),
@@ -1350,11 +1412,10 @@ return v;
 }
 const confidenceOf = cov => (cov >= 0.85 ? "Alta" : cov >= 0.65 ? "Media" : "Baja");
 const seriesOut = bars => bars.slice(-260).map(b => [dayNum(b.date), b.close]);
+// Orden (07 §2): acciones antes que otros; dentro, pct mostrado ↓, pRef ↓, factores ↓, símbolo ↑
 function cmpRows(a, b) {
-if (b.A !== a.A) return b.A - a.A;
-const pa = isNum(a.pGate) ? a.pGate : -1, pb = isNum(b.pGate) ? b.pGate : -1;
-if (pb !== pa) return pb - pa;
-return a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0;
+if (a.group !== b.group) return a.group === "acciones" ? -1 : 1;
+return b.pct - a.pct || b.pRef - a.pRef || b.factorPct - a.factorPct || (a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0);
 }
 const flag = (code, text, severity) => ({ code, text, severity });
 function analyze(input) {
@@ -1366,7 +1427,8 @@ const reg = regimeFrom({ spxDesc: spxReg, vixQuote: input.vixQuote, treasuryDesc
 const rf = reg.rf;
 const rows = [], rest = [], excluded = (input.stage1?.excluded || []).slice(), notes = (input.notes || []).slice();
 const finalSet = new Set();
-for (const fz of input.finalists || []) {
+for (const fz0 of input.finalists || []) {
+const fz = Object.assign({}, fz0, { quote: cleanZeros("quote", fz0.quote), km: cleanZeros("km", fz0.km), rt: cleanZeros("rt", fz0.rt), fs: cleanZeros("fs", fz0.fs), pts: cleanZeros("pts", fz0.pts), ptc: cleanZeros("ptc", fz0.ptc) });
 finalSet.add(fz.symbol);
 const q = fz.quote || {}; const P_t = q.price; const changePct = fin(q.changePercentage);
 const scr = (status, reason) => rest.push({ symbol: fz.symbol, display: fz.symbol, name: String(q.name || fz.symbol), price: fin(P_t), changePct, S1: s1Of(fz.symbol), D1: d1Of(fz.symbol), status, reason });
@@ -1381,8 +1443,9 @@ if (fz.pts || fz.gs || fz.ptc) Object.assign(feat.f, infoFeatures({ pts: fz.pts,
 const sc = stockScore(feat, reg, { fs: fz.fs, isFinancial: fz.isFinancial });
 const divYield = isNum(fz.rt?.dividendYieldTTM) ? fz.rt.dividendYieldTTM : 0;
 const pr = stockPrediction({ S: sc.S, coverage: sc.coverage, beta: feat.meta.beta, te: feat.meta.te, volF: feat.meta.volF, rf, erp, sigM: reg.sigM, divYield, p0: P_t });
+if (!isNum(pr.pBeat)) { scr("sin_historial", "Sin historial suficiente para medir el riesgo"); continue; }
 const cp = stockCaps(feat, { fs: fz.fs, isFinancial: fz.isFinancial, changePct });
-const sg = signalDetail({ A: pr.A, regime: reg.state, coverage: sc.coverage, pGate: pr.pBeat, caps: cp.caps, capReasons: cp.reasons });
+const sg = signalFromProb({ p: pr.pBeat, coverage: sc.coverage, caps: cp.caps, capReasons: cp.reasons });
 const ex = explainStock(sc, reg, feat, fz.isFinancial);
 const bars = withLive(hist, P_t, asOf);
 const flags = [];
@@ -1398,8 +1461,9 @@ if (fz.isFinancial) flags.push(flag("financial", "Factores adaptados a financier
 rows.push({
 symbol: fz.symbol, display: fmt.displaySymbol(fz.symbol, false), name: String(q.name || fz.symbol), cls: "stock", clsLabel: CLS_LABEL.stock,
 price: P_t, priceTime: isNum(q.timestamp) ? q.timestamp * 1000 : nowMs, priceSource: "quote", changePct,
-A: pr.A, S: sc.S, zAdj: sc.zAdj, signal: sg.code, signalLabel: sg.label, capReasons: sg.reasons,
-pBeat: pr.pBeat, pBase: pr.pBase, pUp: null, pGate: pr.pBeat,
+group: "acciones", ref: "sp500", pRef: pr.pBeat, pct: sg.pct, factorPct: Math.round(sc.S), S: sc.S, zAdj: sc.zAdj,
+signal: sg.code, signalLabel: sg.label, capReason: sg.capReason, capShort: sg.capShort, capReasons: sg.capReason ? [sg.capReason] : [],
+pBeat: pr.pBeat, pBase: pr.pBase, pUp: null, pUpStock: pr.pUpStock, expRet: pr.expRet, medRet: pr.medRet,
 cone: pr.cone, muAnn: pr.muAnn, sigAnn: pr.sigAnn, divYield,
 alpha: pr.alpha, ir: pr.ir, te: feat.meta.te, vol: feat.meta.vol, beta: feat.meta.beta,
 coverage: sc.coverage, confidence: confidenceOf(sc.coverage),
@@ -1432,7 +1496,7 @@ const hist = normalizeEod(eodDesc, { asOf: aAsOf, dropDate: drop });
 const P_t = useQ ? quote.price : hist.length ? hist[hist.length - 1].close : null;
 const res = nonStockScore({ series: hist, priceLive: P_t, asOf: aAsOf, cls, spx, rf, erp, sigM: reg.sigM, isBenchmark: def.symbol === "^GSPC" });
 if (!res) { excluded.push({ symbol: def.symbol, reason: "Menos de 200 días de historia" }); continue; }
-const sg = signalDetail({ A: res.A, regime: reg.state, coverage: res.coverage, pGate: res.pUp, caps: res.caps, capReasons: res.capReasons });
+const sg = signalFromProb({ p: res.pUp, coverage: res.coverage, caps: res.caps, capReasons: res.capReasons });
 const ex = explainNonStock(res, cls);
 const bars = withLive(hist, P_t, aAsOf);
 const flags = [];
@@ -1444,9 +1508,10 @@ nonStockCount++;
 rows.push({
 symbol: def.symbol, display: fmt.displaySymbol(def.symbol, !!example), name, cls, clsLabel: CLS_LABEL[cls] || cls,
 price: P_t, priceTime: useQ ? quote.timestamp * 1000 : etWallToMs(aAsOf, "16:00"), priceSource: useQ ? "quote" : "history", changePct,
-A: res.A, S: 100 * normCdf(res.zT), zAdj: res.lambda * clamp(res.zT, -2.5, 2.5) - res.pen.reduce((s, p) => s + p[1], 0),
-signal: sg.code, signalLabel: sg.label, capReasons: sg.reasons,
-pBeat: res.pBeat, pBase: null, pUp: res.pUp, pGate: res.pUp,
+group: "otros", ref: "sube", pRef: res.pUp, pct: sg.pct, factorPct: Math.round(100 * normCdf(res.zT)),
+S: 100 * normCdf(res.zT), zAdj: res.lambda * clamp(res.zT, -2.5, 2.5) - res.pen.reduce((s, p) => s + p[1], 0),
+signal: sg.code, signalLabel: sg.label, capReason: sg.capReason, capShort: sg.capShort, capReasons: sg.capReason ? [sg.capReason] : [],
+pBeat: res.pBeat, pBase: res.pBase, pUp: res.pUp, pUpStock: null, expRet: res.expRet, medRet: res.medRet,
 cone: res.cone, muAnn: res.muAnn, sigAnn: res.sig, divYield: isEq ? CONFIG.IDX_DIV_YIELD : 0,
 alpha: res.alpha, ir: res.ir, te: res.te, vol: res.sig, beta: null,
 coverage: res.coverage, confidence: confidenceOf(res.coverage),
@@ -1461,7 +1526,7 @@ rest.sort((a, b) => (isNum(b.S1) ? b.S1 : -1) - (isNum(a.S1) ? a.S1 : -1));
 const s1n = (input.stage1?.rows || []).length;
 const meta = input.meta || {};
 const out = {
-asOf, plan, nowMs, example: !!example, partial: !!input.partial,
+asOf, plan, nowMs, example: !!example, partial: !!input.partial, partialReason: input.partial ? input.partialReason || "límite" : null,
 regime: reg, rf, erp, rows, rest, excluded,
 counts: {
 universe: isNum(meta.universe) ? meta.universe : s1n + excluded.length, eligible: isNum(meta.eligible) ? meta.eligible : s1n,
@@ -1471,6 +1536,47 @@ ranked: rows.length, nonStock: nonStockCount,
 notes,
 };
 return scrub(out);
+}
+
+// Partición del día para `db` (07 §5.3): documentos ≤ max bytes; las series van aparte.
+const bytesOf = x => new TextEncoder().encode(JSON.stringify(x)).length;
+function splitDay(output, { dateET, runId, max = CONFIG.SYNC.DOC_MAX_BYTES, dev = null, savedAt = null }) {
+const parts = [], mk = (kind, items) => {
+const k = parts.length, base = { kind: "diaParte", v: CONFIG.DAY_SCHEMA_VERSION, dateET, runId, k };
+return kind === "rows" ? Object.assign(base, { rows: items }) : kind === "rest" ? Object.assign(base, { rest: items }) : Object.assign(base, { series: Object.fromEntries(items) });
+};
+const pack = (kind, items) => {
+let cur = [];
+for (const it of items) {
+if (cur.length && bytesOf(mk(kind, cur.concat([it]))) > max) { parts.push(mk(kind, cur)); cur = []; }
+cur.push(it);
+}
+if (cur.length) parts.push(mk(kind, cur));
+};
+pack("rows", output.rows.map(r => Object.assign({}, r, { series: null }))); // null conserva el orden de las claves
+pack("series", output.rows.filter(r => Array.isArray(r.series) && r.series.length).map(r => [r.symbol, r.series]));
+const head = () => ({ kind: "dia", v: CONFIG.DAY_SCHEMA_VERSION, dateET, plan: output.plan, runId, savedAt, dev, partial: !!output.partial, partialReason: output.partialReason || null,
+meta: Object.assign({}, output, { rows: null }, restOut ? { rest: null } : {}), parts: parts.map((p, i) => ({ id: `dia-${dateET}-p${i}`, kind: p.rows ? "rows" : p.rest ? "rest" : "series", n: (p.rows || p.rest || Object.keys(p.series)).length })), bytes: parts.reduce((a, p) => a + bytesOf(p), 0) });
+let restOut = false, manifest = head();
+if (bytesOf(manifest) > max) { restOut = true; pack("rest", output.rest); manifest = head(); } // universos de pago: el resto también se parte
+return { manifest, parts };
+}
+function joinDay(manifest, parts) {
+if (!manifest || manifest.kind !== "dia" || !Array.isArray(manifest.parts) || !manifest.meta) return null;
+const byK = new Map();
+for (const p of parts || []) if (p) { if (p.runId !== manifest.runId) return null; byK.set(p.k, p); }
+const rows = [], series = {}, rest = [];
+for (let k = 0; k < manifest.parts.length; k++) {
+const d = manifest.parts[k], p = byK.get(k);
+if (!p) { if (d.kind === "series") continue; return null; }
+if (d.kind === "rows" && Array.isArray(p.rows)) rows.push(...p.rows);
+else if (d.kind === "rest" && Array.isArray(p.rest)) rest.push(...p.rest);
+else if (d.kind === "series" && p.series && typeof p.series === "object") Object.assign(series, p.series);
+else return null;
+}
+const out = Object.assign({}, manifest.meta, { rows: rows.map(r => Object.assign({}, r, { series: series[r.symbol] || [] })) });
+if (manifest.meta.rest === null) out.rest = rest;
+return out;
 }
 
 // Presupuesto (puro)
@@ -1548,11 +1654,11 @@ const sign = r === 0 ? "" : r < 0 ? MINUS : signed ? "+" : "";
 return sign + nf(d).format(r === 0 ? 0 : Math.abs(v)) + NBSP + "%";
 },
 pctFmp(x, d = 2) { return isNum(x) ? fmt.pctFrac(x / 100, d) : "—"; },
-prob(p) {
+prob(p) { // el entero mostrado es el que usa la señal (displayPct)
 if (!isNum(p)) return "—";
 if (p < 0.35) return "≤" + NBSP + "35" + NBSP + "%";
 if (p > 0.65) return "≥" + NBSP + "65" + NBSP + "%";
-return "≈" + NBSP + Math.round(p * 100) + NBSP + "%";
+return "≈" + NBSP + displayPct(p) + NBSP + "%";
 },
 price(x, o = {}) {
 if (!isNum(x)) return "—";
@@ -1599,7 +1705,7 @@ xsecPercentile, rankZ, winsorize, anchorZ, combineZ, alphaFromScore, probBeat, p
 etParts, etWallToMs, isTradingDay, prevTradingDay, nextTradingDay, lastTradingDayOnOrBefore, marketState, isFresh,
 makeError, classifyText, asArray, normalizeEod, riskSeries, filterFloatUniverse, filterQuotes, isJunkListing,
 stage1Select, regimeFrom, stockFeatures, infoFeatures, stockScore, stockCaps, stockPrediction,
-nonStockScore, signalOf, signalDetail, signalCode, explainStock, explainNonStock, technicals, fundamentalsOf, analyze,
+nonStockScore, displayPct, signalFromProb, stockUpProb, retStats, cleanZeros, extractRows, splitDay, joinDay, bytesOf, explainStock, explainNonStock, technicals, fundamentalsOf, analyze,
 planRun, liveIntervalMs, canAuto, fmt,
 };
 root.RadarCore = Object.freeze(RadarCore);
@@ -2056,7 +2162,7 @@ const count = v => Number.isInteger(v) && v >= 0; // conteo válido de la caché
 
 // Único acceso al almacenamiento. Nunca lanza.
 function makeStorage(ls) {
-const PFX = CFG.LS_PREFIX;
+const PFX = CFG.LS_PREFIX, ver = k => (k.startsWith("day.") ? CFG.DAY_SCHEMA_VERSION : CFG.SCHEMA_VERSION);
 const ok = !!ls && typeof ls.getItem === "function";
 return Object.freeze({
 get(k) {
@@ -2064,13 +2170,13 @@ if (!ok) return null;
 try {
 const s = ls.getItem(PFX + k); if (s == null) return null;
 const v = JSON.parse(s);
-if (!v || v.v !== CFG.SCHEMA_VERSION) { try { ls.removeItem(PFX + k); } catch (e) { /* sin acceso */ } return null; }
+if (!v || v.v !== ver(k)) { try { ls.removeItem(PFX + k); } catch (e) { /* sin acceso */ } return null; }
 return v;
 } catch (e) { return null; }
 },
 set(k, val) {
 if (!ok) return false;
-try { ls.setItem(PFX + k, JSON.stringify(Object.assign({}, val, { v: CFG.SCHEMA_VERSION }))); return true; } catch (e) { return false; }
+try { ls.setItem(PFX + k, JSON.stringify(Object.assign({}, val, { v: ver(k) }))); return true; } catch (e) { return false; }
 },
 remove(k) { if (!ok) return; try { ls.removeItem(PFX + k); } catch (e) { /* sin acceso */ } },
 keys(prefix = "") {
@@ -2115,21 +2221,6 @@ case "cancelled": return mk("cancelled");
 default: return retryable ? mk("transient", { retryable, retryAfterMs: ra }) : mk("unknown"); // upstream_error y códigos nuevos
 }
 }
-function classifyPayload(payload) {
-if (payload === undefined || payload === null) return C.makeError("tool_error", "unexpected_shape", { raw: "payload vacío" });
-if (typeof payload === "string") {
-let parsed;
-try { parsed = JSON.parse(payload); } catch (e) { return C.classifyText(payload) || C.makeError("tool_error", "unexpected_shape", { raw: payload.slice(0, 200) }); }
-return classifyPayload(parsed);
-}
-if (typeof payload === "object" && !Array.isArray(payload)) {
-const em = payload["Error Message"] || payload["error"];
-if (typeof em === "string") return C.classifyText(em) || C.makeError("tool_error", "tool_failed", { raw: em.slice(0, 200) });
-}
-if (typeof payload !== "object") return C.makeError("tool_error", "unexpected_shape", { raw: String(payload) });
-return null;
-}
-
 function makeBucket({ perMin, now }) {
 const stamps = [];
 return {
@@ -2167,18 +2258,42 @@ const bornAt = clock();
 let tier = plan;
 let bucket = makeBucket({ perMin: CFG.PLAN_PER_MIN[tier], now: clock });
 const gate = makeGate(Math.max(1, concurrency));
-const lastCounted = new Map(), lastSeen = new Map();
-// N1: llamadas con caché en vuelo por identidad. El shell entrega su resultado también a los watches de esa identidad,
-// a veces antes de resolver la llamada: esa entrega es la MISMA ejecución y la cuenta la llamada, no el watch.
-const inCall = new Map();
+const lastFailed = new Map(), lastSeen = new Map();
+// N1: el shell entrega el resultado de una llamada con caché también a los watches de esa identidad, antes o después
+// de resolverla: esa entrega es la MISMA ejecución y la cuenta la llamada. Se empareja por huella del resultado, sin ventana
+// de tiempo: `held` guarda las entregas llegadas con la llamada en vuelo y `callFp` los resultados de llamadas aún sin entrega.
+const inCall = new Map(), watched = new Map(), held = new Map(), callFp = new Map();
+const FP_TTL_MS = 120000, FP_MAX = 4;
 const callBusy = id => (inCall.get(id) || 0) > 0;
-const recentOf = (id, t) => lastCounted.has(id) && t - lastCounted.get(id) < 5000; // la llamada ya contó esta ejecución
+const failedRecently = (id, t) => lastFailed.has(id) && t - lastFailed.get(id) < 5000; // el fallo ya lo contó la llamada
+function fpOf(res) {
+const r = res || {}, s = JSON.stringify(r.payload !== undefined ? r.payload : r.structuredContent !== undefined ? r.structuredContent : r.content) || "";
+let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+return (h >>> 0).toString(36) + "." + s.length;
+}
+function takeFp(map, id, fp) {
+const a = map.get(id), i = a ? a.findIndex(x => x.fp === fp) : -1;
+if (i < 0) return false;
+a.splice(i, 1); if (!a.length) map.delete(id);
+return true;
+}
+function pushFp(map, id, x, max) { const a = map.get(id) || []; a.push(x); if (max && a.length > max) a.shift(); map.set(id, a); }
+// fin de una llamada con caché: empareja su entrega retenida; sin llamadas en vuelo, lo retenido restante son ejecuciones propias del watch
+function settleHeld(id, res) {
+const fp = res && (held.has(id) || watched.has(id)) ? fpOf(res) : null; // la huella solo hace falta si hay un watch
+if (fp && !takeFp(held, id, fp) && watched.has(id)) pushFp(callFp, id, { fp, t: clock() }, FP_MAX);
+if (callBusy(id) || !held.has(id)) return;
+for (const h of held.get(id)) budget.note(1, h.cat);
+held.delete(id);
+}
 const persist = () => tier !== "EXAMPLE";
 const limitOf = () => CFG.PLAN_DAILY_LIMIT[tier];
 const emptyCats = () => Object.fromEntries(CATS.map(c => [c, 0]));
 
 // runDay: marca "corrida lanzada hoy (fecha ET)", aparte del contador: no la borran reset() ni el cambio de día (director, ronda 2)
-const fresh = (today, runDay) => ({ dateET: today, used: 0, limit: limitOf(), limitHit: false, byCat: emptyCats(), runDay });
+const fresh = (today, runDay) => ({ dateET: today, used: 0, limit: limitOf(), limitHit: false, byCat: emptyCats(), runDay, suspect: null });
+// remote: lo que suman los otros dispositivos + el ajuste de "Restablecer" (07 §5.6); 0 sin sincronización
+let remote = { dateET: null, used: 0, limitHit: false, suspect: false };
 let st = load();
 function load() {
 const today = C.etParts(clock()).date;
@@ -2187,12 +2302,12 @@ const runDay = v && typeof v.runDay === "string" ? v.runDay : null;
 if (v && v.dateET === today) {
 const byCat = emptyCats();
 for (const c of CATS) if (v.byCat && count(v.byCat[c])) byCat[c] = v.byCat[c];
-return { dateET: today, used: count(v.used) ? v.used : 0, limit: limitOf(), limitHit: !!v.limitHit, byCat, runDay };
+return { dateET: today, used: count(v.used) ? v.used : 0, limit: limitOf(), limitHit: !!v.limitHit, byCat, runDay, suspect: v.suspect === today ? today : null };
 }
 return fresh(today, runDay);
 }
 function save() {
-if (persist()) store.set("budget", { dateET: st.dateET, used: st.used, limit: isFinite(st.limit) ? st.limit : null, limitHit: st.limitHit, byCat: st.byCat, runDay: st.runDay });
+if (persist()) store.set("budget", { dateET: st.dateET, used: st.used, limit: isFinite(st.limit) ? st.limit : null, limitHit: st.limitHit, byCat: st.byCat, runDay: st.runDay, suspect: st.suspect });
 if (onBudget) { try { onBudget(budget.get()); } catch (e) { /* el observador no debe romper la capa de datos */ } }
 }
 function roll() {
@@ -2200,10 +2315,23 @@ const today = C.etParts(clock()).date;
 if (today !== st.dateET) { st = fresh(today, st.runDay); save(); }
 st.limit = limitOf();
 }
+const rem = () => (remote.dateET === st.dateET ? remote : { used: 0, limitHit: false, suspect: false });
 const budget = {
-get() { roll(); return { dateET: st.dateET, used: st.used, limit: st.limit, limitHit: st.limitHit, byCat: Object.assign({}, st.byCat), ranToday: st.runDay === st.dateET }; },
-remaining() { roll(); return st.limitHit ? 0 : st.limit - st.used; },
-note(n, cat) { roll(); st.used += n; const c = CATS.includes(cat) ? cat : "manual"; st.byCat[c] = (st.byCat[c] || 0) + n; save(); },
+get() {
+roll(); const r = rem();
+return { dateET: st.dateET, used: Math.max(0, st.used + r.used), local: st.used, limit: st.limit, limitHit: st.limitHit || r.limitHit, byCat: Object.assign({}, st.byCat),
+ranToday: st.runDay === st.dateET, suspect: st.suspect === st.dateET || r.suspect };
+},
+remaining() { const b = budget.get(); return b.limitHit ? 0 : b.limit - b.used; },
+local() { roll(); return { dateET: st.dateET, used: st.used, byCat: Object.assign({}, st.byCat), limitHit: st.limitHit, suspect: st.suspect === st.dateET ? st.dateET : null }; },
+setRemote(r) { remote = Object.assign({ used: 0, limitHit: false, suspect: false }, r); if (onBudget) { try { onBudget(budget.get()); } catch (e) { /* idem */ } } },
+markSuspect() { roll(); st.suspect = st.dateET; save(); },
+clearLimit() { roll(); st.limitHit = false; save(); },
+note(n, cat) {
+roll(); st.used += n; const c = CATS.includes(cat) ? cat : "manual"; st.byCat[c] = (st.byCat[c] || 0) + n;
+if (c === "corrida") st.runDay = st.dateET; // una corrida que cruza la medianoche ET también marca el día en que gastó
+save();
+},
 markLimitHit() { roll(); if (isFinite(st.limit)) st.used = Math.max(st.used, st.limit); st.limitHit = true; save(); },
 reset() { st = fresh(C.etParts(clock()).date, st.runDay); save(); },
 markRun() { roll(); st.runDay = st.dateET; save(); },
@@ -2232,20 +2360,19 @@ release();
 } catch (raw) {
 release();
 const e = Object.assign({}, classifyError(raw), { section: o.section });
-if (COUNTED.has(e.code)) { budget.note(1, cat); lastCounted.set(id, clock()); }
+if (COUNTED.has(e.code)) { budget.note(1, cat); lastFailed.set(id, clock()); }
 if (e.kind === "limit_reached") budget.markLimitHit();
 log({ key, cat, section: o.section, ok: false, code: e.code, kind: e.kind });
-if (feeds) inCall.set(id, inCall.get(id) - 1);
+if (feeds) { inCall.set(id, inCall.get(id) - 1); settleHeld(id, null); }
 if (e.retryable && !o.noRetry && attempt === 0) { await sleep(Math.min(60000, isNum(e.retryAfterMs) ? e.retryAfterMs : 500 + Math.random() * 1000)); continue; }
 throw e;
 }
 const cached = !!(res && res.cache);
-if (!cached) { budget.note(1, cat); lastCounted.set(id, clock()); lastSeen.set(id, clock()); }
-if (feeds) inCall.set(id, inCall.get(id) - 1); // ya contada: una entrega posterior al watch cae en `recent`
+if (!cached) { budget.note(1, cat); lastSeen.set(id, clock()); }
+if (feeds) { inCall.set(id, inCall.get(id) - 1); settleHeld(id, cached ? null : res); }
 log({ key, cat, section: o.section, ok: true, cached });
-const pe = classifyPayload(res ? res.payload : undefined);
-if (pe) { if (pe.kind === "limit_reached") budget.markLimitHit(); throw Object.assign(pe, { section: o.section }); }
-return C.asArray(res.payload);
+try { return C.extractRows(res); } // 07 §E1: payload, structuredContent o texto JSON
+catch (err) { const pe = classifyError(err); if (pe.kind === "limit_reached") budget.markLimitHit(); throw Object.assign(pe, { section: o.section }); }
 }
 }
 
@@ -2255,6 +2382,7 @@ const cat = o.cat || "franja";
 if (!ep) { Promise.resolve().then(() => handler({ type: "error", error: C.makeError("bad_request", "bug", { section: o.section }) })); return () => {}; }
 const input = ep.build(args || {}), id = ep.tool + "|" + stable(input);
 let active = true, unsub = null, release = null, safety = null;
+watched.set(id, (watched.get(id) || 0) + 1);
 const opts = { cache: Object.assign({}, DAY) };
 if (isNum(o.refetchInterval)) opts.refetchInterval = o.refetchInterval;
 const emit = ev => { if (active) { try { handler(ev); } catch (e) { if (root.console) root.console.error(e); } } };
@@ -2273,17 +2401,23 @@ if (!active || !ev) return;
 if (ev.type === "data") {
 const res = ev.result || {}, mark = res.cache, t = clock();
 const newer = mark && isNum(mark.storedAt) && mark.storedAt > bornAt && mark.storedAt > (lastSeen.get(id) || 0) + 1000;
-if ((!mark || newer) && !recentOf(id, t) && !callBusy(id)) { budget.note(1, cat); lastCounted.set(id, t); }
+if (!mark || newer) {
+const fp = fpOf(res), mine = callFp.get(id);
+if (mine) { const live = mine.filter(x => t - x.t < FP_TTL_MS); if (live.length) callFp.set(id, live); else callFp.delete(id); }
+if (!takeFp(callFp, id, fp)) { // si coincide, es la entrega de una llamada ya contada
+if (callBusy(id)) pushFp(held, id, { fp, cat }); // se decide al terminar la llamada
+else budget.note(1, cat);
+}
+}
 lastSeen.set(id, Math.max(lastSeen.get(id) || 0, mark && isNum(mark.storedAt) ? mark.storedAt : t));
 log({ key, cat, section: o.section, ok: true, cached: !!mark, watch: true });
-const pe = classifyPayload(res.payload);
-if (pe) { if (pe.kind === "limit_reached") budget.markLimitHit(); emit({ type: "error", error: Object.assign(pe, { section: o.section }) }); return; }
 let rows;
-try { rows = C.asArray(res.payload); } catch (err) { emit({ type: "error", error: Object.assign(classifyError(err), { section: o.section }) }); return; }
+try { rows = C.extractRows(res); }
+catch (err) { const pe = classifyError(err); if (pe.kind === "limit_reached") budget.markLimitHit(); emit({ type: "error", error: Object.assign(pe, { section: o.section }) }); return; }
 emit({ type: "data", rows, storedAt: mark && isNum(mark.storedAt) ? mark.storedAt : t, fresh: !mark });
 } else if (ev.type === "error") {
 const e = Object.assign({}, classifyError(ev.error), { section: o.section });
-if (COUNTED.has(e.code) && !callBusy(id) && !recentOf(id, clock())) budget.note(1, cat); // misma regla que call() (S3); la llamada en vuelo cuenta su propio fallo
+if (COUNTED.has(e.code) && !callBusy(id) && !failedRecently(id, clock())) budget.note(1, cat); // misma regla que call() (S3); la llamada en vuelo cuenta su propio fallo
 if (e.kind === "limit_reached") budget.markLimitHit();
 log({ key, cat, section: o.section, ok: false, code: e.code, kind: e.kind, watch: true });
 emit({ type: "error", error: e });
@@ -2294,7 +2428,10 @@ free();
 Promise.resolve().then(() => emit({ type: "error", error: Object.assign(classifyError({ code: "bad_request", message: String(err) }), { section: o.section }) }));
 }
 }
-return () => { active = false; free(); if (unsub) { try { unsub(); } catch (e) { /* idempotente */ } unsub = null; } };
+return () => {
+if (active) { const n = (watched.get(id) || 1) - 1; if (n > 0) watched.set(id, n); else { watched.delete(id); callFp.delete(id); } }
+active = false; free(); if (unsub) { try { unsub(); } catch (e) { /* idempotente */ } unsub = null; }
+};
 }
 
 function runQueue(tasks, o = {}) {
@@ -2365,7 +2502,178 @@ st = load(); save();
 return Object.freeze({ plan: () => tier, setPlan, budget, call, watch, runQueue, detectPlan, identity });
 }
 
-root.RadarData = Object.freeze({ create, makeStorage, classifyError, classifyPayload, makeBucket, ENDPOINTS, stable });
+
+// Sincronización entre dispositivos con `db` en data/users/<uid>/… (07 §5). Sin db/uid queda inactiva y la página usa
+// solo el almacenamiento del navegador. Ningún fallo de `db` sale de aquí: se degrada y lo dice en statusText.
+const TERMINAL = new Set(["revoked", "not_granted", "capability_disabled", "capability_removed"]);
+const LOCAL_TEXT = "Solo en este navegador (inicia sesión en claude.ai para sincronizar entre dispositivos)";
+function createSync({ db, uid, dev, now, storage, timer = setTimeout }) { // timer: debounces en el reloj de la página
+const S = CFG.SYNC, col = db && uid ? db.collection("data/users/" + uid) : null;
+const st = { active: !!col, status: col ? "loading" : "inactive", statusText: col ? "Sincronizando con tus otros dispositivos…" : LOCAL_TEXT };
+const counters = new Map(); // id → cuerpo (contador-<dev> y contador-ajuste)
+let own = null, ownTimer = null, livePatch = null, liveTimer = null, liveDoc = null, liveSet = false, dayWrites = true;
+const off = (text, status = "inactive") => { st.active = false; st.status = status; st.statusText = text; };
+const fail = e => {
+const code = e && e.code;
+if (code === "invalid_argument") off("Sincronización no disponible con tu nivel de acceso");
+else if (TERMINAL.has(code)) off(LOCAL_TEXT);
+return code;
+};
+const wait = ms => new Promise(r => setTimeout(r, ms));
+async function verb(fn) { // `unavailable`: 1 reintento tras 0.5–1.5 s
+try { return await fn(); } catch (e) { if (e && e.code === "unavailable") { await wait(500 + Math.random() * 1000); return fn(); } throw e; }
+}
+const ref = id => col.doc(id);
+const read = async id => { const d = await verb(() => ref(id).get()); return d.exists ? d.data() : null; };
+async function write(id, body) { if (!st.active) return false; try { await verb(() => ref(id).set(body)); return true; } catch (e) { fail(e); return false; } }
+function globalCounter(today) {
+let used = 0, limitHit = false, suspect = false;
+const adj = counters.get("contador-ajuste"), aj = adj && adj.dateET === today ? adj : null, offset = aj && isNum(aj.offset) ? aj.offset : 0;
+for (const [id, d] of counters) {
+if (!d || d.kind !== "contador" || d.dateET !== today || id === "contador-" + dev) continue; // el propio va en memoria
+if (isNum(d.used)) used += d.used;
+if (!aj || d.at > aj.at) { limitHit = limitHit || !!d.limitHit; suspect = suspect || d.suspect === today; } // un reinicio limpia lo anterior
+}
+return { dateET: today, used: used + offset, offset, limitHit, suspect };
+}
+const readCounters = async () => { const q = await verb(() => col.where("kind", "in", ["contador", "ajuste"]).get()); counters.clear(); q.docs.forEach(d => counters.set(d.id, d.data())); };
+async function readDay(today) {
+const m = await read("dia-" + today);
+if (!m) return null;
+const parts = await Promise.all((m.parts || []).map(p => read(p.id).catch(() => null)));
+return { manifest: m, output: C.joinDay(m, parts.filter(Boolean)) };
+}
+async function load(today) {
+if (!st.active) return { ok: false };
+const work = (async () => {
+const [plan, holidays, live, run, day] = await Promise.all([read("plan"), read("feriados-" + today.slice(0, 4)), read("vivo"), read("corrida"), readDay(today), readCounters()]);
+liveDoc = live || null;
+return { ok: true, plan, holidays, live, run, day, counters: globalCounter(today) };
+})();
+work.catch(() => {}); // si gana el tope de tiempo, su rechazo posterior no debe quedar suelto
+let res;
+try { res = await Promise.race([work, wait(S.LOAD_TIMEOUT_MS).then(() => null)]); } catch (e) { fail(e); res = null; }
+if (!res) {
+if (st.active) { st.status = "degraded"; st.statusText = "No se pudo comprobar si ya corriste el análisis en otro dispositivo. Si no, córrelo aquí."; }
+return { ok: false };
+}
+st.status = "ok"; st.statusText = "Sincronizado entre tus dispositivos";
+return res;
+}
+// Reclamo de la corrida: acquire (arrendamiento corto) + get + set (receta "claim a slot" del contrato)
+async function claimRun({ dayET, plan, auto }) {
+if (!st.active) return { ok: false, reason: "error" };
+try {
+const r = ref("corrida"), lease = await verb(() => r.acquire({ holder: dev, ttlMs: S.RUN_LEASE_MS }));
+if (!lease.acquired) return { ok: false, reason: "busy", expiresAt: lease.expiresAt };
+const cur = await read("corrida"), t = now();
+if (cur && cur.dateET === dayET) {
+if (cur.state === "running" && t - cur.startedAt < S.RUN_STALE_MIN * 60000) return { ok: false, reason: "running", run: cur };
+if (auto) return { ok: false, reason: "already", run: cur };
+}
+const runId = dev + "-" + t;
+await verb(() => r.set({ kind: "corrida", v: 1, dateET: dayET, plan, state: "running", auto: !!auto, dev, runId, startedAt: t, finishedAt: null, reason: null }));
+return { ok: true, runId };
+} catch (e) { fail(e); return { ok: false, reason: "error" }; }
+}
+async function finishRun({ runId, state, reason }) {
+if (!st.active || !runId) return;
+try { const cur = await read("corrida"); if (cur && cur.runId === runId) await verb(() => ref("corrida").update({ state, finishedAt: now(), reason: reason || null })); } catch (e) { fail(e); }
+}
+async function saveDay(output, dayET, runId) {
+if (!st.active || !dayWrites) return false;
+const { manifest, parts } = C.splitDay(output, { dateET: dayET, runId, dev, savedAt: now() });
+const put = async () => { for (const [i, p] of parts.entries()) await verb(() => ref(manifest.parts[i].id).set(p)); await verb(() => ref("dia-" + dayET).set(manifest)); };
+try { await put(); }
+catch (e) {
+if (e && e.code === "quota_exceeded") { await prune(dayET, true); try { await put(); } catch (e2) { dayWrites = false; st.statusText = "Sin espacio para guardar el análisis en tus dispositivos; queda en este navegador."; return false; } }
+else { fail(e); return false; }
+}
+try {
+const idx = (await read("indice")) || { dias: [] };
+const dias = (idx.dias || []).filter(d => d && d.dateET !== dayET).concat([{ dateET: dayET, parts: manifest.parts.length }]).sort((a, b) => (a.dateET < b.dateET ? 1 : -1));
+await verb(() => ref("indice").set({ kind: "indice", v: 1, dias, at: now() }));
+} catch (e) { fail(e); }
+return true;
+}
+// Contador: valor ABSOLUTO de este dispositivo, con debounce; nunca incrementos (last-writer-wins)
+function writeCounter(b) {
+if (!st.active || !b) return;
+own = { kind: "contador", v: 1, dev, dateET: b.dateET, used: b.used, byCat: b.byCat, limitHit: !!b.limitHit, suspect: b.suspect || null };
+if (!ownTimer) ownTimer = timer(flush, S.COUNTER_DEBOUNCE_MS);
+}
+async function flush() {
+clearTimeout(ownTimer); ownTimer = null;
+if (liveTimer) { clearTimeout(liveTimer); await pushLive(); }
+if (!own) return;
+const body = Object.assign({}, own, { at: now() }); own = null;
+if (await write("contador-" + dev, body)) counters.set("contador-" + dev, body);
+}
+async function writeAdjust(offset, dateET) {
+const body = { kind: "ajuste", v: 1, dateET, offset, at: now() };
+if (await write("contador-ajuste", body)) counters.set("contador-ajuste", body);
+}
+const writePlan = d => write("plan", Object.assign({ kind: "plan", v: 1 }, d, { at: now() }));
+const writeHolidays = (year, rows) => write("feriados-" + year, { kind: "feriados", v: 1, year, rows, at: now() });
+function merge(a, b) { const o = Object.assign({}, a); for (const [k, v] of Object.entries(b)) o[k] = v && typeof v === "object" && !Array.isArray(v) && o[k] && typeof o[k] === "object" ? merge(o[k], v) : v; return o; }
+function patchLive(patch) {
+if (!st.active) return;
+livePatch = merge(livePatch || {}, patch);
+if (!liveTimer) liveTimer = timer(pushLive, liveSet ? S.LIVE_SET_DEBOUNCE_MS : S.LIVE_DEBOUNCE_MS);
+}
+async function pushLive() {
+liveTimer = null; const p = livePatch; livePatch = null;
+if (!p || !st.active) return;
+try {
+if (liveDoc && !liveSet) { await verb(() => ref("vivo").update(p)); liveDoc = merge(liveDoc, p); }
+else { const full = merge(liveDoc || { kind: "vivo", v: 1 }, p); await verb(() => ref("vivo").set(full)); liveDoc = full; }
+} catch (e) {
+// 07 §10: si se rechaza `update` (merge anidado o documento borrado), `vivo` pasa a `set` completo con debounce de 10 s
+if (e && e.code === "invalid_argument" && liveDoc && !liveSet) { liveSet = true; livePatch = merge(p, livePatch || {}); if (!liveTimer) liveTimer = timer(pushLive, S.LIVE_SET_DEBOUNCE_MS); }
+else if (!(e && e.code === "resource_exhausted")) fail(e);
+}
+}
+// Suscripciones (≤ 4 por carga): corrida, día de hoy, contadores y vivo
+function subscribe(today, h) {
+if (!st.active) return () => {};
+const unsubs = [], onErr = e => fail(e);
+const doc = (id, fn) => { try { unsubs.push(ref(id).onSnapshot(d => fn(d.exists ? d.data() : null), onErr)); } catch (e) { onErr(e); } };
+doc("corrida", r => h.onRun && h.onRun(r));
+doc("dia-" + today, async m => { if (m && h.onDay) { const d = await readDay(today).catch(() => null); if (d) h.onDay(d); } });
+doc("vivo", v => { if (v) liveDoc = v; if (v && h.onLive) h.onLive(v); });
+try {
+unsubs.push(col.where("kind", "in", ["contador", "ajuste"]).onSnapshot(q => {
+counters.clear(); q.docs.forEach(d => counters.set(d.id, d.data()));
+if (h.onCounters) h.onCounters(globalCounter(today));
+}, onErr));
+} catch (e) { onErr(e); }
+return () => unsubs.forEach(u => u());
+}
+// Poda: una vez por día ET y por dispositivo
+async function prune(today, force) {
+if (!st.active || (!force && storage.get("sync.pruned") && storage.get("sync.pruned").dateET === today)) return;
+storage.set("sync.pruned", { dateET: today });
+try {
+const idx = await read("indice");
+const dias = ((idx && idx.dias) || []).slice().sort((a, b) => (a.dateET < b.dateET ? 1 : -1));
+for (const d of dias.slice(S.KEEP_DAYS)) {
+for (let k = 0; k < (d.parts || 0); k++) await verb(() => ref(`dia-${d.dateET}-p${k}`).delete());
+await verb(() => ref("dia-" + d.dateET).delete());
+}
+if (dias.length > S.KEEP_DAYS) await verb(() => ref("indice").set({ kind: "indice", v: 1, dias: dias.slice(0, S.KEEP_DAYS), at: now() }));
+const yest = C.addDays(today, -1);
+for (const [id, d] of counters) if (d && d.dateET < yest) { await verb(() => ref(id).delete()); counters.delete(id); }
+await verb(() => ref("feriados-" + (Number(today.slice(0, 4)) - 1)).delete());
+} catch (e) { fail(e); }
+}
+return {
+get active() { return st.active; }, get status() { return st.status; }, get statusText() { return st.statusText; },
+load, claimRun, finishRun, saveDay, writeCounter, flush, writeAdjust, writePlan, writeHolidays, patchLive, subscribe, prune,
+globalCounter,
+};
+}
+
+root.RadarData = Object.freeze({ create, createSync, makeStorage, classifyError, makeBucket, ENDPOINTS, stable });
 })(globalThis);
 </script>
 <script id="radar-ui">
@@ -2384,6 +2692,18 @@ state: null, client: null, perm: null, pageAbort: new AbortController(), bootDay
 const pageSig = () => App.pageAbort.signal; // stopAll() la aborta tras un error de página
 function browserStore() { try { return root.localStorage; } catch (e) { return null; } }
 const store = D.makeStorage(browserStore());
+let Sync = D.createSync({}); // inactiva hasta que haya db + user + id (07 §5.1)
+function deviceId() {
+const c = store.get("device");
+if (c && typeof c.id === "string" && /^d[0-9a-z]{10}$/.test(c.id)) return c.id;
+const id = "d" + Array.from({ length: 10 }, () => Math.floor(Math.random() * 36).toString(36)).join("");
+store.set("device", { id });
+return id;
+}
+// 07 §E4 (N10): los botones manuales esperan a que termine la corrida
+const busyRun = () => App.state.run.status === "running", WAIT_TXT = "Espera a que termine el análisis";
+const OTHER_RUNNING = "Otro dispositivo está corriendo el análisis de hoy; aparecerá aquí al terminar.";
+const RUNNING_TXT = "Analizando; el ranking aparece aquí al terminar.";
 
 const STRIP = C.NONSTOCK.filter(d => d.strip);
 const RANKED = C.NONSTOCK.filter(d => d.rank);
@@ -2393,8 +2713,14 @@ const groupOf = cls => (cls.startsWith("crypto") ? "crypto" : cls === "fx" ? "fx
 const EXAMPLE_KINDS = new Set(["no_mcp", "not_connected", "selection", "auth", "policy", "denied_scope"]);
 const PAGE_KINDS = new Set(["limit_reached", "auth", "not_connected", "selection", "no_mcp", "policy"]);
 const CLS_FILTERS = [["all", "Todas"], ["stock", "Acciones"], ["commodity", "Materias primas"], ["crypto", "Cripto"], ["fx", "Divisas"], ["index", "Índices y ETF"]];
-const SIG_FILTERS = [["all", "Todas"], ["4", "Compra fuerte"], ["3", "Compra"], ["2", "Mantener"], ["1", "Evitar"]];
-const SIG_TXT = { 4: "▲▲ Compra fuerte", 3: "▲ Compra", 2: "■ Mantener", 1: "▼ Evitar" };
+const SIG_FILTERS = [["all", "Todas"], ["3", "Compra"], ["2", "Mantener"], ["1", "Evitar"]];
+const SIG_TXT = { 3: "▲ Compra", 2: "■ Mantener", 1: "▼ Evitar" };
+// Encabezados de grupo (07 §3.2)
+const GROUP_TXT = {
+acciones: ["Acciones · probabilidad de ganarle al S&P 500 en 3 meses", "50 % es una moneda al aire. Una acción típica ronda ≈ 47 % y las mejores del modelo rara vez pasan de ≈ 54 %: es una ventaja pequeña, no una certeza."],
+otros: ["Índices, ETF, materias primas, cripto y divisas · probabilidad de que el precio suba en 3 meses", "Los índices de bolsa suelen quedar arriba de 50 % por la prima de riesgo de las acciones. La cripto casi nunca: con volatilidad tan alta, la mayoría de los escenarios termina abajo aunque la tendencia sea alcista."],
+};
+const NO_BUY_NOTE = " Hoy ninguna acción supera el umbral de compra; si quieres bolsa, mira los índices abajo.";
 const WD_ES = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const PLAN_NAME = { FREE: "Free", STARTER: "Starter", PREMIUM: "Premium", ULTIMATE: "Ultimate", EXAMPLE: "Ejemplo" };
@@ -2437,11 +2763,11 @@ const p = store.get("prefs") || {};
 const ok = (v, list, d) => (list.includes(v) ? v : d);
 return {
 theme: ok(p.theme, ["system", "light", "dark"], "system"), cls: ok(p.cls, CLS_FILTERS.map(x => x[0]), "all"),
-sig: ok(p.sig, SIG_FILTERS.map(x => x[0]), "all"), sort: ok(p.sort, ["A", "p", "S", "chg"], "A"),
+sig: ok(p.sig, SIG_FILTERS.map(x => x[0]), "all"),
 showRest: p.showRest === true, sel: typeof p.sel === "string" ? p.sel : null,
 };
 }
-function prefsNow() { const u = App.state.ui; return { theme: u.theme, cls: u.cls, sig: u.sig, sort: u.sort, showRest: u.showRest, sel: u.selected }; }
+function prefsNow() { const u = App.state.ui; return { theme: u.theme, cls: u.cls, sig: u.sig, showRest: u.showRest, sel: u.selected }; }
 function savePrefs() { return store.set("prefs", prefsNow()); }
 function storageWorks() { return savePrefs() && !!store.get("prefs"); }
 
@@ -2459,7 +2785,7 @@ breadth: { gainers: blank(), losers: blank(), active: blank(), sectors: { NASDAQ
 macro: { status: "loading", spxDesc: null, treasuryDesc: null, regime: null, err: null, storedAt: null },
 run: { status: "idle", stage: null, done: 0, total: 0, plan: null, startedAt: null, finishedAt: null, abort: null, message: null },
 result: null, resultSource: null, resultSavedAt: null,
-ui: { cls: prefs.cls, sig: prefs.sig, sort: prefs.sort, showRest: prefs.showRest, selected: prefs.sel, theme: prefs.theme, extra: {}, thesis: {}, rankWatch: null },
+ui: { cls: prefs.cls, sig: prefs.sig, showRest: prefs.showRest, selected: prefs.sel, theme: prefs.theme, extra: {}, thesis: {}, rankWatch: null },
 sections: { strip: sec(), ranking: sec(), detail: { state: "empty", err: null }, breadth: sec(), macro: sec(), status: sec() },
 sample: { fn: null, status: "unknown" },
 page: { banner: null },
@@ -2470,8 +2796,9 @@ function sec() { return { state: "loading", err: null }; }
 
 // almacenamiento: caches
 function persistOk() { return App.state.mode === "live"; }
-function saveLive() {
-if (!persistOk()) return;
+const patched = {}; // storedAt ya enviado a `vivo` por clave
+function saveLive(fromSync) {
+if (!persistOk() && !fromSync) return;
 const s = App.state, b = s.breadth;
 const pick = x => ({ rows: x.rows, storedAt: x.storedAt, date: x.date });
 const val = {
@@ -2480,6 +2807,14 @@ breadth: { gainers: pick(b.gainers), losers: pick(b.losers), active: pick(b.acti
 macro: { spxDesc: s.macro.spxDesc, treasuryDesc: s.macro.treasuryDesc, storedAt: s.macro.storedAt },
 };
 if (!store.set("live", val)) { val.macro = Object.assign({}, val.macro, { spxDesc: null }); store.set("live", val); }
+if (!Sync.active) return;
+// a `vivo` solo lo nuevo de este dispositivo (update con merge anidado, 07 §5.2); lo adoptado de `vivo` se da por enviado
+const patch = {}, fresh = (k, x) => isNum(x.storedAt) && x.storedAt > (patched[k] || 0) && ((patched[k] = x.storedAt), !fromSync && !x.adopted);
+for (const d of STRIP) { const q = s.live.quotes[d.symbol]; if (q.q && fresh("q." + d.symbol, q)) (patch.quotes = patch.quotes || {})[d.symbol] = { q: q.q, storedAt: q.storedAt }; }
+for (const k of ["gainers", "losers", "active"]) if (b[k].rows && fresh(k, b[k])) (patch.breadth = patch.breadth || {})[k] = pick(b[k]);
+for (const ex of ["NASDAQ", "NYSE"]) if (b.sectors[ex].rows && fresh(ex, b.sectors[ex])) ((patch.breadth = patch.breadth || {}).sectors = patch.breadth.sectors || {})[ex] = pick(b.sectors[ex]);
+if (s.macro.spxDesc && fresh("macro", s.macro)) patch.macro = { spxDesc: s.macro.spxDesc, treasuryDesc: s.macro.treasuryDesc, storedAt: s.macro.storedAt };
+if (!fromSync && Object.keys(patch).length) Sync.patchLive(patch);
 }
 function saveDay(out, dateET) {
 if (!persistOk()) return;
@@ -2499,8 +2834,10 @@ const arrOf = f => a => Array.isArray(a) && a.every(f), strs = arrOf(isStr);
 const shape = spec => o => isObj(o) && Object.keys(spec).every(k => spec[k](o[k]));
 const validRow = shape({
 symbol: isStr, display: isStr, name: isStr, cls: isStr, clsLabel: isStr, signalLabel: isStr, confidence: isStr,
-price: isNum, priceTime: isNum, A: isNum, S: isNum, alpha: isNum, coverage: isNum, changePct: numOrNull, pBeat: numOrNull, pBase: numOrNull, pUp: numOrNull,
-signal: v => [1, 2, 3, 4].includes(v), capReasons: strs, tags: strs, cone: shape({ lo: isNum, med: isNum, hi: isNum }),
+price: isNum, priceTime: isNum, S: isNum, alpha: isNum, coverage: isNum, changePct: numOrNull, pBeat: numOrNull, pBase: numOrNull, pUp: numOrNull,
+group: v => v === "acciones" || v === "otros", ref: v => v === "sp500" || v === "sube", pRef: isNum, pct: v => isCount(v) && v >= 35 && v <= 65, factorPct: v => isCount(v) && v <= 100,
+capReason: v => v === null || isStr(v), capShort: v => v === null || isStr(v), pUpStock: numOrNull, expRet: isNum, medRet: isNum,
+signal: v => [1, 2, 3].includes(v), capReasons: strs, tags: strs, cone: shape({ lo: isNum, med: isNum, hi: isNum }),
 drivers: shape({ pos: arrOf(shape({ label: isStr })), neg: arrOf(shape({ label: isStr })) }), flags: arrOf(shape({ text: isStr })),
 penalties: arrOf(shape({ text: isStr, z: isNum })), blocks: v => v === null || arrOf(shape({ key: isStr, label: isStr, weight: isNum }))(v),
 components: arrOf(shape({ code: isStr, block: isStr, label: isStr, contrib: isNum })), fundamentals: v => v === null || isObj(v), tech: isObj,
@@ -2587,6 +2924,7 @@ return C.canAuto({ remaining: cl.budget.remaining(), runPending: runPendingToday
 let budgetFlag = false;
 function onBudget(b) {
 App.state.budget = b;
+if (Sync.active && App.client) Sync.writeCounter(App.client.budget.local());
 if (budgetFlag) return; budgetFlag = true;
 Promise.resolve().then(() => { budgetFlag = false; renderMiniBudget(); renderStatus(); renderRunControls(); evaluateLive(); });
 }
@@ -2669,6 +3007,7 @@ function errText(e) { return e.kind === "transient" && e.code !== "rate_limited"
 function handleError(sec, raw, ctx) {
 const e = D.classifyError(raw), s = App.state;
 if (e.kind === "cancelled") return;
+if (e.kind === "unexpected_shape") s.shapeErrors = (s.shapeErrors || 0) + 1;
 if (e.kind === "user_changed") { stopAll(); return; }
 if (root.console) root.console.warn("[radar]", sec, e.code, e.kind, e.raw || "");
 if (PAGE_KINDS.has(e.kind)) { pageError(e); return; }
@@ -2824,7 +3163,12 @@ if (canAutoNow(1)) registerQuoteWatch(d.symbol, null); else q.status = "paused";
 continue;
 }
 if (w && q.status === "loading") continue; // primera entrega pendiente: no re-registrar
-const due = Math.max(isNum(q.storedAt) ? q.storedAt : 0, isNum(q.attemptAt) ? q.attemptAt : 0) + iv; // desde el último intento (sin bucle)
+const due = Math.max(isNum(q.storedAt) ? q.storedAt : 0, isNum(q.attemptAt) ? q.attemptAt : 0) + iv + (q.adopted ? CFG.SYNC.LIVE_GRACE_MS : 0); // desde el último intento (sin bucle)
+if (Sync.active && App.client.plan() === "FREE") { // dos dispositivos: sondea el último que trajo dato; el otro adopta `vivo` (07 §5.5)
+if (now >= due && visible() && canAutoNow(1)) { if (w) unwatchQuote(d.symbol); registerQuoteWatch(d.symbol, null); next = next === null ? now + iv : Math.min(next, now + iv); }
+else { if (now < due) liveTimers[d.symbol] = App.timer(evaluateLive, due - now + 50); next = next === null ? due : Math.min(next, due); }
+continue;
+}
 if (w && w.iv === iv) { next = next === null ? Math.max(due, now) : Math.min(next, Math.max(due, now)); continue; }
 if (now >= due && visible()) {
 if (!canAutoNow(1)) { if (w) unwatchQuote(d.symbol); q.status = q.q ? "paused" : "paused"; continue; }
@@ -2849,7 +3193,7 @@ if (ev.type !== "data") { handleError("strip", ev.error, { symbol: sym }); retur
 const row = ev.rows.find(r => r && r.symbol === sym) || ev.rows[0];
 if (!row || !isNum(row.price)) { handleError("strip", C.makeError("tool_error", "unexpected_shape"), { symbol: sym }); return; }
 if (q.q && row.price !== q.q.price) q.flash = row.price > q.q.price ? "up" : "down";
-Object.assign(q, { q: row, storedAt: ev.storedAt, status: "ok", err: null, deliveredAt: App.now(), retracted: false });
+Object.assign(q, { q: row, storedAt: ev.storedAt, status: "ok", err: null, deliveredAt: App.now(), retracted: false, adopted: false });
 if (STRIP.every(d => !s.live.quotes[d.symbol].err) && s.sections.strip.err) s.sections.strip.err = null;
 if (s.sections.strip.state === "blocked" && !s.stopped) s.sections.strip.state = "loading";
 saveLive();
@@ -2859,7 +3203,7 @@ refreshSectionState("strip"); renderStrip(); evaluateLiveSoon();
 async function refreshStrip() {
 const s = App.state;
 if (s.mode !== "live" || !App.client) return;
-if (s.stopped || App.client.budget.remaining() < STRIP.length) { renderStripFooter(); return; }
+if (s.stopped || busyRun() || App.client.budget.remaining() < STRIP.length) { renderStripFooter(); return; }
 s.live.manualAt = App.now(); s.live.paused = false;
 renderStripFooter();
 App.timer(renderStripFooter, 60000);
@@ -2933,8 +3277,8 @@ kids.push(h("span", null, every + (isNum(s.live.nextTickMs) ? ` · próxima ${F.
 else kids.push(h("span", null, "En pausa: actualización automática en pausa para cuidar tu límite diario."));
 const recent = isNum(s.live.manualAt) && App.now() - s.live.manualAt < 60000;
 const noBudget = App.client.budget.remaining() < STRIP.length;
-kids.push(h("button", { class: "btn btn-quieto", id: "btn-actualizar-franja", disabled: recent || noBudget || b.limitHit || s.stopped, onclick: refreshStrip },
-b.limitHit ? "Límite diario agotado" : "Actualizar franja", h("span", "costo", ` · ${STRIP.length} llamadas`)));
+kids.push(h("button", { class: "btn btn-quieto", id: "btn-actualizar-franja", disabled: recent || noBudget || b.limitHit || s.stopped || busyRun(), onclick: refreshStrip },
+b.limitHit ? "Límite diario agotado" : "Actualizar franja", h("span", "costo", ` · ${STRIP.length} llamadas`)), busyRun() ? nota(WAIT_TXT, "span") : null);
 }
 fill(pie, ...kids);
 }
@@ -3058,7 +3402,7 @@ saveLive(); renderBreadth();
 }
 async function refreshBreadth() {
 const s = App.state, cl = App.client;
-if (!cl || s.mode !== "live" || cl.budget.remaining() < 5) return;
+if (!cl || s.mode !== "live" || cl.budget.remaining() < 5 || busyRun()) return;
 const date = sectorDate();
 const keys = [["gainers", {}], ["losers", {}], ["active", {}], ["sectors", { date, exchange: "NASDAQ" }], ["sectors", { date, exchange: "NYSE" }]];
 const res = await cl.runQueue(keys.map(([k, a]) => () => cl.call(k, a, { section: "breadth", cat: "manual", refresh: true, signal: pageSig() })), {});
@@ -3081,7 +3425,9 @@ const junk = $("#btn-junk"); junk.setAttribute("aria-pressed", String(b.showAll)
 junk.textContent = b.showAll ? "Ocultar SPAC, warrants y apalancados" : "Ver lista completa (incluye SPAC, warrants, apalancados)";
 const upd = $("#btn-actualizar-mercado");
 upd.hidden = s.mode !== "live";
-upd.disabled = !App.client || s.mode !== "live" || App.client.budget.remaining() < 5;
+upd.disabled = !App.client || s.mode !== "live" || App.client.budget.remaining() < 5 || busyRun();
+upd.title = busyRun() ? WAIT_TXT : "";
+const espera = $("#mercado-espera"); if (espera) espera.hidden = !busyRun();
 const panel = (title, x, list) => {
 let body;
 if (x.retracted) body = nota("—");
@@ -3142,19 +3488,36 @@ const pending = () => STRIP.some(d => s.live.watches[d.symbol] && s.live.quotes[
 || ["gainers", "losers", "active"].some(k => busy(s.breadth[k])) || ["NASDAQ", "NYSE"].some(ex => busy(s.breadth.sectors[ex]));
 while (pending() && Date.now() - t0 < maxMs) await new Promise(r => setTimeout(r, 150));
 }
+// 07 §E1: ≥ 3 respuestas con forma desconocida al abrir → aviso de página "format"; no es "FMP caído"
+function formatNotice() {
+const s = App.state;
+s.page.banner = { kind: "format", text: "FMP respondió en un formato que esta página no reconoce. No se lanzó el análisis para no gastar llamadas.", action: null };
+renderBanners();
+}
 function fmpDownAtBoot() {
-const s = App.state, bad = e => !!e && !["plan_denied", "symbol_denied", "cancelled"].includes(e.kind);
+const s = App.state, bad = e => !!e && !["plan_denied", "symbol_denied", "cancelled", "unexpected_shape"].includes(e.kind);
 const stripBad = STRIP.filter(d => !s.live.quotes[d.symbol].q && bad(s.live.quotes[d.symbol].err)).length;
 return !s.macro.spxDesc || stripBad * 2 >= STRIP.length || bad(s.plan.error);
 }
 function maybeAutoRun() {
 const s = App.state;
 if (s.mode !== "live" || !App.client || hasTodayRun()) { renderRanking(); return; }
-const tier = App.client.plan();
-// 4.ª condición (director, ronda 1): sin llamadas de corrida hoy; 5.ª (director, ronda 2): sin marca de corrida lanzada hoy
-const attempted = (App.client.budget.get().byCat.corrida || 0) > 0 || runMarkedToday();
-const wants = tier === "FREE" ? CFG.AUTO_RUN_FREE && storageWorks() && !attempted : true;
+const tier = App.client.plan(), today = todayET(), b = App.client.budget.get();
+let attempted;
+if (Sync.active || s.syncLoaded === false && Sync.status === "degraded") {
+// con sync (07 §5.5): load OK, sin día de hoy (ya revisado), corrida de hoy ausente, sin sospecha y guarda global; el reclamo va en runAnalysis
+if (!s.syncLoaded) { renderRanking(); return; }
+const r = s.syncRun;
+if (r && r.dateET === today) {
+const fresh = r.state === "running" && App.now() - r.startedAt < CFG.SYNC.RUN_STALE_MIN * 60000;
+s.syncOther = fresh ? { state: "running" } : r.state === "done" || r.state === "partial" ? null : { state: "failed" };
+renderRanking(); return;
+}
+attempted = b.suspect;
+} else attempted = (b.byCat.corrida || 0) > 0 || runMarkedToday() || b.suspect; // rondas 1–2 + sospecha de límite (07 §E5)
+const wants = tier === "FREE" ? CFG.AUTO_RUN_FREE && storageWorks() && !attempted : !b.suspect;
 if (!wants || !runGuard(true).ok) { renderRanking(); return; }
+if (s.shapeErrors >= 3) { formatNotice(); renderRanking(); return; }
 if (fmpDownAtBoot()) {
 s.run = Object.assign({}, s.run, { status: "blocked", message: "FMP no respondió al abrir. No se lanzó la corrida automática para no gastar tu límite; córrela cuando FMP responda." });
 renderRanking(); return;
@@ -3163,51 +3526,96 @@ runAnalysis({ auto: true });
 }
 // Marca "corrida lanzada hoy (fecha ET)" (va con el contador, pero no la borran "Restablecer contador" ni "Borrar datos").
 const runMarkedToday = () => App.client.budget.get().ranToday;
+function localAutoOk() { const b = App.client.budget.get(); return storageWorks() && !(b.byCat.corrida > 0) && !b.ranToday && !b.suspect; }
+// Reclamo rechazado (07 §5.4): otro dispositivo corre o ya corrió hoy
+let claimRetried = false;
+function onClaimRefused(cl, auto) {
+const s = App.state;
+if (cl.reason === "busy" || cl.reason === "running") {
+s.syncOther = { state: "running" };
+const at = cl.expiresAt ? Date.parse(cl.expiresAt) : NaN;
+if (cl.reason === "busy" && isNum(at) && !claimRetried) { claimRetried = true; App.timer(() => { if (!hasTodayRun() && !(s.syncRun && s.syncRun.dateET === todayET())) { s.syncOther = null; runAnalysis({ auto }); } }, at + 10000 - App.now()); }
+} else if (cl.reason === "already") s.syncOther = ["done", "partial"].includes(cl.run && cl.run.state) ? null : { state: "failed" };
+else s.syncOther = { state: "error" };
+renderRanking();
+}
+// Una sola fuente para botón, motivo y texto vacío (07 §E2, N11)
+function runExplain(auto) {
+const s = App.state, cl = App.client, verb = hasTodayRun() ? "Volver a correr" : "Correr análisis";
+if (s.run.status === "running") return { label: "Analizando…", enabled: false, reason: RUNNING_TXT, empty: RUNNING_TXT }; // la etapa va en #progreso
+if (s.mode === "example") return { label: "Correr análisis de ejemplo", enabled: true, reason: "", empty: "Datos de ejemplo: corre el análisis de ejemplo." };
+if (s.mode !== "live" || !cl) return { label: "Correr análisis", enabled: false, reason: "Conectando con FMP…", empty: "Conectando con FMP…" };
+const g = runGuard(auto), cost = g.plan && Number.isInteger(g.plan.cost) && g.plan.cost > 0 ? g.plan.cost : null;
+const label = g.limit ? "Límite diario agotado" : cost ? `${verb} (≈ ${cost} llamadas)` : verb;
+const other = s.syncOther && s.syncOther.state;
+if (other === "running") return { label, enabled: false, reason: OTHER_RUNNING, empty: OTHER_RUNNING };
+if (!g.ok) return { label, enabled: false, reason: g.reason, empty: g.reason };
+const rem = cl.budget.remaining();
+const uses = `Correr análisis usa ≈ ${cost} de tus ≈ ${isFinite(rem) ? rem : "∞"} llamadas restantes y tarda ~30 s.`;
+const why = other === "failed" ? `La corrida de hoy no terminó en el otro dispositivo; puedes correrla aquí (≈ ${cost} llamadas).`
+: s.syncLoaded === false && Sync.status === "degraded" ? Sync.statusText
+: ["blocked", "error", "partial"].includes(s.run.status) && s.run.message ? s.run.message : "";
+return { label, enabled: true, reason: why, empty: (why ? why + " " : "Aún no hay análisis de hoy. ") + uses };
+}
 async function runAnalysis(opts) {
 const s = App.state, auto = !!(opts && opts.auto);
 const g = runGuard(auto);
 if (!g.ok) { s.run.message = g.reason; renderRanking(); return; }
+let runId = null, unlocked = false; // reclamo entre dispositivos (07 §5.4)
+if (s.mode === "live" && Sync.active) {
+const cl = await Sync.claimRun({ dayET: auto ? App.bootDay : todayET(), plan: App.client.plan(), auto });
+if (cl.ok) runId = cl.runId;
+else if (cl.reason === "error" && !Sync.active) { if (auto && !localAutoOk()) { renderRanking(); return; } } // sync se apagó: ruta del almacenamiento local
+else if (cl.reason === "error" && !auto) unlocked = true; // la manual corre igual, sin candado
+else { onClaimRefused(cl, auto); return; }
+}
 const ac = new AbortController();
 const startUsed = s.mode === "live" ? App.client.budget.get().byCat.corrida || 0 : 0; // solo llamadas de la corrida
-s.run = { status: "running", stage: "universe", stageLabel: "1/4 · Universo", done: 0, total: g.plan.cost, plan: g.plan, startedAt: App.now(), finishedAt: null, abort: ac, message: null, auto, cap: runCapNow(auto), outage: null,
-dayET: auto ? App.bootDay : todayET() }; // BAJO N6: la automática es del día ET en que se abrió la página; la manual, del día del clic
+s.run = { status: "running", stage: "universe", stageLabel: "1/4 · Universo", done: 0, total: g.plan.cost, plan: g.plan, startedAt: App.now(), finishedAt: null, abort: ac, message: unlocked ? "Corriendo sin candado entre dispositivos." : null, auto, cap: runCapNow(auto), outage: null, cut: null,
+runId, dayET: auto ? App.bootDay : todayET() }; // BAJO N6: la automática es del día ET en que se abrió la página; la manual, del día del clic
 if (s.mode === "live") App.client.budget.markRun();
 s.sections.ranking.err = null;
 if (s.sections.ranking.state === "blocked") s.sections.ranking.state = "loading";
-renderRanking(); renderStatus();
+renderAll();
 try {
 const tier = App.client.plan();
 const out = tier === "FREE" || tier === "EXAMPLE" ? await runFree(ac, startUsed, []) : await runPaid(ac, startUsed);
-if (ac.signal.aborted) { abortedRun(); return; }
-if (!out) return;
+if (s.run.outage) { outageRun(); return; }
+if (!out) { syncFinish("error"); return; }
+if (!out.rows.length) { finishRun("error", s.run.cut ? `La corrida se cortó (${s.run.cut}) antes de tener resultados; no se guardó nada.` : "La corrida no produjo resultados; no se guardó nada."); syncFinish("error"); return; }
 s.result = out; s.resultSource = s.mode === "example" ? "example" : "run"; s.resultSavedAt = App.now();
 saveDay(out, s.run.dayET);
+if (s.mode === "live" && Sync.active && runId) await Sync.saveDay(out, s.run.dayET, runId);
 finishRun(out.partial ? "partial" : "done", null);
+syncFinish(out.partial ? "partial" : "done", out.partialReason);
 if (["PREMIUM", "ULTIMATE"].includes(out.plan)) watchRankingPrices();
 if (s.ui.selected && !out.rows.some(r => r.symbol === s.ui.selected) && !out.rest.some(r => r.symbol === s.ui.selected)) s.ui.selected = null;
 renderAll();
 } catch (raw) {
 const e = D.classifyError(raw);
-if (ac.signal.aborted || e.kind === "cancelled") { abortedRun(); return; }
+if (s.run.outage) { outageRun(); return; }
 finishRun("error", errText(e));
-handleError("ranking", e);
+if (e.kind !== "cancelled") handleError("ranking", e);
+syncFinish("error", e.kind);
 }
 }
-// Detenida por el usuario o por el corte de fallas (nada parcial se guarda en ninguno de los dos casos).
-function abortedRun() {
+function syncFinish(state, reason) { const s = App.state; if (s.mode === "live" && s.run.runId) { Sync.finishRun({ runId: s.run.runId, state, reason: reason || null }); Sync.flush(); } }
+// Corte por fallas (ronda 2): no se guarda nada parcial.
+function outageRun() {
 const s = App.state;
-if (!s.run.outage) { finishRun("aborted", "Detenida"); return; }
 const e = C.makeError(s.run.outage === "down" ? "server_unavailable" : "tool_error", "outage", { userText: OUTAGE_TEXT[s.run.outage] });
 finishRun("error", e.userText);
 handleError("ranking", e);
+syncFinish("error", "fallas");
 }
 function finishRun(status, message) {
 const s = App.state;
 s.run.status = status; s.run.message = message; s.run.finishedAt = App.now(); s.run.abort = null;
 refreshSectionState("ranking");
-renderRanking(); renderStatus(); evaluateLive();
+renderAll(); evaluateLive();
 }
-function stopRun() { const a = App.state.run.abort; if (a) a.abort(); }
+// "Detener": se corta y se analiza lo que haya (07 §E3)
+function stopRun() { const s = App.state; if (s.run.abort) { s.run.cut = s.run.cut || "detenida"; s.run.abort.abort(); } }
 const nextFrame = () => new Promise(r => setTimeout(r, 0));
 
 const DEEP_KEYS = ["eodLight", "keyMetrics", "scores", "ratios", "earnings", "ptSummary", "grades", "ptConsensus"];
@@ -3217,20 +3625,29 @@ const DEEP_KEYS = ["eodLight", "keyMetrics", "scores", "ratios", "earnings", "pt
 const OUTAGE_CODES = new Set(["server_unavailable", "upstream_error"]);
 function runCtx(ac) {
 const s = App.state, today = todayET(), cl = App.client, opt = { section: "ranking", cat: "corrida", signal: ac.signal };
-let streak = 0;
-const okKeys = new Set();
-const call = (key, args) => cl.call(key, args, opt).then(v => { streak = 0; okKeys.add(key); return v; }, raw => {
+let streak = 0, anyOk = false, issued = 0, okSeq = 0, rejSeqs = [];
+const okKeys = new Set(), tally = { calls: 0, rejected: 0 };
+const cut = why => { if (!s.run.cut && !s.run.outage) s.run.cut = why; }; // la cola se detiene; lo que ya está en vuelo termina
+// Racha de rechazos (07 §E5) en orden de emisión: un éxito borra los rechazos de llamadas emitidas ANTES que él. Un éxito
+// rezagado (emitido antes del primer rechazo) no borra los posteriores; uno intercalado sí, aunque llegue tarde.
+const call = (key, args) => { const seq = ++issued; return cl.call(key, args, opt).then(v => { tally.calls++; streak = 0; if (seq > okSeq) { okSeq = seq; rejSeqs = rejSeqs.filter(f => f > seq); } anyOk = true; okKeys.add(key); return v; }, raw => {
 const e = D.classifyError(raw);
-const down = OUTAGE_CODES.has(e.code), rejected = e.code === "tool_error" && e.kind === "tool_failed" && !okKeys.has(key);
+if (e.kind === "cancelled") throw e;
+tally.calls++;
+const down = OUTAGE_CODES.has(e.code), failed = e.code === "tool_error" && e.kind === "tool_failed", rejected = failed && !okKeys.has(key);
+if (failed) { tally.rejected++; if (seq > okSeq) rejSeqs.push(seq); } else if (seq > okSeq) { okSeq = seq; rejSeqs = rejSeqs.filter(f => f > seq); } // otro error: FMP respondió
 if (!down && !rejected) streak = 0;
-else if (++streak >= CFG.OUTAGE_STREAK && !s.run.outage) { s.run.outage = down ? "down" : "rejected"; ac.abort(); }
+else if (++streak >= CFG.OUTAGE_STREAK && !s.run.outage && !s.run.cut) { s.run.outage = down ? "down" : "rejected"; ac.abort(); }
+// 07 §E5: racha de rechazos tras éxitos = posible límite con texto desconocido
+if (rejSeqs.length >= CFG.SUSPECT_STREAK && anyOk && !s.run.outage && !s.run.cut) { if (s.mode === "live") cl.budget.markSuspect(); cut("posible límite"); }
 throw e;
-});
+}); };
 return {
-s, cl, call, sig: ac.signal, today, from: C.addDays(today, -CFG.HIST_DAYS),
+s, cl, call, cut, tally, sig: ac.signal, today, from: C.addDays(today, -CFG.HIST_DAYS),
+live: () => !s.run.cut && !s.run.outage,
 stage: (k, label) => { s.run.stage = k; s.run.stageLabel = label; renderProgress(); },
 tick: () => { s.run.done++; renderProgress(); },
-stopOn: e => e.kind === "limit_reached",
+stopOn: e => { if (e.kind === "limit_reached") cut("límite"); return !!s.run.cut || !!s.run.outage; },
 };
 }
 async function runFree(ac, startUsed, notes) {
@@ -3246,10 +3663,11 @@ if (rows.length < 100) break;
 }
 } catch (raw) { // BAJO 9: sin acciones, se rankea lo demás
 const e = D.classifyError(raw);
-if (sig.aborted || e.kind === "cancelled" || e.kind === "limit_reached" || PAGE_KINDS.has(e.kind)) throw e;
+if (e.kind === "limit_reached") rc.cut("límite");
+else if (s.run.outage || (!s.run.cut && (e.kind === "cancelled" || PAGE_KINDS.has(e.kind)))) throw e;
 uniFailed = true;
 }
-if (sig.aborted) return null;
+if (s.run.outage) return null;
 const uni = C.filterFloatUniverse(floatRows, { nowMs, etfList: s.mode === "example" ? [] : C.ETF_FREE.slice() });
 if (!uni.stocks.length) notes = notes.concat([uniFailed ? "No se pudo obtener la muestra de acciones de FMP; el ranking incluye solo materias primas, cripto, divisas e índices." : "FMP no devolvió acciones en la muestra de hoy; el ranking incluye solo materias primas, cripto, divisas e índices."]);
 // R2 plan exacto; la automática descuenta todo lo gastado hoy (MEDIO 3)
@@ -3267,12 +3685,12 @@ screen = uni.stocks.slice().sort((x, y) => fl.get(y) - fl.get(x) || (x < y ? -1 
 }
 const unscreened = uni.stocks.filter(x => !screen.includes(x)).map(symbol => ({ symbol, reason: "Sin cribar hoy por presupuesto" }));
 // R3 macro (solo si falta)
-if (!s.macro.spxDesc || !s.macro.treasuryDesc) { await loadMacro(true); s.run.done += pr.calls.macro; }
+if (rc.live() && (!s.macro.spxDesc || !s.macro.treasuryDesc)) { await loadMacro(true); s.run.done += pr.calls.macro; }
 if (!s.macro.spxDesc) throw C.makeError("tool_error", "tool_failed");
 // R4 cribado
 rc.stage("stage1", `2/4 · Cribando ${screen.length} acciones`);
-const qres = await cl.runQueue(screen.map(sym => () => rc.call("quote", { symbol: sym })), { signal: sig, stopOn: rc.stopOn, onProgress: rc.tick });
-if (sig.aborted) return null;
+const qres = rc.live() ? await cl.runQueue(screen.map(sym => () => rc.call("quote", { symbol: sym })), { signal: sig, stopOn: rc.stopOn, onProgress: rc.tick }) : [];
+if (s.run.outage) return null;
 const quotes = [], excluded = uni.excluded.concat(unscreened);
 let limitHit = false;
 qres.forEach((r, i) => {
@@ -3282,8 +3700,8 @@ if (r.error.kind === "limit_reached") limitHit = true;
 excluded.push({ symbol: screen[i], reason: r.error.kind === "symbol_denied" || r.error.kind === "plan_denied" ? "Fuera de tu plan" : "Sin cotización" });
 }
 });
-if (limitHit) return limitAbort();
-if (screen.length && !quotes.length) { const e = (qres.find(r => !r.ok) || {}).error; throw e || C.makeError("tool_error", "tool_failed"); }
+if (limitHit) rc.cut("límite");
+if (screen.length && !quotes.length && rc.live()) { const e = (qres.find(r => !r.ok) || {}).error; throw e || C.makeError("tool_error", "tool_failed"); }
 const fq = C.filterQuotes(quotes, { nowMs, holidays: s.clock.holidays, mode: "core" });
 const st = C.stage1Select({ quotes: fq.pass, K: pr.K });
 st.excluded = excluded.concat(fq.excluded);
@@ -3298,37 +3716,36 @@ const nsDefs = RANKED.filter(d => d.symbol === "^GSPC" || pr.nonStockHist.includ
 const nsFetch = nsDefs.filter(d => d.symbol !== "^GSPC");
 const tasks = nsFetch.map(d => () => rc.call(d.key, { symbol: d.symbol, from, to: today }))
 .concat(pr.etfs.flatMap(e => [() => rc.call("quote", { symbol: e }), () => rc.call("eodLight", { symbol: e, from, to: today })]));
-const res = await cl.runQueue(tasks, { signal: sig, stopOn: rc.stopOn, onProgress: rc.tick });
-if (sig.aborted) return null;
-let limitHit = res.some(r => !r.ok && r.error.kind === "limit_reached");
+const res = rc.live() ? await cl.runQueue(tasks, { signal: sig, stopOn: rc.stopOn, onProgress: rc.tick }) : [];
+if (s.run.outage) return null;
 const val = r => (r && r.ok ? r.value : null);
 const histOf = Object.fromEntries(nsFetch.map((d, i) => [d.symbol, val(res[i])]));
 const nonStocks = nsDefs.map(d => ({ def: d, quote: d.strip ? s.live.quotes[d.symbol].q : null, eodDesc: d.symbol === "^GSPC" ? s.macro.spxDesc : histOf[d.symbol] }));
 const etfs = pr.etfs.map((e, i) => ({ symbol: e, quote: (val(res[nsFetch.length + 2 * i]) || [])[0] || null, eodDesc: val(res[nsFetch.length + 2 * i + 1]) }));
 rc.stage("stage2", `4/4 · Análisis profundo de ${st.finalists.length} finalistas`);
-const finals = await fetchFinalists(st.finalists, DEEP_KEYS.slice(0, pr.perFinalist), rc);
-if (sig.aborted) return null;
-if (finals.limitHit) limitHit = true;
-if (limitHit) {
-if (finals.list.filter(f => Array.isArray(f.eodDesc) && f.eodDesc.length).length < 5) return limitAbort();
-notes = notes.concat(["Análisis parcial: se agotó el límite diario de FMP."]);
-}
+const finals = rc.live() ? await fetchFinalists(st.finalists, DEEP_KEYS.slice(0, pr.perFinalist), rc) : { list: [] };
+if (s.run.outage) return null;
+// 07 §E3/§E5: con corte se analiza lo que haya; muchas consultas rechazadas también marca parcial
+const t = rc.tally, why = s.run.cut || (t.rejected >= CFG.SUSPECT_MIN && t.rejected / Math.max(1, t.calls) >= CFG.SUSPECT_RATIO ? "muchas consultas rechazadas" : null);
+if (why) notes = notes.concat([`Análisis parcial: ${why}`]);
 rc.stage("scoring", "Calculando…");
 await nextFrame();
 const quoteOf = Object.fromEntries(quotes.map(q => [q.symbol, q]));
 const out = C.analyze({
 plan: cl.plan(), nowMs: App.now(), asOf: asOfNow(), marketOpen: s.clock.market.open, example: s.mode === "example",
 spxDesc: s.macro.spxDesc, vixQuote: s.live.quotes["^VIX"].q, treasuryDesc: s.macro.treasuryDesc, stage1: st,
-finalists: finals.list.map(f => Object.assign(f, { quote: quoteOf[f.symbol] }, finOf(f.symbol))),
-nonStocks, etfs, partial: limitHit, notes, meta,
+finalists: finals.list.filter(f => Array.isArray(f.eodDesc) && f.eodDesc.length).map(f => Object.assign(f, { quote: quoteOf[f.symbol] }, finOf(f.symbol))),
+nonStocks, etfs, partial: !!why, partialReason: why, notes, meta,
 });
-if (limitHit) pageError(C.makeError("tool_error", "limit_reached"));
+if (s.run.cut === "límite") pageError(C.makeError("tool_error", "limit_reached"));
+if (s.run.cut === "posible límite") suspectNotice();
 return out;
 }
-function limitAbort() {
-finishRun("error", C.ERR_TEXT.limit_reached);
-pageError(C.makeError("tool_error", "limit_reached"));
-return null;
+function suspectNotice() {
+const s = App.state;
+stopPolling();
+s.page.banner = { kind: "suspect", text: "FMP empezó a rechazar todas las consultas; puede que se haya agotado tu límite diario (FMP no lo dijo con el mensaje esperado). Se pausaron las actualizaciones automáticas por hoy.", action: null };
+renderBanners();
 }
 async function fetchFinalists(symbols, keys, rc) {
 const cl = rc.cl, tasks = [], idx = [];
@@ -3339,14 +3756,12 @@ idx.push([k, sym]);
 const res = await cl.runQueue(tasks, { signal: rc.sig, stopOn: rc.stopOn, onProgress: rc.tick });
 const by = Object.fromEntries(symbols.map(sym => [sym, { symbol: sym, eodDesc: null, km: null, rt: null, fs: null, ec: null, pts: null, gs: null, ptc: null, denied: false }]));
 const field = { eodLight: "eodDesc", keyMetrics: "km", ratios: "rt", scores: "fs", earnings: "ec", ptSummary: "pts", grades: "gs", ptConsensus: "ptc" };
-let limitHit = false;
 res.forEach((r, i) => {
 const [k, sym] = idx[i], f = by[sym];
 if (r.ok) f[field[k]] = k === "eodLight" || k === "earnings" ? r.value : r.value[0] || null;
 else if (r.error.kind === "symbol_denied") f.denied = true;
-else if (r.error.kind === "limit_reached") limitHit = true;
 });
-return { list: symbols.map(sym => by[sym]), limitHit };
+return { list: symbols.map(sym => by[sym]) };
 }
 async function runPaid(ac, startUsed) {
 // Ramas pagadas: NO VERIFICADO CON DATOS REALES.
@@ -3415,22 +3830,17 @@ renderTable();
 function renderRunControls() {
 const s = App.state, btn = $("#btn-correr"), stopBtn = $("#btn-detener"), motivo = $("#correr-motivo");
 if (!btn) return;
-const running = s.run.status === "running";
-const g = running ? { ok: false } : runGuard();
-let label;
-if (running) label = "Analizando…";
-else if (s.mode === "example") label = "Correr análisis de ejemplo";
-else if (s.mode !== "live") label = "Correr análisis";
-else if (g.limit) label = "Límite diario agotado";
-else {
-const verb = hasTodayRun() ? "Volver a correr" : "Correr análisis", cost = g.plan && g.plan.cost; // N4: nunca "≈ undefined"
-label = Number.isInteger(cost) && cost > 0 ? `${verb} (≈ ${cost} llamadas)` : verb;
-}
-btn.textContent = label;
-btn.disabled = running || !g.ok;
-stopBtn.hidden = !running;
-motivo.textContent = s.run.status === "aborted" ? "Corrida detenida; no se guardó nada." : s.run.status === "blocked" ? s.run.message || "" : !running && !g.ok && s.mode === "live" ? g.reason || "" : "";
+const x = runExplain(false);
+btn.textContent = x.label; btn.disabled = !x.enabled;
+stopBtn.hidden = s.run.status !== "running";
+motivo.textContent = x.reason;
+if (!s.result) renderVacio(x); // botón, motivo y texto vacío salen del mismo runExplain (07 §E2)
 renderProgress();
+}
+function renderVacio(x) {
+const s = App.state, vacio = $("#ranking-vacio"), wait = s.run.status === "running" || (s.mode !== "example" && (s.mode !== "live" || !App.client));
+if (!vacio || vacio.textContent === x.empty) return;
+fill(vacio, wait ? nota(x.empty, "p", "estado-carga") : h("p", null, x.empty));
 }
 function renderProgress() {
 const s = App.state, el = $("#progreso");
@@ -3449,7 +3859,7 @@ num.textContent = `${done}/${total}`;
 function renderRankingSub() {
 const s = App.state, el = $("#ranking-sub"), r = s.result;
 if (!el) return;
-const parts = ["Ranking por Atractivo", "horizonte 3 meses"];
+const parts = ["Ordenado por probabilidad a 3 meses"];
 if (r) {
 const t = r.nowMs;
 const m = C.marketState(t, s.clock.holidays);
@@ -3464,15 +3874,12 @@ if (reg) parts.push(`régimen ${reg.label}`);
 el.textContent = parts.join(" · ");
 if (r && s.page.banner && ["auth", "not_connected", "selection", "no_mcp", "policy"].includes(s.page.banner.kind)) el.textContent += ` · Del ${F.timeET(r.nowMs)}; reconecta para actualizar`;
 }
+// Filtros de clase y señal dentro de cada grupo (el orden ya viene de analyze, 07 §2)
 function filteredRows() {
 const s = App.state, u = s.ui;
 let rows = s.result ? s.result.rows.slice() : [];
 if (u.cls !== "all") rows = rows.filter(r => (u.cls === "crypto" ? r.cls.startsWith("crypto") : u.cls === "index" ? r.cls === "index" || r.cls === "etf" : r.cls === u.cls));
 if (u.sig !== "all") rows = rows.filter(r => String(r.signal) === u.sig);
-const desc = (k) => (a, b) => { const x = isNum(a[k]) ? a[k] : -Infinity, y = isNum(b[k]) ? b[k] : -Infinity; return y - x || b.A - a.A || (a.symbol < b.symbol ? -1 : 1); };
-if (u.sort === "p") rows.sort(desc("pBeat"));
-else if (u.sort === "S") rows.sort(desc("S"));
-else if (u.sort === "chg") rows.sort(desc("changePct"));
 return rows;
 }
 function renderFilters() {
@@ -3482,31 +3889,40 @@ const el = $("#" + id);
 fill(el, ...list.map(([v, t]) => h("button", { "aria-pressed": String(u[key] === v), "data-value": v, onclick: () => { u[key] = v; savePrefs(); renderFilters(); renderTable(); const b = $(`#${id} [data-value="${v}"]`); if (b) b.focus(); }, text: t })));
 };
 seg("filtro-clase", CLS_FILTERS, "cls"); seg("filtro-senal", SIG_FILTERS, "sig");
-$("#orden").value = u.sort;
 }
+const NCOLS = 11, WIDE = new Set([2, 5, 6, 7, 8, 9, 10]); // ≤ 640 px: solo #, Activo, Señal y Probabilidad (07 §3.5)
 function ghostRows(n) {
-return Array.from({ length: n }, () => h("tr", { class: "fantasma", "aria-hidden": "true" }, Array.from({ length: 13 }, (_, i) => h("td", { class: i === 2 || i === 5 || i >= 7 ? "c-ancha" : null }, h("span")))));
+return Array.from({ length: n }, () => h("tr", { class: "fantasma", "aria-hidden": "true" }, Array.from({ length: NCOLS }, (_, i) => h("td", WIDE.has(i) ? "c-ancha" : null, h("span")))));
+}
+// Barra centrada en 50 %: media barra = PROB_BAR_SPAN puntos; usa el entero mostrado
+function probBar(pct, cls = "pbar") {
+const d = pct - 50, w = Math.min(1, Math.abs(d) / CFG.PROB_BAR_SPAN) * 50;
+return h("span", { class: cls, "aria-hidden": "true" }, d ? h("span", { class: "pbar-fill " + (d > 0 ? "up" : "down"), style: `left:${d > 0 ? 50 : 50 - w}%;width:${w}%` }) : null);
+}
+function groupHead(g, rows) {
+const [title, note] = GROUP_TXT[g];
+const noBuy = g === "acciones" && App.state.result.rows.some(r => r.group === g) && !App.state.result.rows.some(r => r.group === g && r.signal === 3);
+return h("tr", "grupo", h("th", { colspan: String(NCOLS), scope: "colgroup" },
+h("span", "grupo-tit", title), h("span", "grupo-nota", note + (noBuy ? NO_BUY_NOTE : "")), rows.length ? null : h("span", "grupo-vacio", "Sin activos con este filtro")));
 }
 function renderTable() {
-const s = App.state, body = $("#tabla-cuerpo"), vacio = $("#ranking-vacio"), cont = $("#tabla-cont");
+const s = App.state, table = $("#tabla-ranking"), vacio = $("#ranking-vacio"), cont = $("#tabla-cont");
 const running = s.run.status === "running";
 cont.classList.toggle("atenuada", running && !!s.result);
+table.querySelectorAll("tbody").forEach(t => t.remove());
 if (!s.result) {
-fill(body, ...ghostRows(5));
-let msg;
-if (running) msg = [nota(`Analizando: ${s.run.stageLabel || ""}`, "p", "estado-carga")];
-else if (s.mode === "live" && App.client) {
-const pr = estPlan(); const rem = App.client.budget.remaining();
-msg = [h("p", null, s.run.status === "error" && s.run.message ? s.run.message : `Aún no hay análisis de hoy. Correr análisis usa ≈ ${pr.cost} de tus ≈ ${isFinite(rem) ? rem : "∞"} llamadas restantes y tarda ~30 s.`)];
-} else msg = [nota("Preparando el ranking…", "p", "estado-carga")];
-fill(vacio, ...msg); vacio.hidden = false;
+table.append(h("tbody", null, ghostRows(5)));
+renderVacio(runExplain(false));
+vacio.hidden = false;
 return;
 }
 const rows = filteredRows();
-vacio.hidden = rows.length > 0 && !running;
+vacio.hidden = !running;
 if (running) fill(vacio, nota("Actualizando…", "p", "estado-carga"));
-else if (!rows.length) fill(vacio, nota("Ningún activo coincide con estos filtros."));
-fill(body, ...rows.map((r, i) => rowEl(r, i)));
+for (const g of ["acciones", "otros"]) {
+const gr = rows.filter(r => r.group === g);
+table.append(h("tbody", { "data-group": g }, groupHead(g, gr), gr.map((r, i) => rowEl(r, i))));
+}
 }
 function rowEl(r, i) {
 const s = App.state, sel = s.ui.selected === r.symbol;
@@ -3514,17 +3930,15 @@ const po = priceOpts(r.cls, r.symbol);
 const tags = (r.tags || []).map(t => h("span", { class: "tag " + ((r.drivers && r.drivers.neg || []).some(d => d.label === t) ? "neg" : "pos"), text: t }));
 const flags = (r.flags || []).slice(0, 2).map(f => h("span", { class: "flag" + (f.severity === "warn" ? " warn" : ""), text: f.text }));
 if ((r.flags || []).length > 2) flags.push(h("span", "flag", `+${r.flags.length - 2}`));
-return h("tr", { "data-symbol": r.symbol, "data-cls": r.cls, "data-signal": String(r.signal), "aria-selected": String(sel) },
+return h("tr", { "data-symbol": r.symbol, "data-cls": r.cls, "data-group": r.group, "data-signal": String(r.signal), "data-pct": String(r.pct), "aria-selected": String(sel) },
 h("td", "n", String(i + 1)),
 h("td", null, h("button", { class: "activo-btn", "aria-label": `${r.display}: ${r.name}. Ver detalle`, onclick: () => selectSymbol(r.symbol, true) },
 h("span", "sim", r.display), h("span", "nom", r.name), h("span", "sub-clase", r.clsLabel))),
 h("td", "c-ancha", r.clsLabel),
-h("td", null, h("span", "pill s" + r.signal, SIG_TXT[r.signal])),
-h("td", "n", h("span", "abar", h("span", { class: "abar-track", "aria-hidden": "true" }, h("span", { class: "abar-fill", style: `width:${C.clamp(r.A, 0, 100).toFixed(1)}%` })), h("span", null, F.score(r.A)))),
-h("td", "n c-ancha", F.score(r.S)),
-h("td", "n", h("span", "precio-num", F.price(r.price, po)), h("span", "var-mini " + dirCls(r.changePct), isNum(r.changePct) ? `${arrow(r.changePct)} ${F.pctFmp(r.changePct)}` : "—")),
-h("td", "n c-ancha", F.prob(r.pBeat)),
-h("td", "n c-ancha", r.cls === "stock" ? "—" : F.prob(r.pUp)),
+h("td", null, h("span", "pill s" + r.signal, SIG_TXT[r.signal]), r.capShort ? h("span", "tope", "tope: " + r.capShort) : null),
+h("td", "n", h("span", "prob", h("span", "prob-num", F.prob(r.pRef)), probBar(r.pct))),
+h("td", { class: "n c-ancha", title: "Qué tan bien puntúa en factores con evidencia académica. No es una probabilidad.", text: String(r.factorPct) }),
+h("td", "n c-ancha", h("span", "precio-num", F.price(r.price, po)), h("span", "var-mini " + dirCls(r.changePct), isNum(r.changePct) ? `${arrow(r.changePct)} ${F.pctFmp(r.changePct)}` : "—")),
 h("td", "n c-ancha", r.cone ? F.range(r.cone.lo, r.cone.hi, po) : "—"),
 h("td", "c-ancha", `${r.confidence} · ${Math.round(r.coverage * 100)} %`),
 h("td", "c-ancha", h("span", "tags", tags)),
@@ -3585,24 +3999,33 @@ if (row) renderRowDetail(row, body, h2, back); else renderRestDetail(rest, body,
 }
 function datum(k, v, opts) { return h("div", "dato", h("dt", null, k), h("dd", { class: "num" + (opts && opts.big ? " grande" : ""), text: v }), opts && opts.note ? nota(opts.note, "span") : null); }
 function renderRowDetail(r, body, h2, back) {
-const s = App.state, po = priceOpts(r.cls, r.symbol), isStock = r.cls === "stock";
+const po = priceOpts(r.cls, r.symbol), isStock = r.cls === "stock", P = F.prob;
 h2.textContent = r.display;
 const head = h("div", "det-cab", back,
 h("div", "det-nombre", `${r.name} · ${r.clsLabel}`),
 h("div", "det-precio", h("span", "grande", F.price(r.price, po)),
 h("span", "num " + dirCls(r.changePct), isNum(r.changePct) ? `${arrow(r.changePct)} ${F.pctFmp(r.changePct)}` : ""),
-h("span", "pill s" + r.signal, SIG_TXT[r.signal])),
-h("div", "det-atractivo", nota("Atractivo", "span"), h("span", "cifra", F.score(r.A)),
-h("span", { class: "abar-track", "aria-hidden": "true" }, h("span", { class: "abar-fill", style: `width:${C.clamp(r.A, 0, 100).toFixed(1)}%` }))),
+h("span", "pill s" + r.signal, SIG_TXT[r.signal]), r.capShort ? h("span", "tope", "tope: " + r.capShort) : null),
+h("div", "det-prob", h("span", "cifra", P(r.pRef)), probBar(r.pct, "pbar grande"),
+nota(isStock ? "de probabilidad de ganarle al S&P 500 en 3 meses (la señal usa este número)" : "de probabilidad de que el precio suba en 3 meses (la señal usa este número)", "span")),
 nota(r.priceSource === "history" ? "Precio del último cierre disponible" : `Precio de las ${F.timeET(r.priceTime)}`, "span"));
 const chartBox = h("div", { id: "grafica-detalle" });
 const legend = h("div", "leyenda-graf", keyItem("", "Precio (12 meses)"), keyItem(" sma", SMA_KEY), keyItem(" cono", "Rango 80 % a 3 meses"), keyItem(" med", "Mediana"));
+// Frases de §1.3: Evitar con P(sube) > 50 % en acciones; promedio positivo con probabilidad < 50 %
+const says = [];
+if (r.ref === "sp500" && r.signal === 1 && isNum(r.pUpStock) && C.displayPct(r.pUpStock) > 50) says.push("Lo más probable es que suba menos que el índice; si quieres bolsa, el índice es mejor apuesta.");
+if (r.expRet > 0 && r.pRef < 0.5) says.push("El promedio es positivo, pero lo más probable es que baje: las ganancias se concentran en pocos escenarios grandes. Por eso la señal no es Compra.");
+const noBeat = r.cls === "fx" || r.symbol === "^GSPC";
 const pred = h("div", "bloque", h("h3", null, "Predicción a 3 meses"),
 h("dl", "pred",
-isStock ? datum("Prob. de superar al S&P 500", F.prob(r.pBeat), { big: true }) : datum("Prob. de subir", F.prob(r.pUp), { big: true }),
-isStock ? datum("Una acción típica", F.prob(r.pBase)) : datum("Prob. de superar al S&P 500", F.prob(r.pBeat), { note: r.cls === "fx" ? "No comparable en divisas" : r.symbol === "^GSPC" ? "Es la referencia" : null }),
-datum("Rango 80 %", F.range(r.cone.lo, r.cone.hi, po)), datum("Mediana", F.price(r.cone.med, po)),
-datum("α anual", F.pctFrac(r.alpha, 1)), datum("Confianza", `${r.confidence} · ${Math.round(r.coverage * 100)} %`)),
+datum(isStock ? "Referencia típica: una acción típica" : "Referencia típica: con tendencia neutra", P(r.pBase)),
+isStock ? datum("Probabilidad de que el precio suba", P(r.pUpStock)) : noBeat ? null : datum("Probabilidad de ganarle al S&P 500", P(r.pBeat)),
+datum("Retorno esperado (promedio)", F.pctFrac(r.expRet, 1)), datum("Resultado más probable (mediana)", F.pctFrac(r.medRet, 1)),
+datum("Rango 80 %", F.range(r.cone.lo, r.cone.hi, po)), datum("Confianza", `${r.confidence} · ${Math.round(r.coverage * 100)} %`)),
+says.map(t => h("p", "frase", t)),
+h("details", "calculo", h("summary", null, "Cómo se calcula"), h("dl", "pred",
+datum("α anual", F.pctFrac(r.alpha, 1)), datum("IR", isNum(r.ir) ? F.num(r.ir, 2) : "—"), datum("TE", isNum(r.te) ? F.pctFrac(r.te, 1, false) : "—"),
+datum("Factores (percentil)", String(r.factorPct), { note: "No es una probabilidad." }))),
 nota("Estimación calibrada con literatura académica, no un modelo entrenado; no es asesoría financiera."));
 fill(body, head, chartBox, legend, pred, driversBlock(r), techBlock(r), isStock && r.fundamentals ? fundBlock(r) : null, flagsBlock(r), thesisBlock(r));
 drawDetailChart(chartBox, r.series, { cone: r.cone, po, label: r.display });
@@ -3625,7 +4048,7 @@ kids.push(h("div", "comp-lista",
 comps.map(c => h("div", "comp-fila", h("span", null, c.label), h("span", "c " + dirCls(c.contrib), (c.contrib > 0 ? "+" : c.contrib < 0 ? "−" : "") + F.num(Math.abs(c.contrib), 2)))),
 h("div", "comp-fila", h("strong", null, "Suma de contribuciones (z)"), h("strong", { class: "c", "data-total": total.toFixed(2), text: (total > 0 ? "+" : total < 0 ? "−" : "") + F.num(Math.abs(total), 2) }))));
 if (r.penalties && r.penalties.length) kids.push(nota("Penalizaciones: " + r.penalties.map(p => `${p.text} (−${F.num(p.z, 2)} z)`).join(" · ")));
-if (r.capReasons && r.capReasons.length) kids.push(nota("Topes de señal: " + r.capReasons.join(" · ")));
+if (r.capReason) kids.push(nota("Tope de señal (Compra → Mantener): " + r.capReason));
 return h("div", "bloque", kids);
 }
 function techBlock(r) {
@@ -3648,11 +4071,11 @@ function callButton(label, cost, fn, extra) {
 const s = App.state, cl = App.client;
 const live = s.mode === "live" && cl;
 const b = live ? cl.budget.get() : null;
-const disabled = !live || b.limitHit || cl.budget.remaining() < cost || extra.status === "loading";
+const disabled = !live || b.limitHit || cl.budget.remaining() < cost || extra.status === "loading" || busyRun();
 const warn = live && !hasTodayRun() && cl.plan() === "FREE" && !canAutoNow(cost) && !b.limitHit;
 return h("div", "acciones",
 h("button", { class: "btn", disabled, onclick: fn }, extra.status === "loading" ? "Consultando…" : b && b.limitHit ? "Límite diario agotado" : `${label} (${cost} ${cost === 1 ? "llamada" : "llamadas"})`),
-warn ? nota("Puede dejar sin espacio la corrida de hoy.", "span") : null,
+busyRun() ? nota(WAIT_TXT, "span") : warn ? nota("Puede dejar sin espacio la corrida de hoy.", "span") : null,
 extra.status === "error" ? nota(errText(extra.err), "span") : null);
 }
 async function loadAdx(r) {
@@ -3825,7 +4248,9 @@ nota("Texto generado con tu cuenta de Claude a partir de los números de esta p�
 function thesisPrompt(r) {
 const po = priceOpts(r.cls, r.symbol), reg = App.state.result && App.state.result.regime;
 const datos = {
-simbolo: r.symbol, nombre: r.name, clase: r.clsLabel, senal: r.signalLabel, atractivo_0_100: Math.round(r.A), score_factores: Math.round(r.S),
+simbolo: r.symbol, nombre: r.name, clase: r.clsLabel, senal: r.signalLabel, tope_de_senal: r.capReason,
+probabilidad_que_decide_la_senal: { referencia: r.ref === "sp500" ? "ganarle al S&P 500 en 3 meses" : "que el precio suba en 3 meses", pct: r.pct },
+factores_percentil_no_es_probabilidad: r.factorPct,
 confianza: r.confidence, cobertura_pct: Math.round(r.coverage * 100),
 prob_superar_sp500_3m: F.prob(r.pBeat), prob_accion_tipica_3m: r.cls === "stock" ? F.prob(r.pBase) : null, prob_subir_3m: r.cls === "stock" ? null : F.prob(r.pUp),
 precio: F.price(r.price, po), rango_80_3m: F.range(r.cone.lo, r.cone.hi, po), alfa_anual: F.pctFrac(r.alpha, 1),
@@ -3876,14 +4301,14 @@ const planBlock = h("div", null, h("h3", null, "Plan de FMP"),
 h("span", "badge", ex ? "Modo ejemplo" : `Plan detectado: ${PLAN_NAME[tier]}${tier === "FREE" ? "" : " (no verificado)"}`),
 nota(ex ? "Sin conector: no se consulta FMP." : { probe: "Detectado hoy con una sonda.", cache: "Detectado hoy (guardado en este navegador).", default: s.plan.note || "No se pudo detectar el plan; se asume Free." }[s.plan.source] || ""),
 tier === "FREE" ? nota("Plan FMP Free: 250 llamadas/día, sin lotes, universo de muestra.") : null,
-ex ? null : h("div", "acciones", h("button", { class: "btn", id: "btn-detectar", disabled: !cl || b.limitHit, onclick: redetectPlan }, "Volver a detectar", h("span", "costo", " (1–3 llamadas)"))));
+ex ? null : h("div", "acciones", busyRun() ? nota(WAIT_TXT, "span") : null, h("button", { class: "btn", id: "btn-detectar", disabled: !cl || b.limitHit || busyRun(), onclick: redetectPlan }, "Volver a detectar", h("span", "costo", " (1–3 llamadas)"))));
 let budgetBlock;
 if (ex) budgetBlock = h("div", null, h("h3", null, "Presupuesto"), h("p", { id: "presupuesto", text: "Sin consumo: el modo ejemplo no llama a FMP." }));
 else {
 const finite = isFinite(b.limit) && b.limit !== null;
 const frac = finite ? Math.min(1, b.used / b.limit) : 0;
 budgetBlock = h("div", null, h("h3", null, "Presupuesto de hoy"),
-h("p", { id: "presupuesto", class: "num", text: finite ? `≈ ${b.used} de ${b.limit} llamadas hoy (estimado en este navegador)` : `≈ ${b.used} llamadas hoy (estimado en este navegador; plan sin límite diario publicado)` }),
+h("p", { id: "presupuesto", class: "num", text: `≈ ${b.used}${finite ? ` de ${b.limit}` : ""} llamadas hoy (${Sync.active ? "suma de tus dispositivos; estimado" : "estimado en este navegador"}${finite ? "" : "; plan sin límite diario publicado"})` }),
 finite ? h("div", { class: "medidor" + (frac > 0.85 ? " alto" : ""), role: "meter", "aria-valuemin": "0", "aria-valuemax": String(b.limit), "aria-valuenow": String(b.used), "aria-label": "Llamadas usadas hoy" }, h("div", { style: `width:${(frac * 100).toFixed(1)}%` })) : null,
 b.limitHit ? nota("Límite diario agotado: FMP lo reinicia mañana.") : null,
 h("div", { class: "desglose", id: "desglose" }, Object.keys(CAT_NAME).flatMap(k => [h("span", null, CAT_NAME[k]), h("span", null, String((b.byCat && b.byCat[k]) || 0))])),
@@ -3899,13 +4324,13 @@ const lastRun = s.result
 : run.status === "running" ? "En curso…" : "Sin corrida hoy.";
 const conn = { ok: "FMP conectado.", no_mcp: "Esta vista no puede usar conectores.", not_connected: "Sin conector FMP.", needs_reauth: "FMP necesita reconexión.", denied: "Sin permiso para usar FMP.", selection: "Elige un conector FMP.", policy: "Bloqueado por tu organización.", error: "Error de conexión.", pending: "Conectando…" }[s.conn.status] || "—";
 const other = h("div", null, h("h3", null, "Actualización y conexión"),
-nota(policy), nota("Última corrida: " + lastRun), nota("Conexión: " + conn),
+nota(policy), nota("Última corrida: " + lastRun), nota("Conexión: " + conn), ex ? null : h("p", { class: "nota", id: "sync-estado", text: "Dispositivos: " + Sync.statusText }),
 h("div", "acciones", h("button", { class: "btn", id: "btn-borrar", onclick: clearData, text: clearArmed ? "Toca otra vez para confirmar" : "Borrar datos guardados en este navegador" })));
 fill(cont, planBlock, budgetBlock, other);
 }
 async function redetectPlan() {
 const s = App.state, cl = App.client;
-if (!cl || s.mode !== "live") return;
+if (!cl || s.mode !== "live" || busyRun()) return;
 const dp = await cl.detectPlan({ force: true });
 s.plan = { tier: dp.tier, source: dp.source, detectedAt: App.now(), note: dp.source === "default" ? "No se pudo detectar el plan; se asume " + PLAN_NAME[dp.tier] + "." : null };
 if (dp.error) handleIfPage(dp.error);
@@ -3914,7 +4339,12 @@ renderAll();
 function resetCounter() {
 if (!resetArmed) { resetArmed = true; renderStatus(); App.timer(() => { resetArmed = false; renderStatus(); }, 4000); return; }
 resetArmed = false;
-if (App.client && App.state.mode === "live") App.client.budget.reset();
+const cl = App.client;
+if (cl && App.state.mode === "live" && Sync.active) { // 07 §5.6: ajuste = −(suma de todos los contadores); el local queda igual
+const today = todayET(), g = Sync.globalCounter(today), offset = -(cl.budget.local().used + g.used - g.offset);
+cl.budget.clearLimit();
+Sync.writeAdjust(offset, today).then(() => cl.budget.setRemote(Sync.globalCounter(today)));
+} else if (cl && App.state.mode === "live") cl.budget.reset();
 App.state.page.banner = App.state.page.banner && App.state.page.banner.kind === "limit_reached" ? null : App.state.page.banner;
 App.state.live.paused = false;
 renderAll();
@@ -3982,6 +4412,7 @@ if (root.console) root.console.error("[radar] caché local descartada", e);
 dropCaches(); initState(); applyTheme(); tickClock(true); renderAll();
 }
 if (!root.claude || typeof root.claude.use !== "function") return enterExample(C.makeError("not_granted", "no_mcp")); // A2
+const syncP = initSync(); // A2: db + user + id() en paralelo con mcp
 let mcp = null;
 try { mcp = await Promise.race([root.claude.use("mcp"), new Promise(r => setTimeout(() => r(null), 10500))]); } catch (e) { mcp = null; }
 if (!mcp) return enterExample(C.makeError("not_granted", "no_mcp"));
@@ -3998,13 +4429,68 @@ if (srv.authStatus === "needs_reauth") return enterExample(C.makeError("needs_re
 const er = D.classifyError(e);
 if (EXAMPLE_KINDS.has(er.kind)) return enterExample(er);
 }
-return goLive(mcp);
+return goLive(mcp, syncP);
 }
-async function goLive(mcp) {
+const within = (p, ms) => Promise.race([Promise.resolve(p).catch(() => null), new Promise(r => setTimeout(() => r(null), ms))]);
+async function initSync() {
+const [db, user] = await Promise.all([within(root.claude.use("db"), 10500), within(root.claude.use("user"), 10500)]);
+const uid = user ? await within(user.id(), 10500) : null;
+Sync = D.createSync({ db, uid, dev: db && uid ? deviceId() : null, now: App.now, storage: store, timer: App.timer });
+}
+// A2b: lo de `db` gana si es más nuevo; se copia al almacenamiento local (espejo)
+function applySynced(L) {
+const s = App.state, today = todayET(), year = today.slice(0, 4);
+const lp = store.get("plan");
+if (L.plan && L.plan.dateET === today && CFG.K[L.plan.tier] && L.plan.tier !== "EXAMPLE" && !(lp && lp.dateET === today)) store.set("plan", { dateET: today, tier: L.plan.tier, source: L.plan.source, probes: L.plan.probes || {}, detectedAt: L.plan.at });
+if (L.holidays && Array.isArray(L.holidays.rows) && !store.get("holidays." + year)) { store.set("holidays." + year, { fetchedAt: L.holidays.at, rows: L.holidays.rows }); s.clock.holidays = L.holidays.rows; }
+if (L.live) adoptLive(L.live);
+if (L.day && L.day.output) adoptDay(L.day);
+s.syncRun = L.run || null;
+}
+function adoptDay(d) {
+const s = App.state, out = d.output, m = d.manifest;
+if (!out || !validOutput(out) || s.run.status === "running") return false;
+if (s.result && (s.resultSource === "run" || s.resultSource === "cache") && (s.resultSavedAt || 0) >= (m.savedAt || 0)) return false;
+s.result = out; s.resultSource = "cache"; s.resultSavedAt = m.savedAt || App.now();
+store.set(`day.${m.dateET}.${out.plan}`, { savedAt: s.resultSavedAt, output: out });
+return true;
+}
+// vivo: se adopta lo más nuevo por símbolo; lo adoptado pospone el sondeo propio (07 §5.5)
+function adoptLive(v) {
+const s = App.state, newer = (a, b) => isNum(a) && a > (isNum(b) ? b : 0);
+let any = false;
+for (const d of STRIP) {
+const r = v.quotes && v.quotes[d.symbol], q = s.live.quotes[d.symbol];
+if (r && r.q && isNum(r.q.price) && newer(r.storedAt, q.storedAt)) { Object.assign(q, { q: r.q, storedAt: r.storedAt, status: "ok", err: null, adopted: true, retracted: false }); any = true; }
+}
+const b = v.breadth || {};
+for (const k of ["gainers", "losers", "active"]) if (b[k] && Array.isArray(b[k].rows) && newer(b[k].storedAt, s.breadth[k].storedAt)) { Object.assign(s.breadth[k], { rows: b[k].rows, storedAt: b[k].storedAt, status: "ok", err: null }); any = true; }
+for (const ex of ["NASDAQ", "NYSE"]) { const x = b.sectors && b.sectors[ex]; if (x && Array.isArray(x.rows) && newer(x.storedAt, s.breadth.sectors[ex].storedAt)) { Object.assign(s.breadth.sectors[ex], { rows: x.rows, storedAt: x.storedAt, date: x.date, status: "ok", err: null }); any = true; } }
+const mc = v.macro;
+if (mc && Array.isArray(mc.spxDesc) && newer(mc.storedAt, s.macro.storedAt)) { Object.assign(s.macro, { spxDesc: mc.spxDesc, treasuryDesc: mc.treasuryDesc || null, storedAt: mc.storedAt }); any = true; }
+if (any) saveLive(true);
+return any;
+}
+async function goLive(mcp, syncP) {
 const s = App.state;
+await syncP;
+const L = Sync.active ? await Sync.load(todayET()) : { ok: false };
+s.syncLoaded = L.ok;
+if (L.ok) applySynced(L);
 const cached = store.get("plan");
 const tier0 = cached && cached.dateET === todayET() && CFG.K[cached.tier] && cached.tier !== "EXAMPLE" ? cached.tier : "FREE";
 App.client = D.create({ mcp, storage: store, now: App.now, plan: tier0, onBudget });
+if (L.ok) {
+App.client.budget.setRemote(L.counters);
+Sync.subscribe(todayET(), {
+onRun: r => { s.syncRun = r; renderRunControls(); renderTable(); },
+onDay: d => { if (adoptDay(d)) { s.syncOther = null; renderAll(); } },
+onCounters: g => App.client.budget.setRemote(g),
+onLive: v => { if (adoptLive(v)) { renderStrip(); renderBreadth(); evaluateLiveSoon(); } },
+});
+Sync.prune(todayET());
+root.addEventListener("pagehide", () => Sync.flush());
+}
 s.budget = App.client.budget.get();
 const hintT = App.timer(() => { s.conn.hint = "Si ves un aviso de claude.ai para permitir FMP, acéptalo."; renderPulse(); }, 2000);
 const planToday = !!cached && cached.dateET === todayET() && !!CFG.K[cached.tier];
@@ -4014,6 +4500,8 @@ try { dp = planToday || canProbe ? await App.client.detectPlan() : { tier: tier0
 finally { clearTimeout(hintT); s.conn.hint = null; }
 if (dp.error && EXAMPLE_KINDS.has(dp.error.kind)) return enterExample(dp.error);
 s.mode = "live"; s.conn.status = "ok";
+if (dp.error && dp.error.kind === "unexpected_shape") s.shapeErrors = (s.shapeErrors || 0) + 1;
+if (dp.source === "probe") Sync.writePlan({ dateET: todayET(), tier: dp.tier, source: dp.source, probes: dp.probes || {} });
 s.plan = { tier: dp.tier, source: dp.source, detectedAt: App.now(), error: dp.error || null,
 note: dp.skipped ? "No se detectó el plan para cuidar tu límite diario; se asume Free." : dp.source === "default" && dp.error && dp.error.kind !== "limit_reached" ? "No se pudo detectar el plan; se asume " + PLAN_NAME[dp.tier] + "." : null };
 if (dp.error && dp.error.kind === "limit_reached") pageError(dp.error);
@@ -4039,6 +4527,7 @@ try {
 const rows = await App.client.call("holidays", { year }, { section: "status", cat: "arranque", signal: pageSig() });
 s.clock.holidays = rows.filter(r => r && typeof r.date === "string");
 if (persistOk()) store.set("holidays." + year, { fetchedAt: App.now(), rows: s.clock.holidays });
+Sync.writeHolidays(year, s.clock.holidays);
 tickClock(false);
 } catch (e) { handleIfPage(e); }
 }
@@ -4048,7 +4537,6 @@ $("#btn-tema").addEventListener("click", cycleTheme);
 $("#btn-correr").addEventListener("click", () => runAnalysis({}));
 $("#btn-detener").addEventListener("click", stopRun);
 $("#btn-permisos").addEventListener("click", openPermissions);
-$("#orden").addEventListener("change", ev => { App.state.ui.sort = ev.target.value; savePrefs(); renderTable(); });
 $("#resto").addEventListener("toggle", ev => { App.state.ui.showRest = ev.target.open; savePrefs(); });
 $("#btn-junk").addEventListener("click", () => { App.state.breadth.showAll = !App.state.breadth.showAll; renderBreadth(); });
 $("#btn-actualizar-mercado").addEventListener("click", refreshBreadth);
