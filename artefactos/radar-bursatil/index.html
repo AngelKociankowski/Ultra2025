@@ -1715,18 +1715,19 @@ return example && isNonStock ? "EJ-" + sym : sym;
 const runAlive = (r, nowMs) => !!r && r.state === "running" && nowMs - (isNum(r.beatAt) ? r.beatAt : r.startedAt) < CONFIG.SYNC.BEAT_STALE_MS && nowMs - r.startedAt < CONFIG.SYNC.RUN_STALE_MIN * 60000;
 
 // Frases del detalle (director, E1): cada una cita la probabilidad de la que sale. Precio ← P(sube); S&P 500 ← P(>S&P).
+// Entre 49 y 51 % (entero mostrado) usan las palabras de la leyenda, "casi una moneda al aire", con su leve sesgo (director, F2).
 function detailPhrases(r) {
 const out = [], stock = r.ref === "sp500", pUp = stock ? r.pUpStock : r.pUp;
 if (stock && isNum(r.pBeat)) {
 const d = displayPct(r.pBeat), q = `Con ${fmt.prob(r.pBeat)} de probabilidad de ganarle al S&P 500, `;
-out.push({ ref: "sp500", p: r.pBeat, text: q + (d > 50 ? "lo más probable es que rinda más que el índice."
-: d < 50 ? "lo más probable es que rinda menos que el índice" + (r.signal === 1 ? "; si quieres bolsa, el índice es mejor apuesta." : ".")
-: "ganarle o no al índice es casi una moneda al aire.") });
+out.push({ ref: "sp500", p: r.pBeat, text: q + (d >= CONFIG.SIGNAL_BUY_PCT ? "lo más probable es que rinda más que el índice."
+: d <= CONFIG.SIGNAL_AVOID_PCT ? "lo más probable es que rinda menos que el índice" + (r.signal === 1 ? "; si quieres bolsa, el índice es mejor apuesta." : ".")
+: "ganarle o no al índice es casi una moneda al aire" + (d > 50 ? " (ligeramente a favor)." : d < 50 ? " (ligeramente en contra)." : ".")) });
 }
 if (isNum(pUp)) {
 const d = displayPct(pUp), q = `Con ${fmt.prob(pUp)} de probabilidad de subir, `;
-let text = q + (d > 50 ? "lo más probable es que el precio suba en 3 meses." : d < 50 ? "lo más probable es que el precio baje en 3 meses."
-: "la dirección del precio en 3 meses es casi una moneda al aire.");
+let text = q + (d >= CONFIG.SIGNAL_BUY_PCT ? "lo más probable es que el precio suba en 3 meses." : d <= CONFIG.SIGNAL_AVOID_PCT ? "lo más probable es que el precio baje en 3 meses."
+: "la dirección del precio es casi una moneda al aire" + (d > 50 ? " (ligeramente al alza)." : d < 50 ? " (ligeramente a la baja)." : "."));
 if (isNum(r.expRet) && r.expRet > 0 && pUp < 0.5) text += " El promedio es positivo porque las ganancias se concentran en pocos escenarios grandes" + (stock ? "." : "; por eso la señal no es Compra.");
 out.push({ ref: "sube", p: pUp, text });
 }
