@@ -2400,7 +2400,10 @@ const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "
 const PLAN_NAME = { FREE: "Free", STARTER: "Starter", PREMIUM: "Premium", ULTIMATE: "Ultimate", EXAMPLE: "Ejemplo" };
 const CAT_NAME = { sonda: "Detección de plan", arranque: "Arranque", franja: "Franja en vivo", mercado: "Mercado completo", macro: "Régimen macro", corrida: "Corrida de análisis", detalle: "Detalle", manual: "Manual" };
 const TRANSIENT_FINAL = "FMP no respondió; se reintentará en el próximo refresco.";
-const OUTAGE_TEXT = "FMP falló 3 veces seguidas (servicio no disponible). Se detuvo la corrida para no gastar tu límite y no se guardó nada; vuelve a correrla cuando FMP responda.";
+const OUTAGE_TEXT = {
+down: "FMP falló 3 veces seguidas (servicio no disponible). Se detuvo la corrida para no gastar tu límite y no se guardó nada; vuelve a correrla cuando FMP responda.",
+rejected: "FMP rechazó las primeras consultas de la corrida (3 seguidas, ninguna salió bien); se detuvo sin gastar más y no se guardó nada.",
+};
 
 // DOM: nodos y textContent, nunca HTML en cadenas
 const $ = (sel, r) => (r || doc).querySelector(sel);
@@ -3166,7 +3169,7 @@ const g = runGuard(auto);
 if (!g.ok) { s.run.message = g.reason; renderRanking(); return; }
 const ac = new AbortController();
 const startUsed = s.mode === "live" ? App.client.budget.get().byCat.corrida || 0 : 0; // solo llamadas de la corrida
-s.run = { status: "running", stage: "universe", stageLabel: "1/4 · Universo", done: 0, total: g.plan.cost, plan: g.plan, startedAt: App.now(), finishedAt: null, abort: ac, message: null, auto, cap: runCapNow(auto), outage: false,
+s.run = { status: "running", stage: "universe", stageLabel: "1/4 · Universo", done: 0, total: g.plan.cost, plan: g.plan, startedAt: App.now(), finishedAt: null, abort: ac, message: null, auto, cap: runCapNow(auto), outage: null,
 dayET: auto ? App.bootDay : todayET() }; // BAJO N6: la automática es del día ET en que se abrió la página; la manual, del día del clic
 if (s.mode === "live") App.client.budget.markRun();
 s.sections.ranking.err = null;
@@ -3194,7 +3197,7 @@ handleError("ranking", e);
 function abortedRun() {
 const s = App.state;
 if (!s.run.outage) { finishRun("aborted", "Detenida"); return; }
-const e = C.makeError("server_unavailable", "outage", { userText: OUTAGE_TEXT });
+const e = C.makeError(s.run.outage === "down" ? "server_unavailable" : "tool_error", "outage", { userText: OUTAGE_TEXT[s.run.outage] });
 finishRun("error", e.userText);
 handleError("ranking", e);
 }
@@ -3208,15 +3211,19 @@ function stopRun() { const a = App.state.run.abort; if (a) a.abort(); }
 const nextFrame = () => new Promise(r => setTimeout(r, 0));
 
 const DEEP_KEYS = ["eodLight", "keyMetrics", "scores", "ratios", "earnings", "ptSummary", "grades", "ptConsensus"];
-// Corte por fallas (ronda 2): 3 errores reintentables seguidos (ya con su reintento) abortan la corrida.
+// Corte por fallas (ronda 2): 3 fallas seguidas abortan la corrida. Cuentan los errores reintentables (ya con su
+// reintento) y los tool_error genéricos de un endpoint que en esta corrida aún no ha respondido bien ni una vez
+// (director). Un tool_error por símbolo después de una respuesta buena de ese endpoint no cuenta. "Limit Reach" va por su rama.
 const OUTAGE_CODES = new Set(["server_unavailable", "upstream_error"]);
 function runCtx(ac) {
 const s = App.state, today = todayET(), cl = App.client, opt = { section: "ranking", cat: "corrida", signal: ac.signal };
 let streak = 0;
-const call = (key, args) => cl.call(key, args, opt).then(v => { streak = 0; return v; }, raw => {
+const okKeys = new Set();
+const call = (key, args) => cl.call(key, args, opt).then(v => { streak = 0; okKeys.add(key); return v; }, raw => {
 const e = D.classifyError(raw);
-if (!OUTAGE_CODES.has(e.code)) streak = 0;
-else if (++streak >= CFG.OUTAGE_STREAK && !s.run.outage) { s.run.outage = true; ac.abort(); }
+const down = OUTAGE_CODES.has(e.code), rejected = e.code === "tool_error" && e.kind === "tool_failed" && !okKeys.has(key);
+if (!down && !rejected) streak = 0;
+else if (++streak >= CFG.OUTAGE_STREAK && !s.run.outage) { s.run.outage = down ? "down" : "rejected"; ac.abort(); }
 throw e;
 });
 return {
