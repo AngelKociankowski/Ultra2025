@@ -308,7 +308,10 @@ th,td{padding-inline:6px;}}
 @media (max-width:380px){th,td{padding-inline:4px;}
 .activo-btn,.activo-btn .nom{max-width:5.5rem;}
 .pill{padding:2px 6px;gap:3px;}
-.pbar{width:36px;}}
+.pbar{width:36px;}
+#cabecera{gap:var(--sp-2);}
+#btn-tema{padding-inline:8px;}
+.pulso{font-size:11px;gap:6px;}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none !important;transition:none !important;scroll-behavior:auto !important;}}
 </style>
 <header id="cabecera">
@@ -1707,9 +1710,7 @@ return example && isNonStock ? "EJ-" + sym : sym;
 },
 };
 
-// Frases del detalle (director, corrección E1 de 07 §1.3): cada frase sale de la probabilidad que tiene al lado y la nombra.
-// La dirección del precio sale de P(sube) (pUpStock en acciones, pUp en el resto); lo que se dice frente al S&P 500 sale de
-// P(>S&P) (pBeat, en acciones). Las dos pueden ir juntas sin oponerse: "rinde menos que el índice" y "sube" no se excluyen.
+// Frases del detalle (director, E1): cada una cita la probabilidad de la que sale. Precio ← P(sube); S&P 500 ← P(>S&P).
 function detailPhrases(r) {
 const out = [], stock = r.ref === "sp500", pUp = stock ? r.pUpStock : r.pUp;
 if (stock && isNum(r.pBeat)) {
@@ -2292,9 +2293,8 @@ let tier = plan;
 let bucket = makeBucket({ perMin: CFG.PLAN_PER_MIN[tier], now: clock });
 const gate = makeGate(Math.max(1, concurrency));
 const lastFailed = new Map(), lastSeen = new Map();
-// N1: el shell entrega el resultado de una llamada con caché también a los watches de esa identidad, antes o después
-// de resolverla: esa entrega es la MISMA ejecución y la cuenta la llamada. Se empareja por huella del resultado, sin ventana
-// de tiempo: `held` guarda las entregas llegadas con la llamada en vuelo y `callFp` los resultados de llamadas aún sin entrega.
+// N1 (D-E-15): la entrega al watch del resultado de una llamada es la misma ejecución; se empareja por huella.
+// `held`: entregas llegadas con la llamada en vuelo; `callFp`: resultados de llamadas aún sin su entrega.
 const inCall = new Map(), watched = new Map(), held = new Map(), callFp = new Map();
 const FP_TTL_MS = 120000, FP_MAX = 4;
 const callBusy = id => (inCall.get(id) || 0) > 0;
@@ -2311,7 +2311,7 @@ a.splice(i, 1); if (!a.length) map.delete(id);
 return true;
 }
 function pushFp(map, id, x, max) { const a = map.get(id) || []; a.push(x); if (max && a.length > max) a.shift(); map.set(id, a); }
-// fin de una llamada con caché: empareja su entrega retenida; sin llamadas en vuelo, lo retenido restante son ejecuciones propias del watch
+// al terminar la llamada: lo retenido que no es suyo son ejecuciones propias del watch
 function settleHeld(id, res) {
 const fp = res && (held.has(id) || watched.has(id)) ? fpOf(res) : null; // la huella solo hace falta si hay un watch
 if (fp && !takeFp(held, id, fp) && watched.has(id)) pushFp(callFp, id, { fp, t: clock() }, FP_MAX);
@@ -2323,14 +2323,13 @@ const persist = () => tier !== "EXAMPLE";
 const limitOf = () => CFG.PLAN_DAILY_LIMIT[tier];
 const emptyCats = () => Object.fromEntries(CATS.map(c => [c, 0]));
 
-// runDay: marca "corrida lanzada hoy (fecha ET)", aparte del contador: no la borran reset() ni el cambio de día (director, ronda 2)
+// runDay: marca "corrida lanzada hoy"; no la borran reset() ni el cambio de día (ronda 2)
 const fresh = (today, runDay) => ({ dateET: today, used: 0, limit: limitOf(), limitHit: false, byCat: emptyCats(), runDay, suspect: null });
 // remote: lo que suman los otros dispositivos + el ajuste de "Restablecer" (07 §5.6); 0 sin sincronización
 let remote = { dateET: null, used: 0, limitHit: false, suspect: false };
 let st = load();
-function load() {
+function load(v = persist() ? store.get("budget") : null) {
 const today = C.etParts(clock()).date;
-const v = persist() ? store.get("budget") : null;
 const runDay = v && typeof v.runDay === "string" ? v.runDay : null;
 if (v && v.dateET === today) {
 const byCat = emptyCats();
@@ -2343,9 +2342,11 @@ function save() {
 if (persist()) store.set("budget", { dateET: st.dateET, used: st.used, limit: isFinite(st.limit) ? st.limit : null, limitHit: st.limitHit, byCat: st.byCat, runDay: st.runDay, suspect: st.suspect });
 if (onBudget) { try { onBudget(budget.get()); } catch (e) { /* el observador no debe romper la capa de datos */ } }
 }
+// un solo contador por navegador: se relee por si otra pestaña lo escribió (ALTO E2)
 function roll() {
-const today = C.etParts(clock()).date;
-if (today !== st.dateET) { st = fresh(today, st.runDay); save(); }
+const today = C.etParts(clock()).date, v = persist() ? store.get("budget") : null;
+if (v && v.dateET === today) st = load(v);
+else if (today !== st.dateET) { st = fresh(today, st.runDay); save(); }
 st.limit = limitOf();
 }
 const rem = () => (remote.dateET === st.dateET ? remote : { used: 0, limitHit: false, suspect: false });
@@ -2366,7 +2367,7 @@ if (c === "corrida") st.runDay = st.dateET; // una corrida que cruza la medianoc
 save();
 },
 markLimitHit() { roll(); if (isFinite(st.limit)) st.used = Math.max(st.used, st.limit); st.limitHit = true; save(); },
-reset() { st = fresh(C.etParts(clock()).date, st.runDay); save(); },
+reset() { roll(); st = fresh(st.dateET, st.runDay); save(); },
 markRun() { roll(); st.runDay = st.dateET; save(); },
 };
 const log = r => { if (onLog) { try { onLog(Object.assign({ t: clock() }, r)); } catch (e) { /* idem */ } } };
@@ -2477,7 +2478,7 @@ if (!tasks.length) { resolve(results); return; }
 const finish = () => { if (done >= tasks.length && active === 0) resolve(results); };
 const pump = () => {
 while (active < conc && next < tasks.length) {
-// stopOn(null) antes de cada tarea: un corte decidido por una respuesta buena (p. ej. vacía) también detiene la cola
+// stopOn(null): un corte decidido en una respuesta buena (vacía) también detiene la cola
 if (stopped || (o.stopOn && o.stopOn(null)) || (o.signal && o.signal.aborted)) { while (next < tasks.length) { results[next++] = cancelled(); done++; } break; }
 const i = next++; active++;
 Promise.resolve().then(tasks[i]).then(
@@ -2537,15 +2538,14 @@ return Object.freeze({ plan: () => tier, setPlan, budget, call, watch, runQueue,
 }
 
 
-// Sincronización entre dispositivos con `db` en data/users/<uid>/… (07 §5). Sin db/uid queda inactiva y la página usa
-// solo el almacenamiento del navegador. Ningún fallo de `db` sale de aquí: se degrada y lo dice en statusText.
+// Sincronización con `db` en data/users/<uid>/… (07 §5); sin db/uid, inactiva. Ningún fallo de `db` sale de aquí.
 const TERMINAL = new Set(["revoked", "not_granted", "capability_disabled", "capability_removed"]);
 const LOCAL_TEXT = "Solo en este navegador (inicia sesión en claude.ai para sincronizar entre dispositivos)";
 function createSync({ db, uid, dev, now, storage, timer = setTimeout }) { // timer: debounces en el reloj de la página
 const S = CFG.SYNC, col = db && uid ? db.collection("data/users/" + uid) : null;
 const st = { active: !!col, status: col ? "loading" : "inactive", statusText: col ? "Sincronizando con tus otros dispositivos…" : LOCAL_TEXT };
 const counters = new Map(); // id → cuerpo (contador-<dev> y contador-ajuste)
-// titular del arrendamiento: dispositivo + pestaña (aleatorio por carga); dos pestañas no "renuevan" la una a la otra (ALTO E2)
+// titular del arrendamiento: dispositivo + pestaña (ALTO E2)
 const holder = dev + ":" + Math.random().toString(36).slice(2, 10);
 let own = null, ownTimer = null, livePatch = null, liveTimer = null, liveDoc = null, liveSet = false, dayWrites = true;
 const off = (text, status = "inactive") => { st.active = false; st.status = status; st.statusText = text; };
@@ -2561,7 +2561,7 @@ try { return await fn(); } catch (e) { if (e && e.code === "unavailable") { awai
 }
 const ref = id => col.doc(id);
 const read = async id => { const d = await verb(() => ref(id).get()); return d.exists ? d.data() : null; };
-// Lo que llega de `db` lo escribió otro dispositivo (o una versión vieja): un documento sin forma se trata como inexistente (MEDIO E7)
+// un documento de `db` sin forma se trata como inexistente (MEDIO E7)
 const RUN_STATES = new Set(["running", "done", "partial", "error", "aborted"]);
 const cleanRun = d => (isObj(d) && isStr(d.dateET) && RUN_STATES.has(d.state) && isNum(d.startedAt) && isStr(d.runId) ? d : null);
 const isCnt = n => Number.isInteger(n) && n >= 0 && n <= S.COUNTER_MAX;
@@ -2572,7 +2572,7 @@ if (d.kind === "ajuste") return Number.isInteger(d.offset) && d.offset <= 0 && d
 return null;
 }
 const setCounters = docs => { counters.clear(); docs.forEach(d => { const v = cleanCounter(d.data()); if (v) counters.set(d.id, v); }); };
-// un cuerpo de más de DOC_MAX_BYTES no se envía: el shell lo rechazaría con el mismo código que "sin permiso" (BAJO E13)
+// > DOC_MAX_BYTES no se envía: el rechazo tendría el código de "sin permiso" (BAJO E13)
 async function write(id, body) {
 if (!st.active || C.bytesOf(body) > S.DOC_MAX_BYTES) return false;
 try { await verb(() => ref(id).set(body)); return true; } catch (e) { fail(e); return false; }
@@ -2674,7 +2674,7 @@ if (!st.active) return;
 livePatch = merge(livePatch || {}, patch);
 if (!liveTimer) liveTimer = timer(pushLive, liveSet ? S.LIVE_SET_DEBOUNCE_MS : S.LIVE_DEBOUNCE_MS);
 }
-// `vivo` ≤ DOC_MAX_BYTES (BAJO E13): primero salen las listas de mercado (4 llamadas para rehacerlas), luego la macro
+// `vivo` ≤ DOC_MAX_BYTES (BAJO E13): salen primero las listas de mercado, luego la macro
 function fitLive(doc) {
 if (C.bytesOf(doc) <= S.DOC_MAX_BYTES) return doc;
 const a = Object.assign({}, doc, { breadth: {} });
@@ -2691,7 +2691,7 @@ try {
 if (liveDoc && !liveSet && fit === next) { await verb(() => ref("vivo").update(p)); liveDoc = next; }
 else { await verb(() => ref("vivo").set(fit)); liveDoc = fit; }
 } catch (e) {
-// 07 §10: si se rechaza `update` (merge anidado o documento borrado), `vivo` pasa a `set` completo con debounce de 10 s
+// 07 §10: `update` rechazado → `set` completo cada 10 s
 if (e && e.code === "invalid_argument" && liveDoc && !liveSet) { liveSet = true; livePatch = merge(p, livePatch || {}); if (!liveTimer) liveTimer = timer(pushLive, S.LIVE_SET_DEBOUNCE_MS); }
 else if (!(e && e.code === "resource_exhausted")) fail(e);
 }
@@ -2879,7 +2879,7 @@ macro: { spxDesc: s.macro.spxDesc, treasuryDesc: s.macro.treasuryDesc, storedAt:
 };
 if (!store.set("live", val)) { val.macro = Object.assign({}, val.macro, { spxDesc: null }); store.set("live", val); }
 if (!Sync.active) return;
-// a `vivo` solo lo nuevo de este dispositivo (update con merge anidado, 07 §5.2); lo adoptado de `vivo` se da por enviado
+// a `vivo` solo lo nuevo de este dispositivo (07 §5.2)
 const patch = {}, fresh = (k, x) => isNum(x.storedAt) && x.storedAt > (patched[k] || 0) && ((patched[k] = x.storedAt), !fromSync && !x.adopted);
 for (const d of STRIP) { const q = s.live.quotes[d.symbol]; if (q.q && fresh("q." + d.symbol, q)) (patch.quotes = patch.quotes || {})[d.symbol] = { q: q.q, storedAt: q.storedAt }; }
 for (const k of ["gainers", "losers", "active"]) if (b[k].rows && fresh(k, b[k])) (patch.breadth = patch.breadth || {})[k] = pick(b[k]);
@@ -2919,8 +2919,7 @@ asOf: v => isStr(v) && /^\d{4}-\d{2}-\d{2}$/.test(v), plan: v => !!CFG.K[v], now
 excluded: arrOf(shape({ symbol: isStr, reason: isStr })), rest: arrOf(shape({ symbol: isStr, display: isStr, name: isStr, reason: isStr, S1: numOrNull, price: numOrNull, changePct: numOrNull })),
 counts: shape(Object.fromEntries(["universe", "eligible", "quoted", "finalists", "ranked", "nonStock"].map(k => [k, v => v === undefined || isCount(v)]))), regime: shape({ state: isStr, label: isStr, weights: arrOf(isNum) }),
 });
-// Datos vivos guardados (localStorage) o de `db` (`vivo`, escrito por otro dispositivo): lo que no tiene forma se ignora como
-// si no existiera, con las mismas reglas en los dos caminos (MEDIO E7). Una hora en el futuro tampoco vale.
+// Datos vivos del almacenamiento local o de `db`: lo que no tiene forma se ignora como si no existiera (MEDIO E7)
 function cleanLive(v) {
 if (!isObj(v) || Array.isArray(v)) return null;
 const okT = t => isNum(t) && t > 0 && t <= App.now() + 86400000, obj = x => isObj(x) && !Array.isArray(x);
@@ -2974,16 +2973,13 @@ if (s.run.status === "running") return true;
 if (hasTodayRun()) return false;
 return !(App.client && (App.client.budget.get().byCat.corrida || 0) > 0);
 }
-// MEDIO 3: solo la corrida AUTOMÁTICA (arranque en frío) cumple gastado + corrida ≤ COLD_CAP_FREE.
-// Una corrida manual usa la guarda del plan (§7.2): lo que queda del límite, con tope 193 (ronda 2, N2).
+// Tope: la automática cumple gastado + corrida ≤ COLD_CAP_FREE (MEDIO 3); la manual, la guarda del plan (§7.2, N2)
 function runCapNow(auto) {
 const cl = App.client;
 if (!auto || !cl || cl.plan() !== "FREE") return CFG.RUN_CAP_FREE;
 return Math.min(CFG.RUN_CAP_FREE, CFG.COLD_CAP_FREE - cl.budget.get().used);
 }
-// Reserva de la corrida pendiente (Free). Solo se reserva una corrida que de verdad cabe: si no cabe, no bloquea nada.
-// El intervalo de la franja protege la corrida que se lanzaría ahora; una consulta suelta solo se niega si después
-// ya no cabría ni la corrida mínima.
+// Reserva de la corrida pendiente (Free): solo la que cabe (N2)
 function runReserve(minimal) {
 const s = App.state;
 if (s.run.status === "running") return Math.max(0, s.run.total - s.run.done);
@@ -3245,7 +3241,7 @@ if (d.core) ivShown = iv;
 if (iv === null) {
 if (w && w.iv) unwatchQuote(d.symbol);
 const fresh = q.q && C.isFresh({ storedAt: q.storedAt, ttlMin: CFG.REST_TTL_MIN_FREE, market: m, nowMs: now });
-// una sola consulta por sesión de mercado (al abrir o tras el cierre), no cada vez que el intervalo se apaga
+// una consulta por sesión de mercado
 const tried = isNum(q.attemptAt) && (!isNum(m.lastCloseMs) || q.attemptAt >= m.lastCloseMs);
 if (!fresh && !s.live.watches[d.symbol] && !tried && !s.live.paused) {
 if (canAutoNow(1)) registerQuoteWatch(d.symbol, null); else q.status = "paused";
@@ -3595,7 +3591,7 @@ if (s.mode !== "live" || !App.client || hasTodayRun()) { renderRanking(); return
 const tier = App.client.plan(), today = todayET(), b = App.client.budget.get();
 let attempted;
 if (Sync.active || s.syncLoaded === false && Sync.status === "degraded") {
-// con sync (07 §5.5): load OK, sin día de hoy (ya revisado), corrida de hoy ausente, sin sospecha y guarda global; el reclamo va en runAnalysis
+// con sync (07 §5.5); el reclamo va en runAnalysis
 if (!s.syncLoaded) { renderRanking(); return; }
 const r = s.syncRun;
 if (r && r.dateET === today) { setOther(otherFrom(r)); renderRanking(); return; }
@@ -3610,11 +3606,10 @@ renderRanking(); return;
 }
 runAnalysis({ auto: true });
 }
-// Marca "corrida lanzada hoy (fecha ET)" (va con el contador, pero no la borran "Restablecer contador" ni "Borrar datos").
+// Marca "corrida lanzada hoy" (N3)
 const runMarkedToday = () => App.client.budget.get().ranToday;
 function localAutoOk() { const b = App.client.budget.get(); return storageWorks() && !(b.byCat.corrida > 0) && !b.ranToday && !b.suspect; }
-// Estado de la corrida de otro dispositivo según su documento `corrida` de hoy (07 §5.4). Una "running" sin resultado deja de
-// contar al cumplir RUN_STALE_MIN desde su inicio, y una terminada en error o abortada se ofrece aquí (MEDIO E8).
+// Corrida de otro dispositivo (07 §5.4): "running" vence a los RUN_STALE_MIN; error o abortada → se ofrece aquí (MEDIO E8)
 function otherFrom(r) {
 if (!r || r.dateET !== todayET() || r.state === "done" || r.state === "partial") return null;
 const until = r.startedAt + CFG.SYNC.RUN_STALE_MIN * 60000;
@@ -3624,7 +3619,6 @@ let otherT = null;
 function setOther(o) {
 const s = App.state;
 s.syncOther = o; clearTimeout(otherT); otherT = null;
-// mientras espera, la página sigue abierta: al vencer el plazo sin resultado, ofrece el botón y lo dice
 if (o && o.state === "running" && isNum(o.until)) otherT = App.timer(() => { if (s.syncOther && s.syncOther.state === "running") { setOther(otherFrom(s.syncRun) || { state: "failed" }); renderRanking(); } }, o.until - App.now() + 1000);
 }
 // Reclamo rechazado (07 §5.4): otro dispositivo corre o ya corrió hoy
@@ -3650,7 +3644,7 @@ const g = runGuard(auto), cost = g.plan && Number.isInteger(g.plan.cost) && g.pl
 const label = g.limit ? "Límite diario agotado" : cost ? `${verb} (≈ ${cost} llamadas)` : verb;
 const other = s.syncOther && s.syncOther.state;
 if (other === "running") return { label, enabled: false, reason: OTHER_RUNNING, empty: OTHER_RUNNING };
-if (!g.ok) return { label, enabled: false, reason: g.reason, empty: g.reason };
+if (!g.ok) { const why = (other === "failed" ? "La corrida de hoy no terminó en el otro dispositivo. " : "") + g.reason; return { label, enabled: false, reason: why, empty: why }; } // E8: lo dice aunque no quepa
 const rem = cl.budget.remaining();
 const uses = `Correr análisis usa ≈ ${cost} de tus ≈ ${isFinite(rem) ? rem : "∞"} llamadas restantes y tarda ~30 s.`;
 const why = other === "failed" ? `La corrida de hoy no terminó en el otro dispositivo; puedes correrla aquí (≈ ${cost} llamadas).`
@@ -3665,7 +3659,7 @@ const g = runGuard(auto);
 if (!g.ok) { s.run.message = g.reason; renderRanking(); return; }
 const prev = s.run, ac = new AbortController(), dayET = auto ? App.bootDay : todayET(); // BAJO N6: la automática es del día ET en que se abrió la página; la manual, del día del clic
 const claiming = s.mode === "live" && Sync.active;
-// "running" en el mismo tick del clic, antes de cualquier await: el botón queda deshabilitado y un segundo clic no pasa
+// "running" en el mismo tick del clic, antes de cualquier await (ALTO E2)
 s.run = { status: "running", stage: claiming ? "claim" : "universe", stageLabel: claiming ? "Reservando la corrida…" : "1/4 · Universo", done: 0, total: g.plan.cost, plan: g.plan, startedAt: App.now(), finishedAt: null, abort: ac, message: null, auto, cap: runCapNow(auto), outage: null, cut: null,
 runId: null, dayET, claiming };
 renderRunControls();
@@ -3726,20 +3720,16 @@ function stopRun() { const s = App.state; if (s.run.abort) { s.run.cut = s.run.c
 const nextFrame = () => new Promise(r => setTimeout(r, 0));
 
 const DEEP_KEYS = ["eodLight", "keyMetrics", "scores", "ratios", "earnings", "ptSummary", "grades", "ptConsensus"];
-// Corte por fallas (ronda 2): 3 fallas seguidas abortan la corrida. Cuentan los errores reintentables (ya con su
-// reintento) y los tool_error genéricos de un endpoint que en esta corrida aún no ha respondido bien ni una vez
-// (director). Un tool_error por símbolo después de una respuesta buena de ese endpoint no cuenta. "Limit Reach" va por su rama.
+// Corte por fallas (ronda 2, D-R2-2): 3 seguidas de errores reintentables o tool_error de un endpoint sin éxito previo
 const OUTAGE_CODES = new Set(["server_unavailable", "upstream_error"]);
 function runCtx(ac) {
 const s = App.state, today = todayET(), cl = App.client, opt = { section: "ranking", cat: "corrida", signal: ac.signal };
 let streak = 0, anyOk = false, issued = 0, okSeq = 0, rejSeqs = [];
 const okKeys = new Set(), tally = { calls: 0, rejected: 0 };
 const cut = why => { if (!s.run.cut && !s.run.outage) s.run.cut = why; }; // la cola se detiene; lo que ya está en vuelo termina
-// Racha de rechazos (07 §E5) en orden de emisión: un éxito borra los rechazos de llamadas emitidas ANTES que él. Un éxito
-// rezagado (emitido antes del primer rechazo) no borra los posteriores; uno intercalado sí, aunque llegue tarde.
+// Racha de E5 en orden de emisión: un éxito borra los rechazos emitidos antes que él (D-E-9)
 const answered = seq => { if (seq > okSeq) { okSeq = seq; rejSeqs = rejSeqs.filter(f => f > seq); } };
-// 07 §E5: racha de rechazos tras éxitos = posible límite con texto desconocido. Cuenta también una respuesta "buena" sin datos
-// ([]) o con forma desconocida: FMP podría avisar así del límite (MEDIO E4).
+// racha → "posible límite" (07 §E5); cuentan también [] y la forma desconocida (MEDIO E4)
 const suspicious = seq => {
 if (seq > okSeq) rejSeqs.push(seq);
 if (rejSeqs.length >= CFG.SUSPECT_STREAK && anyOk && !s.run.outage && !s.run.cut) { if (s.mode === "live") cl.budget.markSuspect(); cut("posible límite"); }
@@ -3841,8 +3831,7 @@ const etfs = pr.etfs.map((e, i) => ({ symbol: e, quote: (val(res[nsFetch.length 
 rc.stage("stage2", `4/4 · Análisis profundo de ${st.finalists.length} finalistas`);
 const finals = rc.live() ? await fetchFinalists(st.finalists, DEEP_KEYS.slice(0, pr.perFinalist), rc) : { list: [] };
 if (s.run.outage) return null;
-// 07 §E3/§E5: con corte se analiza lo que haya; muchas consultas rechazadas también marca parcial. Si llegan datos de
-// muy pocos de los activos planeados (éxitos vacíos, por ejemplo), tampoco es una corrida completa (MEDIO E4).
+// parcial: corte (§E3), muchos rechazos (§E5) o cobertura baja (MEDIO E4)
 const withHist = finals.list.filter(f => Array.isArray(f.eodDesc) && f.eodDesc.length).length + nonStocks.filter(n => Array.isArray(n.eodDesc) && n.eodDesc.length).length;
 const planned = st.finalists.length + nonStocks.length, lowCover = planned > 0 && withHist < CFG.COVERAGE_MIN * planned;
 const t = rc.tally, why = s.run.cut || (t.rejected >= CFG.SUSPECT_MIN && t.rejected / Math.max(1, t.calls) >= CFG.SUSPECT_RATIO ? "muchas consultas rechazadas" : lowCover ? "cobertura baja" : null);
