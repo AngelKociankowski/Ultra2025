@@ -17,3 +17,11 @@ data/ultra.db-shm
 # respaldos generados por la plataforma
 data/respaldos/
 data/archivos/
+
+# Andamiaje del ciclo de construcción: el plan del arquitecto, las decisiones
+# del director y los reportes del coder y del tester. Son el expediente de UNA
+# tanda de trabajo, no del proyecto.
+#
+# El porqué de cada decisión no se pierde: acaba donde esta base lo guarda
+# siempre, que es el mensaje del commit y el comentario del código.
+.ciclo/
