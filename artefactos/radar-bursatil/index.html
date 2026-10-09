@@ -2205,7 +2205,31 @@ const count = v => Number.isInteger(v) && v >= 0; // conteo válido de la caché
 function makeStorage(ls) {
 const PFX = CFG.LS_PREFIX, ver = k => (k.startsWith("day.") ? CFG.DAY_SCHEMA_VERSION : CFG.SCHEMA_VERSION);
 const ok = !!ls && typeof ls.getItem === "function";
+const enc = (k, val) => JSON.stringify(Object.assign({}, val, { v: ver(k) }));
+function set(k, val) {
+if (!ok) return false;
+try { ls.setItem(PFX + k, enc(k, val)); return true; } catch (e) { return false; }
+}
+function allKeys() { try { const out = []; for (let i = 0; i < ls.length; i++) { const key = ls.key(i); if (key && key.startsWith(PFX)) out.push(key); } return out; } catch (e) { return []; } }
+// Escritura prioritaria (v5.1, director): contador, candado, lo que está en vuelo y la marca del día SIEMPRE se escriben. Si no
+// hay espacio, se libera en este orden hasta que quepa (caché de respuestas, vivo, días viejos, feriados, preferencias) y se
+// reintenta UNA vez. Devuelve si quedó escrito.
+function setCritical(k, val) {
+if (set(k, val)) return true;
+if (!ok) return false;
+const keys = allKeys(), rest = p => keys.filter(x => x.startsWith(PFX + p));
+const days = rest("day."), newest = days.map(x => x.slice(PFX.length + 4, PFX.length + 14)).sort().pop();
+const groups = [rest("rc."), rest("live"), days.filter(x => x.slice(PFX.length + 4, PFX.length + 14) !== newest), rest("holidays."), rest("prefs")];
+let need = 0;
+try { need = (enc(k, val).length - (ls.getItem(PFX + k) || "").length + k.length + PFX.length) * 2 + 64; } catch (e) { need = Infinity; }
+for (const g of groups) for (const key of g) {
+if (need <= 0) break;
+try { const v = ls.getItem(key); ls.removeItem(key); need -= ((v || "").length + key.length) * 2; } catch (e) { /* sin acceso */ }
+}
+return set(k, val);
+}
 return Object.freeze({
+setCritical,
 get(k) {
 if (!ok) return null;
 try {
@@ -2215,10 +2239,7 @@ if (!v || v.v !== ver(k)) { try { ls.removeItem(PFX + k); } catch (e) { /* sin a
 return v;
 } catch (e) { return null; }
 },
-set(k, val) {
-if (!ok) return false;
-try { ls.setItem(PFX + k, JSON.stringify(Object.assign({}, val, { v: ver(k) }))); return true; } catch (e) { return false; }
-},
+set,
 remove(k) { if (!ok) return; try { ls.removeItem(PFX + k); } catch (e) { /* sin acceso */ } },
 keys(prefix = "") {
 if (!ok) return [];
@@ -2262,14 +2283,15 @@ case "cancelled": return mk("cancelled");
 default: return retryable ? mk("transient", { retryable, retryAfterMs: ra }) : mk("unknown"); // upstream_error y códigos nuevos
 }
 }
-function makeBucket({ perMin, now }) {
+// `reserve()`: lo que los watch con refresco ejecutan por minuto (la plataforma los pide sin pasar por aquí; v5.1)
+function makeBucket({ perMin, now, reserve }) {
 const stamps = [];
 return {
 take() {
 if (!(perMin < Infinity)) return 0;
-const t = now();
+const t = now(), cap = Math.max(1, perMin - (reserve ? reserve() : 0));
 while (stamps.length && t - stamps[0] >= 60000) stamps.shift();
-if (stamps.length < perMin) { stamps.push(t); return 0; }
+if (stamps.length < cap) { stamps.push(t); return 0; }
 return Math.max(1, stamps[0] + 60000 - t);
 },
 };
@@ -2297,7 +2319,9 @@ const store = storage || makeStorage(null);
 const clock = typeof now === "function" ? now : () => 0;
 const bornAt = clock();
 let tier = plan;
-let bucket = makeBucket({ perMin: CFG.PLAN_PER_MIN[tier], now: clock });
+let watchLoad = 0; // ejecuciones por minuto de los watch con refresco
+const reserve = () => watchLoad;
+let bucket = makeBucket({ perMin: CFG.PLAN_PER_MIN[tier], now: clock, reserve });
 const gate = makeGate(Math.max(1, concurrency));
 const lastFailed = new Map(), lastSeen = new Map();
 // N1 (D-E-15): la entrega al watch del resultado de una llamada es la misma ejecución; se empareja por huella.
@@ -2339,7 +2363,7 @@ let remote = { dateET: null, used: 0, limitHit: false, suspect: false };
 // Un solo contador por navegador: cada cambio es una operación que se aplica sobre el registro recién leído. Con Web Locks
 // (`locks`) la lectura-modificación-escritura es atómica entre pestañas y no se pierden llamadas; sin ellos, es directa.
 const ops = [];
-let base = load(), st = base, flushing = false;
+let base = load(), st = base, flushing = false, unsaved = false; // unsaved: el último guardado del contador no cupo (v5.1)
 function load(v = persist() ? store.get("budget") : null) {
 const today = C.etParts(clock()).date;
 const runDay = v && typeof v.runDay === "string" ? v.runDay : null;
@@ -2365,7 +2389,7 @@ flushing = false;
 if (!ops.length) return;
 const cur = baseNow();
 ops.splice(0).forEach(f => f(cur)); cur.limit = limitOf(); base = cur;
-if (persist()) store.set("budget", { dateET: cur.dateET, used: cur.used, limit: isFinite(cur.limit) ? cur.limit : null, limitHit: cur.limitHit, byCat: cur.byCat, runDay: cur.runDay, suspect: cur.suspect });
+if (persist()) unsaved = !(store.setCritical || store.set)("budget", { dateET: cur.dateET, used: cur.used, limit: isFinite(cur.limit) ? cur.limit : null, limitHit: cur.limitHit, byCat: cur.byCat, runDay: cur.runDay, suspect: cur.suspect });
 emit();
 };
 if (!locks || !persist()) return run();
@@ -2380,7 +2404,7 @@ get() {
 roll(); const r = rem();
 // sin límite diario (planes pagados), una marca de límite de un estado Free viejo no cuenta
 return { dateET: st.dateET, used: Math.max(0, st.used + r.used), local: st.used, limit: st.limit, limitHit: isFinite(st.limit) && (st.limitHit || r.limitHit), byCat: Object.assign({}, st.byCat),
-ranToday: st.runDay === st.dateET, suspect: st.suspect === st.dateET || r.suspect };
+ranToday: st.runDay === st.dateET, suspect: st.suspect === st.dateET || r.suspect, unsaved };
 },
 remaining() { const b = budget.get(); return b.limitHit ? 0 : b.limit - b.used; },
 local() { roll(); return { dateET: st.dateET, used: st.used, byCat: Object.assign({}, st.byCat), limitHit: st.limitHit, suspect: st.suspect === st.dateET ? st.dateET : null }; },
@@ -2396,6 +2420,7 @@ mutate(v => { v.used += n; v.byCat[c] = (v.byCat[c] || 0) + n; if (c === "corrid
 markLimitHit() { mutate(v => { const lim = limitOf(); if (isFinite(lim) && v.used >= CFG.LIMIT_TRUST_MIN) v.used = Math.max(v.used, lim); v.limitHit = true; }); },
 reset() { mutate(v => { Object.assign(v, fresh(v.dateET, v.runDay)); }); },
 markRun() { mutate(v => { v.runDay = v.dateET; }); },
+save() { mutate(() => {}); }, // vuelve a guardar el contador (tras liberar espacio)
 };
 const log = r => { if (onLog) { try { onLog(Object.assign({ t: clock() }, r)); } catch (e) { /* idem */ } } };
 
@@ -2446,6 +2471,8 @@ let active = true, unsub = null, release = null, safety = null;
 watched.set(id, (watched.get(id) || 0) + 1);
 const opts = { cache: Object.assign({}, DAY) };
 if (isNum(o.refetchInterval)) opts.refetchInterval = o.refetchInterval;
+const load = isNum(o.refetchInterval) && o.refetchInterval > 0 ? Math.ceil(60000 / o.refetchInterval) : 0;
+watchLoad += load;
 const emit = ev => { if (active) { try { handler(ev); } catch (e) { if (root.console) root.console.error(e); } } };
 const free = () => { if (release) { const r = release; release = null; clearTimeout(safety); r(); } };
 gate.acquire().then(rel => {
@@ -2490,7 +2517,7 @@ Promise.resolve().then(() => emit({ type: "error", error: Object.assign(classify
 }
 }
 return () => {
-if (active) { const n = (watched.get(id) || 1) - 1; if (n > 0) watched.set(id, n); else { watched.delete(id); callFp.delete(id); } }
+if (active) { watchLoad -= load; const n = (watched.get(id) || 1) - 1; if (n > 0) watched.set(id, n); else { watched.delete(id); callFp.delete(id); } }
 active = false; free(); if (unsub) { try { unsub(); } catch (e) { /* idempotente */ } unsub = null; }
 };
 }
@@ -2559,7 +2586,7 @@ return { tier, source, probes, error: lastErr };
 
 function setPlan(p) {
 if (!CFG.K[p]) return;
-tier = p; bucket = makeBucket({ perMin: CFG.PLAN_PER_MIN[p], now: clock });
+tier = p; bucket = makeBucket({ perMin: CFG.PLAN_PER_MIN[p], now: clock, reserve });
 base = load(); mutate(() => {}); // reescribe el registro con el límite del plan
 }
 
@@ -2904,7 +2931,12 @@ const RC = D.createRunCache({ idb: (() => { try { return root.indexedDB || null;
 const lockGet = () => { const l = store.get("runlock"); return l && typeof l.holder === "string" && isNum(l.beatAt) ? l : null; };
 const lockMine = l => !!l && l.holder === TAB;
 const lockLive = l => !!l && !lockMine(l) && l.state === "running" && l.dateET === todayET() && Date.now() - l.beatAt < STALE;
-function lockMark(l, state) { if (l) store.set("runlock", Object.assign({}, l, { state, beatAt: Date.now() })); }
+function lockMark(l, state) { if (l) critical("runlock", Object.assign({}, l, { state, beatAt: Date.now() })); }
+// claves que llevan la cuenta (v5.1): se escriben liberando espacio si hace falta; si aun así no caben, la corrida no arranca o se pausa
+const lsAvailable = !!browserStore();
+const NO_SPACE = "Sin espacio en este navegador para llevar la cuenta; libera espacio o usa otro navegador.";
+function critical(k, v) { const ok = store.setCritical(k, v); if (!ok && lsAvailable && App.state) App.state.noSpace = true; return ok; }
+const noSpace = () => { const s = App.state; return s.mode === "live" && (!!s.noSpace || !!(App.client && App.client.budget.get().unsaved)); };
 function lockDrop() { const l = lockGet(); if (lockMine(l)) store.remove("runlock"); }
 // ¿sigue viva la pestaña del candado? Le pregunta por BroadcastChannel; si el canal no funciona aquí, vale el latido.
 let bcOk = false;
@@ -2926,7 +2958,7 @@ async function lockClaim() {
 const l = lockGet();
 let takeover = !!l && !lockMine(l) && l.dateET === todayET();
 if (lockLive(l)) { if (await tabAlive(l)) return { ok: false }; lockMark(l, "interrumpida"); }
-if (!store.set("runlock", { holder: TAB, dateET: todayET(), beatAt: Date.now(), state: "running" })) return { ok: true, takeover: false }; // sin almacenamiento: como antes
+if (!critical("runlock", { holder: TAB, dateET: todayET(), beatAt: Date.now(), state: "running" })) return lsAvailable ? { ok: false, noSpace: true } : { ok: true, takeover: false }; // sin almacenamiento: como antes; lleno: no arranca
 await new Promise(r => setTimeout(r, 150));
 const m = lockGet();
 return m && !lockMine(m) ? { ok: false } : { ok: true, takeover };
@@ -2956,6 +2988,7 @@ const PARTIAL_TXT = {
 "muchas consultas rechazadas": "Análisis parcial: FMP rechazó muchas consultas (fallas). Las filas con menos datos tienen confianza menor.",
 "cobertura baja": "Análisis parcial: llegaron datos de muy pocos activos; puede que FMP haya agotado tu límite sin avisar.",
 presupuesto: "Análisis parcial: se pausó para no pasar de las llamadas previstas; se puede reanudar.",
+"sin espacio": "Análisis parcial: se pausó porque no hay espacio en este navegador para llevar la cuenta; libera espacio o usa otro navegador.",
 };
 
 const STRIP = C.NONSTOCK.filter(d => d.strip);
@@ -3075,7 +3108,7 @@ function saveDay(out, dateET, run) {
 if (!persistOk()) return;
 const key = `day.${dateET}.${out.plan}`;
 const savedAt = App.now();
-if (run) store.set("daymark", { dateET, run, at: Date.now() }); // marca pequeña para que otra corrida de hoy se retire (W2)
+if (run) critical("daymark", { dateET, run, at: Date.now() }); // marca pequeña para que otra corrida de hoy se retire (W2)
 if (!store.set(key, { savedAt, output: out, run })) {
 const lean = Object.assign({}, out, { rows: out.rows.map(r => Object.assign({}, r, { series: [] })) });
 if (!store.set(key, { savedAt, output: lean, run })) return;
@@ -3812,6 +3845,7 @@ const s = App.state, cl = App.client;
 if (!cl || !(s.mode === "live" || s.mode === "example")) return { ok: false, reason: "Conectando con FMP…" };
 if (s.run.status === "running") return { ok: false, reason: "La corrida ya está en curso." };
 if (s.stopped) return { ok: false, reason: (s.page.banner && s.page.banner.text) || "Conexión con FMP detenida." };
+if (noSpace()) return { ok: false, reason: NO_SPACE };
 if (s.mode === "live" && cl.budget.get().limitHit) return { ok: false, limit: true, reason: limitText() === EARLY_LIMIT ? EARLY_LIMIT : "Límite diario agotado; FMP lo reinicia mañana." };
 const cap = runCapNow(auto), pr = estPlan(undefined, cap);
 return pr.fits ? { ok: true, plan: pr } : { ok: false, plan: pr, reason: s.mode === "live" && RC.status().entries > 0 ? RESUME_NO_FIT : fitReason(pr, cl.budget.remaining(), cap) };
@@ -3929,6 +3963,7 @@ const back = () => { s.run = prev; renderRunControls(); };
 let runId = null, unlocked = false, takeover = false;
 if (live) { // 1) candado del navegador (pestañas); 2) reclamo entre dispositivos (07 §5.4)
 const lk = await lockClaim();
+if (!lk.ok && lk.noSpace) { back(); renderRanking(); return; } // sin espacio para el candado: no arranca (el motivo sale de runGuard)
 if (!lk.ok) { back(); s.localOther = { state: "tab" }; watchLock(); renderRanking(); return; }
 s.run.lockOwned = lockMine(lockGet()); // con candado escrito: si deja de ser de esta pestaña, la corrida se retira (W2)
 takeover = lk.takeover || !!(opts && opts.takeover);
@@ -3982,9 +4017,9 @@ s.result = out; s.resultSource = s.mode === "example" ? "example" : "run"; s.res
 saveDay(out, s.run.dayET, runId || s.run.uid);
 // la tanda de respuestas queda para retomar si se cortó por límite o el usuario la detuvo; si no, se cierra.
 // Va antes de subir el día: si la página muere mientras sube, al volver no se reanuda lo que ya terminó (v3, P2)
-if (live) { if (["detenida", "presupuesto"].includes(s.run.cut)) RC.hold(); else if (!["límite", "posible límite"].includes(s.run.cut)) RC.close(); }
+if (live) { if (["detenida", "presupuesto", "sin espacio"].includes(s.run.cut)) RC.hold(); else if (!["límite", "posible límite"].includes(s.run.cut)) RC.close(); }
 if (live && Sync.active && runId) await Sync.saveDay(out, s.run.dayET, runId); // `corrida` pasa a terminada solo después (syncFinish)
-finishRun(out.partial ? "partial" : "done", s.run.cut === "presupuesto" ? PAUSE_MSG(s.run.techo) : null);
+finishRun(out.partial ? "partial" : "done", s.run.cut === "presupuesto" ? PAUSE_MSG(s.run.techo) : s.run.cut === "sin espacio" ? NO_SPACE : null);
 syncFinish(out.partial ? "partial" : "done", out.partialReason);
 if (["PREMIUM", "ULTIMATE"].includes(out.plan)) watchRankingPrices();
 if (s.ui.selected && !out.rows.some(r => r.symbol === s.ui.selected) && !out.rest.some(r => r.symbol === s.ui.selected)) s.ui.selected = null;
@@ -4007,7 +4042,7 @@ const s = App.state, run = s.run;
 if (run.status !== "running" || s.mode !== "live") return;
 const l = lockGet();
 if ((l && !lockMine(l) && l.state === "running") || superseded()) { handoff(); return; } // W2: un candado que ya no es suyo no se reescribe
-store.set("runlock", { holder: TAB, dateET: run.dayET || todayET(), beatAt: Date.now(), state: "running" });
+critical("runlock", { holder: TAB, dateET: run.dayET || todayET(), beatAt: Date.now(), state: "running" });
 if (run.runId) Sync.beat(run.runId).then(ok => { if (!ok && Sync.active && s.run === run && run.status === "running") handoff(); });
 beatT = App.timer(runBeat, CFG.SYNC.BEAT_MS);
 }
@@ -4081,7 +4116,7 @@ const fly = (tok, on) => {
 if (!useRC) return;
 if (on) flying.add(tok); else flying.delete(tok);
 const f = flightOf(); if (f && f.settled) return; // otra pestaña ya las contó: este registro ya no es de esta corrida
-store.set("runflight." + TAB, { holder: TAB, dateET: s.run.dayET || today, ids: [...flying] });
+critical("runflight." + TAB, { holder: TAB, dateET: s.run.dayET || today, ids: [...flying] });
 };
 const settledTok = tok => { const f = flightOf(); return !!(f && f.settled && Array.isArray(f.ids) && f.ids.includes(tok)); };
 const stopped = new Promise((_, rej) => { const f = () => rej(C.makeError("cancelled", "cancelled", { section: "ranking" })); if (ac.signal.aborted) f(); else ac.signal.addEventListener("abort", f, { once: true }); });
@@ -4090,6 +4125,7 @@ const call = (key, args) => { const seq = ++issued, id = cl.identity(key, args);
 if (hit) { tally.cached++; answered(seq); anyOk = true; okKeys.add(key); return hit; }
 // techo duro (v4): con lo ya emitido en el techo, esta no sale; la corrida se pausa con lo que tiene (solo pasa lo que ya estaba en vuelo)
 if (useRC && superseded()) { handoff(); throw C.makeError("cancelled", "cancelled", { section: "ranking" }); } // W2: no sale
+if (useRC && noSpace()) { cut("sin espacio"); throw C.makeError("cancelled", "cancelled", { section: "ranking" }); } // v5.1: sin cuenta, no sale
 if (s.run.sent >= s.run.techo) { cut("presupuesto"); throw C.makeError("cancelled", "cancelled", { section: "ranking" }); }
 const tok = (s.run.uid || TAB) + ":" + ++s.run.sent; fly(tok, true);
 return cl.call(key, args, Object.assign({ uncounted: () => settledTok(tok) }, opt)).then(v => {
@@ -4860,6 +4896,7 @@ return;
 }
 clearArmed = false;
 store.keys("").filter(k => k !== "budget").forEach(k => store.remove(k)); // contador y marca de corrida del día se conservan (director)
+App.state.noSpace = false; if (App.client) App.client.budget.save(); // con espacio liberado, el contador se vuelve a guardar
 renderAll();
 }
 
