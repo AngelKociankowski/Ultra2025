@@ -57,8 +57,12 @@ export default function EditorServicio({ servicio, grupos, rol, opciones }) {
     }
   }
 
+  // El ancla la usan las marcas de dato faltante del estado de fuerza: «nómina:
+  // falta» en un renglón tenía que llevar a donde se captura la nómina, y no
+  // dejar a quien le dio clic buscando el bloque en una ficha de ocho secciones.
+  // El `scroll-mt-20` es por la barra pegada de arriba, igual que en #contrato.
   return (
-    <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
+    <section id="editar" className="scroll-mt-20 bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="text-base font-semibold text-white">Editar</h2>

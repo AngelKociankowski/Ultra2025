@@ -42,12 +42,18 @@ function Turnos({ turnos, tono }) {
  * Se abre uno a la vez, a propósito: si se pudieran abrir todos, la tabla del
  * mes volvería a ser el archivero volcado en el suelo del que veníamos.
  */
-export default function TablaMovimientos({ clase, movimientos, puedeAplicar = false, opciones }) {
+/**
+ * `seleccion` llega solo cuando la pantalla está ofreciendo una acción en lote
+ * —hoy, descartar el arrastre de aperturas viejas—. Sin ella la tabla es la de
+ * siempre, sin una columna de casillas que nadie va a usar en los otros doce
+ * sitios desde los que se abre.
+ */
+export default function TablaMovimientos({ clase, movimientos, puedeAplicar = false, opciones, seleccion = null }) {
   const [abierto, setAbierto] = useState(null);
   const esApertura = clase === 'aperturas';
   const grupos = esApertura ? EXPEDIENTE_APERTURA : EXPEDIENTE_CANCELACION;
   const tonoTurno = esApertura ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300';
-  const columnas = 9;
+  const columnas = seleccion ? 10 : 9;
 
   return (
     <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl overflow-hidden">
@@ -55,6 +61,7 @@ export default function TablaMovimientos({ clase, movimientos, puedeAplicar = fa
         <table className="w-full text-sm min-w-[1080px]">
           <thead className="bg-slate-900/60">
             <tr className="text-slate-400 text-xs">
+              {seleccion && <th className="w-8 px-3 py-3"></th>}
               <th className="w-8 px-3 py-3"></th>
               <th className="text-left px-3 py-3">Folio</th>
               <th className="text-left px-3 py-3">Servicio</th>
@@ -77,6 +84,20 @@ export default function TablaMovimientos({ clase, movimientos, puedeAplicar = fa
                       activo ? 'bg-slate-800/60' : 'hover:bg-slate-800/40'
                     }`}
                   >
+                    {seleccion && (
+                      // El clic en la casilla no abre el renglón: el renglón
+                      // entero es el botón de desplegar el expediente, y sin
+                      // esto marcar una apertura abriría su ficha de paso.
+                      <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Seleccionar ${f.folio}`}
+                          checked={seleccion.marcadas.has(f.id)}
+                          onChange={() => seleccion.alternar(f.id)}
+                          className="w-4 h-4 accent-amber-500"
+                        />
+                      </td>
+                    )}
                     <td className="px-3 py-2 text-slate-500 select-none">{activo ? '▾' : '▸'}</td>
                     <td className="px-3 py-2 font-mono text-xs text-slate-400 whitespace-nowrap">
                       {f.folio}

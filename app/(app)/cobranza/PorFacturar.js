@@ -23,12 +23,25 @@ import Icono from '@/components/Icono';
  * varios clientes se les factura por sede y reciben dos, tres o cuatro papeles
  * del mismo mes—, y hasta ahora el servicio desaparecía de la pantalla con la
  * primera, sin dejar por dónde registrar las demás.
+ *
+ * La lista se dibuja por tandas. Al día 1 del mes son 219 renglones, y pintar
+ * los 219 obligaba a recorrer veinte pantallas para llegar al final de una lista
+ * que se trabaja de arriba abajo. Lo que NO se hace es traer solo cuarenta del
+ * servidor: el buscador tiene que encontrar un cliente que esté en el renglón
+ * ciento ochenta —es lo que se usa cuando a alguien hay que facturarle aparte—,
+ * así que la lista llega completa y lo que se recorta es lo que se pinta.
  */
+const TANDA = 40;
+
 export default function PorFacturar({ periodo, porFacturar, sinCondiciones, facturados, yaFacturados }) {
   const router = useRouter();
   const [abierta, setAbierta] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [mensaje, setMensaje] = useState(null);
+  // Cuántos renglones se están pintando. Es estado aparte del formulario
+  // abierto a propósito: abrir una fila para facturarla no puede devolver la
+  // lista a cuarenta y perder de vista dónde iba uno.
+  const [limite, setLimite] = useState(TANDA);
 
   const clave = (f) => `${f.servicio_id}·${f.concepto}`;
 
@@ -44,7 +57,13 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
   const coincide = (f) =>
     !termino || [f.servicio, f.razon_social, f.zona, f.asesor].some((c) => plano(c).includes(termino));
 
-  const visibles = porFacturar.filter(coincide);
+  // Se filtra sobre la lista completa y después se recorta. Al revés —recortar
+  // y buscar entre los cuarenta— el buscador diría «ningún pendiente coincide»
+  // de un cliente que sí está en la lista, que es la peor forma de equivocarse:
+  // la pantalla afirmaría que ya se le facturó.
+  const coincidentes = porFacturar.filter(coincide);
+  const visibles = coincidentes.slice(0, limite);
+  const faltanPorPintar = coincidentes.length - visibles.length;
   // Los ya facturados solo salen cuando se busca uno. Al día 1 del mes son
   // doscientos renglones que no hay que tocar, y ponerlos siempre convertiría
   // la pantalla de «lo que falta» en una lista de todo.
@@ -87,7 +106,7 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
           <p className="text-xs text-slate-500">
             {termino ? (
               <>
-                {visibles.length} de {porFacturar.length} pendientes
+                {coincidentes.length} de {porFacturar.length} pendientes
                 {yaVisibles.length > 0 && ` · ${yaVisibles.length} ya con factura`}
               </>
             ) : (
@@ -190,7 +209,7 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
               </tr>
             ))}
 
-            {visibles.length === 0 && (
+            {coincidentes.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                   {termino
@@ -204,6 +223,24 @@ export default function PorFacturar({ periodo, porFacturar, sinCondiciones, fact
           </tbody>
         </table>
       </div>
+
+      {/* El botón dice cuántas faltan y no «mostrar más»: así se sabe si lo que
+          queda son cuatro o ciento ochenta antes de darle. */}
+      {faltanPorPintar > 0 && (
+        <div className="px-5 py-3 border-t border-slate-700/50 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setLimite((n) => n + TANDA)}
+            className="text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-1.5"
+          >
+            Mostrar {Math.min(TANDA, faltanPorPintar)} más
+          </button>
+          <p className="text-xs text-slate-500 tabular-nums">
+            Van {visibles.length} de {coincidentes.length} · faltan {faltanPorPintar} por pintar. El buscador de
+            arriba busca en todas, no solo en las que se ven.
+          </p>
+        </div>
+      )}
 
       {yaVisibles.length > 0 && (
         <div className="border-t border-slate-700/50">

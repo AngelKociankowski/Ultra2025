@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { nombreMes } from './formato';
 
@@ -12,8 +13,14 @@ import { nombreMes } from './formato';
  *
  * Los meses vacíos se dibujan igual. Un hueco también es información: ese mes
  * no hay nada que renovar.
+ *
+ * Cada barra con vencimientos es un enlace a la cartera filtrada por ese mes.
+ * Antes era solo un dibujo con un título flotante: decía «21 contratos» y no
+ * había manera de saber cuáles son esos 21, así que para repartir el trabajo
+ * había que bajar a la tabla y ordenarla a ojo por fecha. Un número que no se
+ * puede abrir no sirve para organizar nada.
  */
-export default function Agenda({ agenda }) {
+export default function Agenda({ agenda, mesActivo = '' }) {
   const tope = Math.max(1, ...agenda.meses.map((m) => m.servicios));
 
   return (
@@ -40,20 +47,33 @@ export default function Agenda({ agenda }) {
           // El primer mes es el que corre: los contratos que vencen este mes ya
           // no dan tiempo de mucho, y por eso van en ámbar y no en cian.
           const color = m.servicios === 0 ? 'bg-slate-700/40' : i === 0 ? 'bg-amber-500/70' : i <= 2 ? 'bg-amber-500/40' : 'bg-cyan-500/50';
+          const barra = (
+            <div
+              title={
+                m.servicios
+                  ? `${m.servicios} contrato${m.servicios === 1 ? '' : 's'} · ${formatNumber(m.guardias)} guardias · ${formatCurrency(m.monto)}/mes — ver cuáles`
+                  : 'Ningún vencimiento este mes'
+              }
+              className={`w-full rounded-t ${color} ${
+                m.mes === mesActivo ? 'ring-2 ring-cyan-400/70' : ''
+              }`}
+              style={{ height: `${alto}px` }}
+            />
+          );
           return (
             <div key={m.mes} className="flex-1 min-w-[42px] flex flex-col items-center gap-1">
               <span className={`text-[11px] ${m.servicios ? 'text-slate-300' : 'text-slate-600'}`}>
                 {m.servicios || ''}
               </span>
-              <div
-                title={
-                  m.servicios
-                    ? `${m.servicios} contrato${m.servicios === 1 ? '' : 's'} · ${formatNumber(m.guardias)} guardias · ${formatCurrency(m.monto)}/mes`
-                    : 'Ningún vencimiento este mes'
-                }
-                className={`w-full rounded-t ${color}`}
-                style={{ height: `${alto}px` }}
-              />
+              {/* Un mes sin vencimientos no es enlace: llevaría a una lista
+                  vacía, y eso no es ofrecer un arreglo sino prometer uno. */}
+              {m.servicios > 0 ? (
+                <Link href={`/juridico?vence=${m.mes}#cartera`} className="w-full flex" aria-label={`Ver los contratos que vencen en ${m.mes}`}>
+                  {barra}
+                </Link>
+              ) : (
+                barra
+              )}
               <span className="text-[10px] text-slate-500 whitespace-nowrap">
                 {mes}
                 {/* El año solo se repite cuando cambia: repetirlo en los doce

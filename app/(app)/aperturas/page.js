@@ -5,9 +5,19 @@ import { getDb } from '@/lib/db';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { ultimoCorte } from '@/lib/queries';
 import { mesActual } from '@/lib/fechas';
-import { calendarioDe, movimientosDe, aniosCon, netoDelPeriodo } from '@/lib/movimientos';
+import {
+  calendarioDe,
+  movimientosDe,
+  aniosCon,
+  netoDelPeriodo,
+  pendientesPorAntiguedad,
+  filtroDePendientes,
+  MESES_RECIENTE,
+} from '@/lib/movimientos';
 import BarraMeses from '@/components/BarraMeses';
 import TablaMovimientos from '@/components/TablaMovimientos';
+import DescarteEnLote from './DescarteEnLote';
+import { TOPE_LOTE } from '@/lib/servicios';
 import { opciones } from '@/lib/catalogos';
 import ResumenPeriodo from '@/components/ResumenPeriodo';
 import Icono from '@/components/Icono';
@@ -23,9 +33,23 @@ export default function Aperturas({ searchParams }) {
   // detrás del permiso es cambiarlas.
   const puedeAplicar = puede(usuario.rol, 'apertura');
 
-  // Las que nunca llegaron al estado de fuerza son casi todas viejas, así que
-  // pedirlas implica mirar el histórico completo y no un mes suelto.
-  const soloPendientes = searchParams?.pendientes === '1';
+  /**
+   * Cuál cola de pendientes se está viendo.
+   *
+   * Son tres y no una porque las 219 aperturas sin aplicar no son una sola cosa:
+   * las de los últimos doce meses todavía se pueden atender, y el resto es el
+   * arrastre de la importación —servicios que ya no operan—, que se revisa una
+   * vez y se cierra. Mezclarlas en un único «pendientes» es lo que tenía el
+   * aviso de arriba encendido en 219 para siempre.
+   *
+   * `todas` se conserva para quien venga de un enlace viejo o quiera el total:
+   * lo que el aviso deja de contar no desaparece de la plataforma.
+   */
+  const colaPedida = ['1', 'viejas', 'todas'].includes(searchParams?.pendientes)
+    ? searchParams.pendientes
+    : '';
+  const cola = colaPedida === '1' ? 'recientes' : colaPedida;
+  const soloPendientes = Boolean(cola);
   const soloDescartadas = searchParams?.descartadas === '1';
   const pedido = soloPendientes || soloDescartadas ? 'todo' : searchParams?.periodo || '';
   const todo = pedido === 'todo';
@@ -38,7 +62,7 @@ export default function Aperturas({ searchParams }) {
     asesor: searchParams?.asesor || '',
     tipo: searchParams?.tipo || '',
     q: searchParams?.q || '',
-    sinAplicar: soloPendientes,
+    ...(soloPendientes ? filtroDePendientes(cola) : {}),
     descartadas: soloDescartadas,
   });
   const neto = periodo ? netoDelPeriodo(periodo) : null;
@@ -48,12 +72,20 @@ export default function Aperturas({ searchParams }) {
   const corte = ultimoCorte();
   const conAviso = movimientos.map((m) => ({ ...m, vieja: !!corte && (m.periodo || '') <= corte }));
 
-  const pendientes = db
-    .prepare(
-      'SELECT COUNT(*) AS n, COALESCE(SUM(guardias), 0) AS g FROM aperturas WHERE servicio_id IS NULL AND descartada = 0'
-    )
-    .get();
+  const pendientes = pendientesPorAntiguedad();
   const descartadas = db.prepare('SELECT COUNT(*) AS n FROM aperturas WHERE descartada = 1').get().n;
+
+  /**
+   * Los años que abarca el arrastre, sacados de los datos y no escritos a mano.
+   *
+   * «de 2023 a 2025» en el código quedaría congelado el día que alguien
+   * descarte las más viejas, y entonces la línea mentiría sobre lo que queda.
+   * Cuando el primero y el último son el mismo año se dice uno solo: «de 2025 a
+   * 2025» se lee como un error de redacción.
+   */
+  const anioA = pendientes.viejas.desde?.slice(0, 4);
+  const anioB = pendientes.viejas.hasta?.slice(0, 4);
+  const aniosViejas = anioA === anioB ? `de ${anioA}` : `de ${anioA} a ${anioB}`;
 
   return (
     <div className="space-y-4">
@@ -75,17 +107,23 @@ export default function Aperturas({ searchParams }) {
         )}
       </div>
 
-      {pendientes.n > 0 && (
+      {/* La caja ámbar cuenta solo lo que todavía se puede atender.
+          El texto —«N apertura(s) sin aplicar · M guardias que no están
+          sumando»— se conserva palabra por palabra: está bien escrito y es el
+          que la operación ya tiene leído. Lo que cambia es de dónde sale el
+          número. */}
+      {pendientes.recientes.n > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-sm text-amber-300 font-semibold">
-              {formatNumber(pendientes.n)} apertura{pendientes.n === 1 ? '' : 's'} sin aplicar ·{' '}
-              {formatNumber(pendientes.g)} guardias que no están sumando
+              {formatNumber(pendientes.recientes.n)} apertura{pendientes.recientes.n === 1 ? '' : 's'} sin aplicar ·{' '}
+              {formatNumber(pendientes.recientes.guardias)} guardias que no están sumando
             </p>
             <p className="text-xs text-amber-400 max-w-3xl mt-0.5">
-              Están anotadas, pero nunca se les creó el servicio, así que no aparecen en el estado de fuerza.
+              De los últimos {MESES_RECIENTE} meses. Están anotadas, pero nunca se les creó el servicio, así que no
+              aparecen en el estado de fuerza.
               {puedeAplicar
-                ? ' Aplicar crea el servicio con los datos que la propia apertura ya trae. Si el servicio ya no opera —casi todas son viejas—, Descartar la saca de esta cuenta sin borrarla del histórico.'
+                ? ' Aplicar crea el servicio con los datos que la propia apertura ya trae. Si el servicio ya no opera, Descartar la saca de esta cuenta sin borrarla del histórico.'
                 : ' Ventas, operaciones o el administrador pueden aplicarlas o descartarlas.'}
             </p>
           </div>
@@ -108,7 +146,26 @@ export default function Aperturas({ searchParams }) {
         </div>
       )}
 
-      {pendientes.n === 0 && descartadas > 0 && (
+      {/* El arrastre de la importación, en gris y sin caja de alarma.
+          Dicho una vez y alcanzable, que es lo que necesita: son aperturas de
+          servicios que hace años no operan, y tenerlas sumadas al aviso de
+          arriba era lo que lo dejaba encendido en 219 para siempre. Un número
+          que no se puede llevar a cero no es un pendiente; encima enseña a
+          pasar por encima de los avisos ámbar que sí piden algo. */}
+      {pendientes.viejas.n > 0 && (
+        <p className="text-xs text-slate-500 max-w-4xl">
+          Otras {formatNumber(pendientes.viejas.n)} aperturas {aniosViejas} quedaron sin aplicar al importar el
+          archivo: describen servicios que ya no operan.{' '}
+          <Link
+            href={cola === 'viejas' ? '/aperturas' : '/aperturas?pendientes=viejas'}
+            className="text-cyan-400 hover:underline"
+          >
+            {cola === 'viejas' ? 'Volver al mes' : 'Revisarlas'} →
+          </Link>
+        </p>
+      )}
+
+      {pendientes.total.n === 0 && descartadas > 0 && (
         // Cuando ya no queda ninguna pendiente el aviso de arriba desaparece, y
         // con él la única puerta a las descartadas. Esta la deja abierta.
         <p className="text-xs text-slate-500">
@@ -116,6 +173,30 @@ export default function Aperturas({ searchParams }) {
           <Link href={soloDescartadas ? '/aperturas' : '/aperturas?descartadas=1'} className="text-cyan-400 hover:underline">
             {soloDescartadas ? 'volver al mes' : `ver las ${formatNumber(descartadas)} descartadas`}
           </Link>
+        </p>
+      )}
+
+      {/* Cuál de las tres colas se está viendo, y cómo pasar a otra. Sin esto,
+          `?pendientes=viejas` y `?pendientes=todas` serían dos pantallas a las
+          que solo se puede llegar escribiendo la URL. */}
+      {soloPendientes && (
+        <p className="text-xs text-slate-400 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="text-slate-500">Estás viendo las pendientes:</span>
+          {[
+            ['1', 'recientes', `últimos ${MESES_RECIENTE} meses`, pendientes.recientes.n],
+            ['viejas', 'viejas', 'arrastre de la importación', pendientes.viejas.n],
+            ['todas', 'todas', 'todas', pendientes.total.n],
+          ].map(([clave, valor, etiqueta, n]) => (
+            <Link
+              key={clave}
+              href={`/aperturas?pendientes=${clave}`}
+              className={`rounded px-1.5 py-0.5 ${
+                cola === valor ? 'bg-cyan-500/20 text-cyan-200' : 'hover:bg-slate-700/60 text-slate-400'
+              }`}
+            >
+              {etiqueta} ({formatNumber(n)})
+            </Link>
+          ))}
         </p>
       )}
 
@@ -147,7 +228,15 @@ export default function Aperturas({ searchParams }) {
         }
       />
 
-      <TablaMovimientos clase="aperturas" movimientos={conAviso} puedeAplicar={puedeAplicar} opciones={opciones()} />
+      {/* La barra de descarte en lote solo en la cola de las viejas y solo para
+          quien registra aperturas. No se ofrece sobre el mes ni sobre «todas»:
+          un descarte masivo tiene que caer sobre una lista ya acotada, y la de
+          las viejas es justo la que el corte dejó del otro lado. */}
+      {cola === 'viejas' && puedeAplicar ? (
+        <DescarteEnLote movimientos={conAviso} opciones={opciones()} tope={TOPE_LOTE} />
+      ) : (
+        <TablaMovimientos clase="aperturas" movimientos={conAviso} puedeAplicar={puedeAplicar} opciones={opciones()} />
+      )}
 
       {resumen.sinMonto > 0 && (
         <p className="text-xs text-slate-500">

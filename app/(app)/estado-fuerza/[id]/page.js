@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { usuarioActual } from '@/lib/auth';
 import { obtenerServicio } from '@/lib/servicios';
+import { loQueFalta } from '@/lib/alta';
 import { gruposEditables, puede, camposCorregibles } from '@/lib/rbac';
 import { CAMPOS } from '@/lib/campos';
 import { opciones } from '@/lib/catalogos';
@@ -18,6 +19,7 @@ import CorreccionServicio from './CorreccionServicio';
 import ArchivoContrato from './ArchivoContrato';
 import Partidas from './Partidas';
 import Suspension from './Suspension';
+import Completar from './Completar';
 import Cobranza from './Cobranza';
 import Icono from '@/components/Icono';
 
@@ -52,6 +54,16 @@ export default function DetalleServicio({ params }) {
     ...g,
     campos: g.campos.map((c) => ({ nombre: c, ...CAMPOS[c] })).filter((c) => c.etiqueta),
   }));
+
+  /**
+   * Lo que el alta dejó pendiente, con el tipo de cada campo para poder
+   * dibujarlo. El tipo sale de `CAMPOS` igual que en el editor: `lib/alta.js`
+   * contesta qué falta y no sabe —ni tiene por qué— si un campo es una lista
+   * desplegable o un importe.
+   */
+  const conTipo = (lista) => lista.map((c) => ({ ...c, ...CAMPOS[c.campo] }));
+  const faltaCrudo = loQueFalta(s);
+  const falta = { ...faltaCrudo, operar: conTipo(faltaCrudo.operar), cobrar: conTipo(faltaCrudo.cobrar) };
 
   const turnos = Object.entries(s.turnos || {});
   const sumaTurnos = turnos.reduce((a, [, v]) => a + (Number(v) || 0), 0);
@@ -251,6 +263,18 @@ export default function DetalleServicio({ params }) {
           />
         </section>
       </div>
+
+      {/* Solo cuando falta algo y el servicio está vivo. En uno dado de baja no
+          hay nada que completar: no se va a operar ni se va a facturar, y
+          pedirle datos sería trabajo para un expediente cerrado. */}
+      {falta.total > 0 && s.estatus === 'ACTIVO' && (
+        <Completar
+          servicioId={s.id}
+          falta={falta}
+          opciones={cat}
+          puedeCompletar={puede(usuario.rol, 'apertura')}
+        />
+      )}
 
       <Suspension servicio={s} puedeMover={puede(usuario.rol, 'cancelacion')} />
 
