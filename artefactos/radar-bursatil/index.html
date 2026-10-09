@@ -3139,7 +3139,7 @@ return !(App.client && (App.client.budget.get().byCat.corrida || 0) > 0);
 function runCapNow(auto) {
 const cl = App.client;
 if (!auto || !cl || cl.plan() !== "FREE") return CFG.RUN_CAP_FREE;
-return Math.min(CFG.RUN_CAP_FREE, CFG.COLD_CAP_FREE - cl.budget.get().used);
+return Math.min(CFG.RUN_CAP_FREE, coldLeft());
 }
 // Reserva de la corrida pendiente (Free): solo la que cabe (N2)
 // Techo duro de la corrida (v4, director): llamadas reales (las que no salen de la caché) fijadas al empezar. La manual, el costo
@@ -3148,7 +3148,25 @@ return Math.min(CFG.RUN_CAP_FREE, CFG.COLD_CAP_FREE - cl.budget.get().used);
 function runCeiling(plan, auto) {
 const cl = App.client;
 if (App.state.mode !== "live" || !cl || !isFinite(CFG.PLAN_DAILY_LIMIT[cl.plan()]) || !plan || !isNum(plan.cost)) return Infinity;
-return auto ? Math.max(0, CFG.COLD_CAP_FREE - cl.budget.get().used) : plan.cost;
+return auto ? Math.max(0, coldLeft()) : plan.cost;
+}
+// Llamadas de la corrida en vuelo, en el almacenamiento local: si la página muere, FMP ya las contó y el contador no (P3).
+// La siguiente carga de este navegador que no vea a otra pestaña corriendo, o la siguiente corrida con el candado, las suma.
+// Son el margen "en vuelo" del director: hasta CONCURRENCY de ellas al día no le quitan lugar a la automática.
+function settleFlight() {
+const f = store.get("runflight");
+if (!f || f.holder === TAB || !App.client) return;
+if (f.dateET === todayET() && Number.isInteger(f.n) && f.n > 0 && f.n <= 50) {
+App.client.budget.note(f.n, "corrida");
+const x = store.get("flightlost"), prev = x && x.dateET === f.dateET && Number.isInteger(x.n) ? x.n : 0;
+store.set("flightlost", { dateET: f.dateET, n: prev + f.n });
+}
+store.remove("runflight");
+}
+// lo que le queda a la automática hoy: arranque + corrida ≤ COLD_CAP_FREE (MEDIO 3), más el margen de lo que quedó en vuelo
+function coldLeft() {
+const x = store.get("flightlost"), lost = x && x.dateET === todayET() && Number.isInteger(x.n) ? Math.min(CFG.CONCURRENCY, x.n) : 0;
+return CFG.COLD_CAP_FREE - App.client.budget.get().used + lost;
 }
 const PAUSE_MSG = n => `Se pausó para no pasar de ≈ ${n} llamadas; se puede reanudar.`, PAUSED = n => `Análisis parcial: se pausó para no pasar de ≈ ${n} llamadas; se puede reanudar.`;
 function runReserve(minimal) {
@@ -3849,7 +3867,7 @@ const prev = s.run, ac = new AbortController(), dayET = auto ? App.bootDay : tod
 const live = s.mode === "live";
 // "running" en el mismo tick del clic, antes de cualquier await (ALTO E2)
 s.run = { status: "running", stage: "claim", stageLabel: "Reservando la corrida…", done: 0, total: g.plan.fullCost || g.plan.cost, plan: g.plan, startedAt: App.now(), t0: Date.now(), net: 0, finishedAt: null, abort: ac, message: null, auto, cap: withCached(runCapNow(auto), live ? RC.status().entries : 0), outage: null, cut: null,
-runId: null, dayET, claiming: live, resumed: false, cachedAtStart: 0, techo: runCeiling(g.plan, auto), sent: 0 };
+runId: null, dayET, claiming: live, resumed: false, cachedAtStart: 0, techo: Infinity, sent: 0, flying: 0 };
 renderRunControls();
 const back = () => { s.run = prev; renderRunControls(); };
 let runId = null, unlocked = false, takeover = false;
@@ -3872,6 +3890,8 @@ else { lockDrop(); back(); onClaimRefused(cl, auto); return; }
 }
 }
 const rcb = live ? RC.begin({ autoResume: auto && resume }) : { resumed: false, entries: 0 };
+if (live) settleFlight(); // con el candado: lo que otra carga dejó en vuelo ya cuenta antes de fijar el techo
+s.run.techo = runCeiling(g.plan, auto);
 const startUsed = live ? App.client.budget.get().byCat.corrida || 0 : 0; // solo llamadas de la corrida
 Object.assign(s.run, { stage: "universe", stageLabel: "1/4 · Universo", claiming: false, runId, resumed: rcb.resumed || takeover, cachedAtStart: rcb.entries, message: unlocked ? "Corriendo sin candado entre dispositivos." : null });
 s.localOther = null;
@@ -3975,18 +3995,21 @@ if (rejSeqs.length >= CFG.SUSPECT_STREAK && anyOk && !s.run.outage && !s.run.cut
 };
 // lo ya traído hoy por una corrida que no terminó sale de la caché: 0 llamadas, no cuenta (corrección de producción).
 // La lectura tiene su tiempo límite (v3, P1) y "Detener" no la espera.
+const fly = d => { if (useRC) { s.run.flying = Math.max(0, (s.run.flying || 0) + d); store.set("runflight", { holder: TAB, dateET: s.run.dayET || today, n: s.run.flying }); } };
 const stopped = new Promise((_, rej) => { const f = () => rej(C.makeError("cancelled", "cancelled", { section: "ranking" })); if (ac.signal.aborted) f(); else ac.signal.addEventListener("abort", f, { once: true }); });
 stopped.catch(() => {}); // sin lecturas pendientes al detener, nadie la espera
 const call = (key, args) => { const seq = ++issued, id = cl.identity(key, args); return (useRC ? Promise.race([RC.get(id), stopped]) : Promise.resolve(null)).then(hit => {
 if (hit) { tally.cached++; answered(seq); anyOk = true; okKeys.add(key); return hit; }
 // techo duro (v4): con lo ya emitido en el techo, esta no sale; la corrida se pausa con lo que tiene (solo pasa lo que ya estaba en vuelo)
 if (s.run.sent >= s.run.techo) { cut("presupuesto"); throw C.makeError("cancelled", "cancelled", { section: "ranking" }); }
-s.run.sent++;
+s.run.sent++; fly(1);
 return cl.call(key, args, opt).then(v => {
+fly(-1);
 tally.calls++; streak = 0; s.run.net++;
 if (Array.isArray(v) && !v.length) suspicious(seq); else { answered(seq); anyOk = true; okKeys.add(key); if (useRC) RC.put(id, v); }
 return v;
 }, raw => {
+fly(-1);
 const e = D.classifyError(raw);
 if (e.kind === "cancelled") throw e;
 tally.calls++;
@@ -4028,7 +4051,7 @@ if (!uni.stocks.length) notes = notes.concat([uniFailed ? "No se pudo obtener la
 const extra = Math.max(0, (s.run.cachedAtStart || 0) - rc.tally.cached); // lo de la caché que aún no se leyó no cuesta
 const b = cl.budget.get(), spent = s.mode === "live" ? (b.byCat.corrida || 0) - startUsed + rc.tally.cached : 0; // lo leído de la caché ocupa plan como lo gastado
 const left = s.run.techo - s.run.sent + extra; // lo que queda del techo, más lo guardado que aún no se leyó (el botón ya lo descontó)
-const cap = s.mode !== "live" ? Infinity : Math.min(left, s.run.auto ? Math.min(s.run.cap - spent, CFG.COLD_CAP_FREE - b.used + extra) : s.run.cap - spent);
+const cap = s.mode !== "live" ? Infinity : Math.min(left, s.run.auto ? Math.min(s.run.cap - spent, coldLeft() + extra) : s.run.cap - spent);
 const planIn = { plan: cl.plan(), eligible: uni.stocks.length, have: { spx: !!s.macro.spxDesc, treasury: !!s.macro.treasuryDesc, universe: true }, nonStock: RANKED, etfs: uni.etfs };
 const pr = C.planRun(Object.assign({ remaining: cl.budget.remaining() + extra, cap }, planIn));
 if (!pr.fits) { finishRun("blocked", fitReason(pr, cl.budget.remaining(), cap)); return null; }
@@ -4858,6 +4881,7 @@ const cached = store.get("plan");
 const tier0 = cached && cached.dateET === todayET() && CFG.K[cached.tier] && cached.tier !== "EXAMPLE" ? cached.tier : "FREE";
 const locks = (() => { try { const l = root.navigator && root.navigator.locks; return l && typeof l.request === "function" ? l : null; } catch (e) { return null; } })();
 App.client = D.create({ mcp, storage: store, now: App.now, plan: tier0, onBudget, locks }); // locks: contador sin pérdidas entre pestañas
+{ const l = lockGet(); if (!lockLive(l) || lockMine(l)) settleFlight(); } // nadie corre en este navegador: lo que quedó en vuelo cuenta ya
 if (L.ok) {
 App.client.budget.setRemote(L.counters);
 Sync.subscribe(todayET(), {
