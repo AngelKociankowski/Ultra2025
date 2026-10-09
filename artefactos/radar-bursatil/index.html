@@ -2835,7 +2835,8 @@ let ok = !!db && (await req(db, "readwrite", st => st.put(v, k), wait.put)) !== 
 if (ok) idbN++;
 if (!ok) { const m = metaOf(); n = C.bytesOf(v); ok = !!m && (m.bytes || 0) + n <= CFG.RUN_CACHE_LS_MAX && storage.set(lsKey(k), v); }
 const m = metaOf();
-if (ok && m && m.open && m.dateET === day()) storage.set("rc.meta", Object.assign({}, m, { entries: (m.entries || 0) + 1, bytes: (m.bytes || 0) + n, ls: (m.ls || 0) + (n ? 1 : 0) }));
+// `plan.have`: respuestas guardadas del plan de la tanda (todo lo que pide una corrida es de su plan)
+if (ok && m && m.open && m.dateET === day()) storage.set("rc.meta", Object.assign({}, m, { entries: (m.entries || 0) + 1, bytes: (m.bytes || 0) + n, ls: (m.ls || 0) + (n ? 1 : 0) }, isObj(m.plan) ? { plan: Object.assign({}, m.plan, { have: (m.plan.have || 0) + 1 }) } : {}));
 return ok;
 }
 // días viejos fuera (una vez al abrir) y, a la vez, cuenta lo que se puede leer de la tanda abierta: es la prueba de IndexedDB
@@ -3218,17 +3219,18 @@ const validPlan = sp => !!sp && [sp.items, sp.pages, sp.stage1, sp.K, sp.per].ev
 // queda del día (límite − gastado − reserva) y el tope alcanzan para terminarlo; si no, no se ofrece ("se reanuda mañana").
 function resumePlan(sp, cached, cap) {
 const s = App.state, cl = App.client, macro = (s.macro.spxDesc ? 0 : 1) + (s.macro.treasuryDesc ? 0 : 1);
-const cost = Math.max(0, sp.items - cached) + macro, left = Math.min((cl ? cl.budget.remaining() : 250) - CFG.RESERVE_CALLS, cap);
+const have = Math.min(cached, Number.isInteger(sp.have) ? sp.have : cached); // del plan, y que se pueda leer ahora
+const cost = Math.max(0, sp.items - have) + macro, left = Math.min((cl ? cl.budget.remaining() : 250) - CFG.RESERVE_CALLS, cap);
 return { fits: cost <= left, resume: true, cost, fullCost: sp.items + macro, cached, K: sp.K, perFinalist: sp.per, nonStockHist: sp.nonStock, etfs: sp.etfs,
 calls: { universe: 0, macro, stage1: sp.stage1, nonStock: sp.nonStock.length, etf: 2 * sp.etfs.length, finalists: sp.K * sp.per }, trims: Array.isArray(sp.trims) ? sp.trims : [] };
 }
-function estPlan(remainingOverride, capOverride, auto) {
+function estPlan(remainingOverride, capOverride) {
 const s = App.state, cl = App.client, tier = cl ? cl.plan() : "FREE";
 const eligible = (s.result && s.result.counts && s.result.counts.eligible) || (tier === "EXAMPLE" ? 40 : 77);
 const cached = remainingOverride === undefined && s.mode === "live" ? RC.status().entries : 0; // la tanda abierta se reusa, también tras "Detener" (v3, P6)
-if (cached > 0 && tier === "FREE" && validPlan(RC.plan())) { // la automática que no termina el plan guardado vuelve a planear (y puede pausarse)
+if (cached > 0 && tier === "FREE" && validPlan(RC.plan())) { // si el plan guardado no cabe hoy, se vuelve a planear la corrida mínima con lo legible
 const rp = resumePlan(RC.plan(), cached, capOverride !== undefined ? capOverride : runCapNow(false));
-if (rp.fits || !auto) return rp;
+if (rp.fits) return rp;
 }
 const pr = C.planRun({ plan: tier, eligible, have: { spx: !!s.macro.spxDesc, treasury: !!s.macro.treasuryDesc, universe: false }, nonStock: RANKED, etfs: [],
 remaining: (remainingOverride !== undefined ? remainingOverride : cl ? cl.budget.remaining() : 250) + cached, cap: withCached(capOverride !== undefined ? capOverride : runCapNow(false), cached) });
@@ -3804,8 +3806,8 @@ if (!cl || !(s.mode === "live" || s.mode === "example")) return { ok: false, rea
 if (s.run.status === "running") return { ok: false, reason: "La corrida ya está en curso." };
 if (s.stopped) return { ok: false, reason: (s.page.banner && s.page.banner.text) || "Conexión con FMP detenida." };
 if (s.mode === "live" && cl.budget.get().limitHit) return { ok: false, limit: true, reason: "Límite diario agotado; FMP lo reinicia mañana." };
-const cap = runCapNow(auto), pr = estPlan(undefined, cap, auto);
-return pr.fits ? { ok: true, plan: pr } : { ok: false, plan: pr, reason: pr.resume ? RESUME_NO_FIT : fitReason(pr, cl.budget.remaining(), cap) };
+const cap = runCapNow(auto), pr = estPlan(undefined, cap);
+return pr.fits ? { ok: true, plan: pr } : { ok: false, plan: pr, reason: s.mode === "live" && RC.status().entries > 0 ? RESUME_NO_FIT : fitReason(pr, cl.budget.remaining(), cap) };
 }
 // MEDIO 4: espera la 1.ª entrega (o falla) de lo arrancado, con tope, antes de la corrida automática
 async function bootSettled(maxMs) {
@@ -3950,6 +3952,8 @@ renderAll();
 try {
 const tier = App.client.plan();
 const out = tier === "FREE" || tier === "EXAMPLE" ? await runFree(ac, startUsed, []) : await runPaid(ac, startUsed);
+// lo que esta corrida tiene del plan de la tanda: lo que leyó de la caché más lo que guardó (la próxima reanudación pide el resto)
+if (live && s.run.tally && !s.run.handoff && validPlan(RC.plan())) RC.setPlan({ have: s.run.tally.cached + s.run.tally.saved });
 if (s.run.handoff) { retire(); return; }
 if (s.run.outage) { outageRun(); return; }
 if (!out) { syncFinish("error"); return; }
@@ -4054,7 +4058,7 @@ const OUTAGE_CODES = new Set(["server_unavailable", "upstream_error"]);
 function runCtx(ac) {
 const s = App.state, today = todayET(), cl = App.client, opt = { section: "ranking", cat: "corrida", signal: ac.signal };
 let streak = 0, anyOk = false, issued = 0, okSeq = 0, rejSeqs = [];
-const okKeys = new Set(), tally = { calls: 0, rejected: 0, cached: 0 }, useRC = s.mode === "live";
+const okKeys = new Set(), tally = s.run.tally = { calls: 0, rejected: 0, cached: 0, saved: 0 }, useRC = s.mode === "live";
 const cut = why => { if (!s.run.cut && !s.run.outage) s.run.cut = why; }; // la cola se detiene; lo que ya está en vuelo termina
 // Racha de E5 en orden de emisión: un éxito borra los rechazos emitidos antes que él (D-E-9)
 const answered = seq => { if (seq > okSeq) { okSeq = seq; rejSeqs = rejSeqs.filter(f => f > seq); } };
@@ -4084,7 +4088,7 @@ const tok = (s.run.uid || TAB) + ":" + ++s.run.sent; fly(tok, true);
 return cl.call(key, args, Object.assign({ uncounted: () => settledTok(tok) }, opt)).then(v => {
 fly(tok, false);
 tally.calls++; streak = 0; s.run.net++;
-if (Array.isArray(v) && !v.length) suspicious(seq); else { answered(seq); anyOk = true; okKeys.add(key); if (useRC) RC.put(id, v); }
+if (Array.isArray(v) && !v.length) suspicious(seq); else { answered(seq); anyOk = true; okKeys.add(key); if (useRC) RC.put(id, v).then(ok => { if (ok) tally.saved++; if (s.run.status !== "running") renderRunControls(); }); } // lo que llega tras detener cambia el botón
 return v;
 }, raw => {
 fly(tok, false);
@@ -4139,7 +4143,7 @@ const planIn = { plan: cl.plan(), eligible: uni.stocks.length, have: { spx: !!s.
 pr = C.planRun(Object.assign({ remaining: cl.budget.remaining() + extra, cap }, planIn));
 if (!pr.fits) { finishRun("blocked", fitReason(pr, cl.budget.remaining(), cap)); return null; }
 s.run.plan = pr; s.run.total = s.run.done + pr.cost - pr.calls.universe;
-if (s.mode === "live" && cl.plan() === "FREE") RC.setPlan({ pages, stage1: pr.calls.stage1, K: pr.K, per: pr.perFinalist, nonStock: pr.nonStockHist, etfs: pr.etfs, trims: pr.trims, items: pages + pr.cost - pr.calls.macro, finalists: null });
+if (s.mode === "live" && cl.plan() === "FREE") RC.setPlan({ pages, stage1: pr.calls.stage1, K: pr.K, per: pr.perFinalist, nonStock: pr.nonStockHist, etfs: pr.etfs, trims: pr.trims, items: pages + pr.cost - pr.calls.macro, finalists: null, have: 0 });
 }
 // MEDIO 5: cribado recortado → las de mayor flotante
 let screen = uni.stocks;
