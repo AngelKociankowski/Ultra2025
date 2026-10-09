@@ -2206,9 +2206,12 @@ function makeStorage(ls) {
 const PFX = CFG.LS_PREFIX, ver = k => (k.startsWith("day.") ? CFG.DAY_SCHEMA_VERSION : CFG.SCHEMA_VERSION);
 const ok = !!ls && typeof ls.getItem === "function";
 const enc = (k, val) => JSON.stringify(Object.assign({}, val, { v: ver(k) }));
+// ¿la última escritura que falló fue por falta de espacio? (no por almacenamiento bloqueado: ese caso sigue como antes)
+let lastQuota = false;
+const isQuota = e => !!e && (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" || e.code === 22 || e.code === 1014);
 function set(k, val) {
 if (!ok) return false;
-try { ls.setItem(PFX + k, enc(k, val)); return true; } catch (e) { return false; }
+try { ls.setItem(PFX + k, enc(k, val)); lastQuota = false; return true; } catch (e) { lastQuota = isQuota(e); return false; }
 }
 function allKeys() { try { const out = []; for (let i = 0; i < ls.length; i++) { const key = ls.key(i); if (key && key.startsWith(PFX)) out.push(key); } return out; } catch (e) { return []; } }
 // Escritura prioritaria (v5.1, director): contador, candado, lo que está en vuelo y la marca del día SIEMPRE se escriben. Si no
@@ -2228,7 +2231,7 @@ try { const v = ls.getItem(key); ls.removeItem(key); need -= ((v || "").length +
 return set(k, val);
 }
 return Object.freeze({
-setCritical,
+setCritical, quotaFull: () => lastQuota,
 get(k) {
 if (!ok) return null;
 try {
@@ -2390,7 +2393,7 @@ flushing = false;
 if (!ops.length) return;
 const cur = baseNow();
 ops.splice(0).forEach(f => f(cur)); cur.limit = limitOf(); base = cur;
-if (persist()) unsaved = !(store.setCritical || store.set)("budget", { dateET: cur.dateET, used: cur.used, limit: isFinite(cur.limit) ? cur.limit : null, limitHit: cur.limitHit, byCat: cur.byCat, runDay: cur.runDay, suspect: cur.suspect }, cur.dateET);
+if (persist()) unsaved = !(store.setCritical || store.set)("budget", { dateET: cur.dateET, used: cur.used, limit: isFinite(cur.limit) ? cur.limit : null, limitHit: cur.limitHit, byCat: cur.byCat, runDay: cur.runDay, suspect: cur.suspect }, cur.dateET) && !!(store.quotaFull && store.quotaFull()); // solo sin espacio
 emit();
 };
 if (!locks || !persist()) return run();
@@ -2937,7 +2940,7 @@ function lockMark(l, state) { if (l) critical("runlock", Object.assign({}, l, { 
 // claves que llevan la cuenta (v5.1): se escriben liberando espacio si hace falta; si aun así no caben, la corrida no arranca o se pausa
 const lsAvailable = !!browserStore();
 const NO_SPACE = "Sin espacio en este navegador para llevar la cuenta; libera espacio o usa otro navegador.";
-function critical(k, v) { const ok = store.setCritical(k, v, todayET()); if (!ok && lsAvailable && App.state) App.state.noSpace = true; return ok; }
+function critical(k, v) { const ok = store.setCritical(k, v, todayET()); if (!ok && lsAvailable && store.quotaFull() && App.state) App.state.noSpace = true; return ok; }
 const noSpace = () => { const s = App.state; return s.mode === "live" && (!!s.noSpace || !!(App.client && App.client.budget.get().unsaved)); };
 function lockDrop() { const l = lockGet(); if (lockMine(l)) store.remove("runlock"); }
 // ¿sigue viva la pestaña del candado? Le pregunta por BroadcastChannel; si el canal no funciona aquí, vale el latido.
