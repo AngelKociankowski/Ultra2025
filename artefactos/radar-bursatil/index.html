@@ -2293,6 +2293,7 @@ while (stamps.length && t - stamps[0] >= 60000) stamps.shift();
 if (stamps.length < cap) { stamps.push(t); return 0; }
 return Math.max(1, stamps[0] + 60000 - t);
 },
+note() { stamps.push(now()); }, // una ejecución que no pasó por aquí (la primera de un watch)
 };
 }
 
@@ -2481,6 +2482,7 @@ safety = setTimeout(free, 20000);
 register();
 });
 function register() {
+bucket.note(); // la primera ejecución del watch ocupa lugar en el minuto (v5.1)
 try {
 unsub = mcp.watchTool(CFG.SERVER, ep.tool, input, ev => {
 free();
