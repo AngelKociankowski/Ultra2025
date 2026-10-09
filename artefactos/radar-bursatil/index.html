@@ -20,7 +20,7 @@ color-scheme: light;
 --fs-xs:.75rem; --fs-sm:.8125rem; --fs-md:.9375rem; --fs-lg:1.125rem; --fs-xl:1.5rem; --fs-2xl:2rem;
 --lh-tight:1.2; --lh-table:1.3; --lh-body:1.45;
 --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px; --sp-7:48px;
---r-1:4px; --r-2:8px; --header-h:56px;
+--r-1:4px; --r-2:8px; --header-h:56px; --banda-h:0px;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
 color-scheme: dark;
@@ -103,6 +103,8 @@ button{font:inherit;color:inherit;}
 #app{max-width:1440px;margin-inline:auto;padding-block:var(--sp-3) var(--sp-7);}
 #app > section,.par-ranking > section{padding-block:var(--sp-6);border-top:1px solid var(--line);min-width:0;}
 #app > section:first-child{border-top:0;padding-top:var(--sp-4);}
+/* anclas (#portafolio,#detalle,#ranking):el título no queda bajo la cabecera fija ni bajo la banda del ejemplo (PF-B4) */
+#app > section,.par-ranking > section{scroll-margin-top:calc(env(safe-area-inset-top,0px) + var(--header-h) + var(--banda-h) + var(--sp-2));}
 .sec-cab{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:var(--sp-2) var(--sp-4);margin-bottom:var(--sp-4);}
 .sec-cab > div{min-width:0;}
 .rotulo{display:block;font:600 var(--fs-xs)/1.2 var(--font-display);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);margin-bottom:4px;}
@@ -299,6 +301,7 @@ dl{margin:0;}
 .pf-campo input[aria-invalid="true"]{border-color:var(--down);}
 .pf-campo .nota{max-width:16rem;}
 .pf-error{font-size:var(--fs-xs);color:var(--down);}
+.pf-remoto{font-size:var(--fs-sm);color:var(--warn);background:var(--warn-soft);border-radius:var(--r-1);padding:6px 10px;justify-self:start;}
 .pf-error:empty{display:none;}
 #pf-perfil{border:0;margin:0;padding:0;min-width:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-3);}
 #pf-perfil legend{padding:0;margin-bottom:var(--sp-2);}
@@ -462,6 +465,7 @@ th,td{padding-inline:6px;}
 <div class="pf-campo"><label for="pf-monto">¿Cuánto quieres invertir?</label><input id="pf-monto" inputmode="decimal" autocomplete="off" aria-describedby="pf-monto-error"><p id="pf-monto-error" class="pf-error" aria-live="polite"></p></div>
 <div class="pf-campo"><label for="pf-cetes">Tasa anual de CETES (%), opcional</label><input id="pf-cetes" inputmode="decimal" autocomplete="off" aria-describedby="pf-cetes-error pf-cetes-nota"><p id="pf-cetes-error" class="pf-error" aria-live="polite"></p><p id="pf-cetes-nota" class="nota"></p></div>
 </div>
+<p id="pf-remoto" class="nota pf-remoto" aria-live="polite" hidden></p>
 <fieldset id="pf-perfil"><legend>Tu nivel de riesgo</legend></fieldset>
 <label class="pf-check"><input type="checkbox" id="pf-fracciones"> Permitir fracciones de título (solo si tu casa de bolsa lo permite)</label>
 </div>
@@ -1843,22 +1847,24 @@ SPY: "Núcleo: la bolsa de EE.UU. completa; es la referencia del modelo y captur
 TLT: "Núcleo: bonos del Tesoro; suelen amortiguar caídas de la bolsa (no siempre).",
 GLD: "Núcleo: oro; diversifica y suele subir cuando el peso o la bolsa caen.",
 });
+// solo un "$" al inicio y un "MXN" al final (con o sin espacio); en medio, nunca (PF-B3). Miles con comas o espacios.
 function parseMXN(text) {
-const t = String(text == null ? "" : text).replace(/[$\s  ]|MXN/gi, "");
-if (!t) return { ok: false, error: "Escribe un monto." };
-if (!/^\d{1,3}(,\d{3})*(\.\d{1,2})?$/.test(t) && !/^\d+(\.\d{1,2})?$/.test(t)) return { ok: false, error: "Formato no válido. Ejemplo: 150,000.00" };
-const v = Number(t.replace(/,/g, ""));
+const t = String(text == null ? "" : text).replace(/[\u00a0\u202f]/g, " ").trim(), n = t.replace(/^\$\s*/, "").replace(/\s*MXN$/i, "");
+if (!n) return { ok: false, error: "Escribe un monto." };
+if (![/^\d{1,3}(,\d{3})*(\.\d{1,2})?$/, /^\d{1,3}( \d{3})*(\.\d{1,2})?$/, /^\d+(\.\d{1,2})?$/].some(re => re.test(n))) return { ok: false, error: "Formato no válido. Ejemplo: 150,000.00" };
+const v = Number(n.replace(/[, ]/g, ""));
 if (v < PORT.MIN_AMOUNT) return { ok: false, error: "El monto mínimo es $ 1,000.00 MXN." };
 if (v > PORT.MAX_AMOUNT) return { ok: false, error: "El monto máximo es $ 100,000,000.00 MXN." };
 return { ok: true, value: v };
 }
-// tasa de CETES opcional (enmienda): vacío = 0 %; 0–30 %
+// tasa de CETES opcional (enmienda): vacío = 0 %; 0–30 %. Si es un número, el rango va antes que el formato (PF-B2)
 function parseRate(text) {
-const t = String(text == null ? "" : text).replace(/[%\s ]/g, "");
+const t = String(text == null ? "" : text).replace(/[%\s\u00a0]/g, "");
 if (!t) return { ok: true, value: null };
-if (!/^\d{1,2}(\.\d{1,2})?$/.test(t)) return { ok: false, error: "Escribe la tasa como número, por ejemplo 10.5" };
 const v = Number(t);
-return v > PORT.CETES_MAX ? { ok: false, error: "La tasa debe estar entre 0 y 30 %." } : { ok: true, value: v };
+if (/^-?\d+(\.\d+)?$/.test(t) && (v < 0 || v > PORT.CETES_MAX)) return { ok: false, error: "La tasa debe estar entre 0 y 30 %." };
+if (!/^\d{1,2}(\.\d{1,2})?$/.test(t)) return { ok: false, error: "Escribe la tasa como número, por ejemplo 10.5" };
+return { ok: true, value: v };
 }
 function fxRate({ rows, live }) {
 const r = (rows || []).find(x => x.symbol === "USDMXN"), c = [];
@@ -2002,6 +2008,17 @@ const sigAnn = Math.sqrt(Math.max(0, quadForm(w, cov))), m = (muAnn - (sigAnn * 
 return { muAnn, sigAnn, lo: A * Math.exp(m - 1.2815516 * s), med: A * Math.exp(m), hi: A * Math.exp(m + 1.2815516 * s), pAbove: s > 0 ? normCdf(m / s) : null,
 badYear: 1 - Math.exp(muAnn - (sigAnn * sigAnn) / 2 - 1.6448536 * sigAnn), usdW: inv, mxnW: 1 - inv };
 }
+// monto sugerido que SÍ alcanza (PF-B1): desde el de la fórmula de §4.7.8, el primero (de 100 en 100) que con títulos enteros
+// compra todo el núcleo con precio y deja realized ≥ MIN_REALIZED; se simula, no se estima por cociente
+function minAmountEnough({ inst, w, A, fx, from }) {
+const core = inst.map((it, i) => (it.role === "core" && isNum(it.priceUSD) && w[i] > 0 ? i : -1)).filter(i => i >= 0);
+let a = Math.ceil(Math.max(isNum(from) ? from : 0, A + 1) / 100) * 100;
+for (let k = 0; k < 5000 && a <= PORT.MAX_AMOUNT; k++, a += a < 100000 ? 100 : 1000) {
+const z = finalizeShares({ inst, w, A: a, fx, fractional: false });
+if (z.realized >= PORT.MIN_REALIZED && core.every(i => z.shares[i] >= 1)) return a;
+}
+return null;
+}
 // orquestación pura (§4.9): la misma entrada da la misma salida
 function buildPortfolio({ output, live, profile, amountMXN, fractional, nowMs, cetesPct = null }) {
 const empty = state => ({ state, positions: [], cashMXN: 0, stats: null, notes: [], excluded: [], meta: null });
@@ -2023,7 +2040,7 @@ example: !!output.example, window: uni.window, k: al.k, sigX: al.sigX, targetVol
 minAmountWhole: fz.minAmountWhole, realized: fz.realized, cetes: isNum(cetesPct) ? cetesPct : null, satCount: inst.filter(it => it.role === "sat").length, capped: al.capped };
 const invested = fz.wFinal.reduce((a, b) => a + b, 0);
 let state = "ok";
-if (!fractional && fz.realized < PORT.MIN_REALIZED && invested < 1) state = "monto_insuficiente";
+if (!fractional && fz.realized < PORT.MIN_REALIZED && invested < 1) { state = "monto_insuficiente"; meta.minAmountWhole = minAmountEnough({ inst, w: al.w, A, fx: fx.rate, from: fz.minAmountWhole }); }
 else if (!inst.length || (invested === 0 && fz.realized >= PORT.MIN_REALIZED)) state = "solo_liquidez";
 const pos = inst.map((it, i) => ({ id: it.id, display: it.display, name: it.name, role: it.role === "core" ? "Núcleo" : "Satélite", kind: it.kind, proxyOf: it.proxyOf, signalLabel: it.row.signalLabel,
 signal: it.signal, pct: it.pct, ref: it.ref, weight: fz.wFinal[i], target: al.w[i], amountMXN: fz.amount[i], priceMXN: fz.priceMXN[i], priceUSD: it.priceUSD, shares: fz.shares[i], sector: it.sector,
@@ -3673,7 +3690,10 @@ if (bn.action === "permisos") kids.push(" ", h("button", { class: "btn", onclick
 if (bn.action === "recargar") kids.push(" ", h("button", { class: "btn", onclick: () => root.location.reload(), text: "Recargar" }));
 fill(aviso, h("div", "banda-fila", kids));
 }
+bandH();
 }
+// alto de la banda del ejemplo (también fija): las anclas lo descuentan con scroll-margin-top
+function bandH() { const b = $("#banda-ejemplo"); doc.documentElement.style.setProperty("--banda-h", (b && !b.hidden ? b.offsetHeight : 0) + "px"); }
 async function openPermissions() {
 try {
 if (!App.perm) App.perm = await root.claude.use("permissions");
@@ -5143,6 +5163,11 @@ const PF_NO_CETES = "Sin tasa de CETES: la liquidez se cuenta al 0 %; escribe la
 const PF_SEG = { core: "Núcleo", sat: "Satélite", usd: "Dólares", cash: "Liquidez" };
 const pctI = x => F.pctFrac(x, 0, false), pct1 = x => F.pctFrac(x, 1, false), runDay = r => F.dateES(C.etParts(r.nowMs).date);
 let pfCalcT = null, pfSaveT = null, pfDbLast = null, pfWatching = false, pfDrawn = null;
+// el updatedAt más alto visto, propio o de otro dispositivo: una edición local siempre queda más nueva aunque los relojes difieran
+let pfSeen = 0;
+const PF_FIELDS = [["pf-monto", "amountMXN", "errMonto", "Se usó el monto guardado en tu otro dispositivo"], ["pf-cetes", "cetesPct", "errCetes", "Se usó la tasa guardada en tu otro dispositivo"]];
+// "escribiendo": el foco está en un campo en el que ya se tecleó algo desde que se enfocó
+const pfTyping = () => PF_FIELDS.some(([id]) => doc.activeElement === $("#" + id) && App.state.pf.typed[id]);
 // preferencias guardadas (almacenamiento local o db): lo que no tiene forma se ignora
 function pfClean(p) {
 if (!isObj(p) || !isNum(p.updatedAt) || typeof p.fractional !== "boolean") return null;
@@ -5153,17 +5178,20 @@ return { amountMXN: a, profile: p.profile, fractional: p.fractional, cetesPct: i
 // sin preferencias guardadas: ejemplo rotulado (Moderado y $ 100,000.00 MXN) hasta que el usuario edite algo
 function pfInit() {
 const saved = pfClean(store.get("portafolio"));
-return Object.assign({ updatedAt: 0, example: !saved, errMonto: null, errCetes: null, tesis: null, memo: null, remote: null }, saved || PF_EX);
+const p = saved || PF_EX;
+pfSeen = saved ? saved.updatedAt : 0;
+// keep*: lo último válido de cada campo; es lo que se guarda (escribir "abc" no borra el monto en tus otros dispositivos)
+return Object.assign({ updatedAt: 0, example: !saved, errMonto: null, errCetes: null, tesis: null, memo: null, remote: null, typed: {}, aviso: "", keepAmt: p.amountMXN, keepCetes: p.cetesPct }, p);
 }
 function pfMount() {
 const fs = $("#pf-perfil"), m = $("#pf-monto"), c = $("#pf-cetes");
 if (!fs) return;
 fs.append(...PF_KEYS.map(k => { const P = C.PORT.PROFILES[k]; return h("label", "pf-card", h("span", "pf-card-tit", h("input", { type: "radio", name: "pf-perfil", value: k, onchange: () => pfSet({ profile: k }) }), h("b", null, P.label)), h("span", null, P.desc), h("span", "pf-linea", P.line)); }));
-m.addEventListener("input", () => pfSet(pfParse(m, false)));
-m.addEventListener("change", () => pfSet(pfParse(m, true)));
-m.addEventListener("blur", () => { const pf = App.state.pf, r = pf.remote; pf.remote = null; if (r && r.updatedAt > pf.updatedAt) pfAdopt(r); });
-c.addEventListener("input", () => pfSet(pfParse(c, false)));
-c.addEventListener("change", () => pfSet(pfParse(c, true)));
+for (const el of [m, c]) {
+el.addEventListener("input", () => { App.state.pf.typed[el.id] = true; pfSet(pfParse(el, false)); });
+el.addEventListener("change", () => pfSet(pfParse(el, true)));
+el.addEventListener("blur", pfResolve);
+}
 $("#pf-fracciones").addEventListener("change", e => pfSet({ fractional: e.target.checked }));
 root.addEventListener("pagehide", () => { if (pfSaveT) pfFlush(); });
 pfFields(false);
@@ -5172,11 +5200,13 @@ pfFields(false);
 function pfParse(el, commit) {
 const pf = App.state.pf, money = el.id === "pf-monto", r = money ? C.parseMXN(el.value) : C.parseRate(el.value), k = money ? "errMonto" : "errCetes";
 if (r.ok || commit) pf[k] = r.ok ? null : r.error;
+if (r.ok) pf[money ? "keepAmt" : "keepCetes"] = r.value;
 if (r.ok && commit && money) el.value = F.mxn(r.value);
 return money ? { amountMXN: r.ok ? r.value : null } : { cetesPct: r.ok ? r.value : null };
 }
 function pfSet(patch) {
-Object.assign(App.state.pf, patch, { example: false, updatedAt: App.now() });
+pfSeen = Math.max(App.now(), pfSeen + 1);
+Object.assign(App.state.pf, patch, { example: false, updatedAt: pfSeen, aviso: "" });
 pfFields(true);
 clearTimeout(pfCalcT); pfCalcT = App.timer(renderPortfolio, 250);
 clearTimeout(pfSaveT); pfSaveT = App.timer(pfFlush, 800);
@@ -5190,32 +5220,46 @@ $("#pf-fracciones").checked = !!pf.fractional;
 $("#pf-ejemplo").hidden = !pf.example;
 for (const [k, inp] of [["errMonto", m], ["errCetes", c]]) { $("#" + inp.id + "-error").textContent = pf[k] || ""; inp.setAttribute("aria-invalid", pf[k] ? "true" : "false"); }
 $("#pf-cetes-nota").textContent = isNum(pf.cetesPct) ? "" : PF_NO_CETES;
+const av = $("#pf-remoto"); av.textContent = pf.aviso; av.hidden = !pf.aviso;
 }
 // almacenamiento local y `db` con el mismo debounce; a `db` solo en vivo y solo si cambió
 function pfFlush() {
 clearTimeout(pfSaveT); pfSaveT = null;
 const pf = App.state.pf;
 if (pf.example) return;
-const body = { amountMXN: pf.amountMXN, profile: pf.profile, fractional: !!pf.fractional, cetesPct: pf.cetesPct, updatedAt: pf.updatedAt };
+const body = { amountMXN: pf.keepAmt, profile: pf.profile, fractional: !!pf.fractional, cetesPct: pf.keepCetes, updatedAt: pf.updatedAt };
 store.set("portafolio", Object.assign({ v: 1 }, body));
 const key = JSON.stringify(Object.assign({}, body, { updatedAt: 0 }));
 if (App.state.mode === "live" && Sync.active && pfWatching && key !== pfDbLast) { pfDbLast = key; Sync.writePrefs(body); }
 }
-// 5.ª suscripción, ya en vivo (el modo ejemplo no toca `preferencias`): gana el updatedAt mayor; con #pf-monto enfocado se espera al blur
+// 5.ª suscripción, ya en vivo (el modo ejemplo no toca `preferencias`): gana el updatedAt mayor; con un campo enfocado se espera al blur
 function pfSync() {
 if (pfWatching || !Sync.active) return;
 pfWatching = true;
 Sync.watchPrefs(raw => {
 const r = pfClean(raw), pf = App.state.pf;
 pfDbLast = r ? JSON.stringify(Object.assign({}, r, { updatedAt: 0 })) : null;
-if (r && (pf.example || r.updatedAt > pf.updatedAt)) { if (doc.activeElement === $("#pf-monto")) pf.remote = r; else pfAdopt(r); }
-else if (!pf.example && (!r || pf.updatedAt > r.updatedAt)) pfFlush();
+if (r && (pf.example || r.updatedAt > pf.updatedAt)) { if (!pfTyping()) pfAdopt(r); else if (!pf.remote || r.updatedAt > pf.remote.updatedAt) pf.remote = r; }
+else if (!pf.example && (!r || pf.updatedAt > r.updatedAt) && !pfSaveT) pfFlush();
 });
 }
 function pfAdopt(r) {
-Object.assign(App.state.pf, r, { example: false, remote: null, errMonto: null, errCetes: null });
-store.set("portafolio", Object.assign({ v: 1 }, r));
+pfSeen = Math.max(pfSeen, r.updatedAt);
+Object.assign(App.state.pf, r, { example: false, remote: null, errMonto: null, errCetes: null, keepAmt: r.amountMXN, keepCetes: r.cetesPct });
+store.set("portafolio", { v: 1, amountMXN: r.amountMXN, profile: r.profile, fractional: r.fractional, cetesPct: r.cetesPct, updatedAt: r.updatedAt });
 pfFields(false); renderPortfolio();
+}
+// PF-M1: al salir de los campos, lo que se escribió gana (se guarda más nuevo y va a `db`); lo demás llega del otro dispositivo.
+// Si lo escrito no es válido, se usa lo guardado en el otro dispositivo y se avisa: nunca se descarta en silencio.
+function pfResolve() {
+const pf = App.state.pf, r = pf.remote, typed = pf.typed, keep = {}, avisos = [];
+pf.remote = null; pf.typed = {};
+if (!r) return;
+for (const [id, k, err, txt] of PF_FIELDS) if (typed[id]) { if (pf[err]) avisos.push(txt); else keep[k] = pf[k]; }
+if (!avisos.length && !Object.keys(keep).length) { if (r.updatedAt > pf.updatedAt) pfAdopt(r); return; }
+pfAdopt(Object.assign({}, r, keep));
+if (Object.keys(keep).length) pfSet(keep);
+pf.aviso = avisos.join(". "); pfFields(true);
 }
 const pfInputs = () => { const s = App.state, pf = s.pf; return [s.result, pf.profile, pf.amountMXN, pf.fractional, pf.cetesPct]; };
 const pfSame = k => !!k && pfInputs().every((v, i) => v === k[i]);
@@ -5260,7 +5304,7 @@ return h("div", { id: "pf-resumen" },
 mos("Volatilidad estimada en pesos", `≈ ${pctI(st.sigAnn)} anual`, `(objetivo ${pctI(res.meta.targetVol)})`),
 mos("Rango probable a 3 meses (80 %)", `${F.mxn(st.lo, 0).replace(/ MXN$/, "")} – ${F.mxn(st.hi, 0)}`, `mediana ${F.mxn(st.med, 0)}`),
 mos("Probabilidad de terminar arriba de tu monto en 3 meses", F.prob(st.pAbove)),
-mos("Moneda", `En dólares ${pctI(st.usdW)} · en pesos ${pctI(st.mxnW)}`, `Año malo (1 de cada 20): ≈ ${F.pctFrac(-st.badYear, 0)}`));
+mos("Moneda", `En dólares ${pctI(st.usdW)}\u00a0· en pesos ${pctI(st.mxnW)}`, `Año malo (1 de cada 20): ≈ ${F.pctFrac(-st.badYear, 0)}`));
 }
 const pfSegOf = p => (p.role === "Liquidez" ? "cash" : p.kind === "usd" ? "usd" : p.role === "Núcleo" ? "core" : "sat");
 function pfBar(res) {
@@ -5632,6 +5676,7 @@ $("#resto").addEventListener("toggle", ev => { App.state.ui.showRest = ev.target
 $("#btn-junk").addEventListener("click", () => { App.state.breadth.showAll = !App.state.breadth.showAll; renderBreadth(); });
 $("#btn-actualizar-mercado").addEventListener("click", refreshBreadth);
 pfMount();
+root.addEventListener("resize", bandH);
 doc.addEventListener("visibilitychange", () => {
 if (doc.hidden) { markInterrupted(); return; } // best effort: si el sistema la congela, otra pestaña o la recarga la retoman
 // de vuelta: si otra corrida tomó el día mientras estaba congelada, se retira antes de nada (W2); si no, latido y pantalla
