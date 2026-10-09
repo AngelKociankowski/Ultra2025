@@ -3142,12 +3142,13 @@ if (!auto || !cl || cl.plan() !== "FREE") return CFG.RUN_CAP_FREE;
 return Math.min(CFG.RUN_CAP_FREE, CFG.COLD_CAP_FREE - cl.budget.get().used);
 }
 // Reserva de la corrida pendiente (Free): solo la que cabe (N2)
-// Techo duro de la corrida (v4, director): llamadas reales (las que no salen de la caché) fijadas al empezar. Es el costo que
-// muestra el botón; la automática, además, lo que cabe en COLD_CAP_FREE con lo gastado hoy. Sin límite diario (planes pagados), sin techo.
+// Techo duro de la corrida (v4, director): llamadas reales (las que no salen de la caché) fijadas al empezar. La manual, el costo
+// que muestra el botón; la automática, lo que cabe en COLD_CAP_FREE con lo gastado hoy (sin crédito de caché). Sin límite diario
+// (planes pagados), sin techo.
 function runCeiling(plan, auto) {
 const cl = App.client;
 if (App.state.mode !== "live" || !cl || !isFinite(CFG.PLAN_DAILY_LIMIT[cl.plan()]) || !plan || !isNum(plan.cost)) return Infinity;
-return auto ? Math.max(0, Math.min(plan.cost, CFG.COLD_CAP_FREE - cl.budget.get().used)) : plan.cost;
+return auto ? Math.max(0, CFG.COLD_CAP_FREE - cl.budget.get().used) : plan.cost;
 }
 const PAUSE_MSG = n => `Se pausó para no pasar de ≈ ${n} llamadas; se puede reanudar.`, PAUSED = n => `Análisis parcial: se pausó para no pasar de ≈ ${n} llamadas; se puede reanudar.`;
 function runReserve(minimal) {
