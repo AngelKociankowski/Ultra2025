@@ -494,6 +494,7 @@ SUSPECT_STREAK: 12, SUSPECT_MIN: 10, SUSPECT_RATIO: 0.25, // "posible límite" c
 COVERAGE_MIN: 0.6, // corrida con menos filas que esta fracción de lo planeado → parcial "cobertura baja" (director, E4)
 SIGNAL_BUY_PCT: 52, SIGNAL_AVOID_PCT: 48, PROB_BAR_SPAN: 15, // señal gobernada por la probabilidad mostrada (07 §1)
 SYNC: { LOAD_TIMEOUT_MS: 4000, DOC_MAX_BYTES: 200000, COUNTER_DEBOUNCE_MS: 5000, LIVE_DEBOUNCE_MS: 3000, LIVE_SET_DEBOUNCE_MS: 10000, RUN_LEASE_MS: 30000, RUN_STALE_MIN: 15, KEEP_DAYS: 2, LIVE_GRACE_MS: 300000, COUNTER_MAX: 100000, BEAT_MS: 20000, BEAT_STALE_MS: 75000 },
+LIMIT_TRUST_MIN: 50, FREE_REPROBE_MS: 2 * 3600000, // con menos llamadas contadas hoy, un "límite" de FMP no infla el contador (puede ser un cambio de plan)
 RESUME_MAX: 3, RUN_CACHE_LS_MAX: 1500000, // corrida que se retoma: reanudaciones automáticas por día y tope del respaldo local
 STAGE1_MIN_FREE: 77, // cribado recortable solo sobre la muestra Free nominal
 RUN_CAP_FREE: 193,
@@ -2063,9 +2064,10 @@ const n = Number(ctx.screenerN) || 400; const out = [];
 for (let i = 1; i <= n; i++) {
 const sym = "SC" + String(i).padStart(3, "0"); const q = quoteOf(sym, ctx); const r = rng(hash(sym + "|scr") ^ ctx.seed), v = vr(r);
 out.push({ symbol: sym, companyName: nameOf(sym, "stock"), marketCap: q.marketCap, sector: SECTORS[Math.floor(r() * SECTORS.length)], industry: "Industria sintética",
-beta: v(0.5, 1.8, 3), price: q.price, volume: q.volume, exchangeShortName: q.exchange, isEtf: false, isFund: false, isActivelyTrading: true, country: "US" });
+beta: v(0.5, 1.8, 3), price: q.price, lastAnnualDividend: v(0, 3, 2), volume: q.volume, exchange: q.exchange === "NYSE" ? "New York Stock Exchange" : "NASDAQ Global Select",
+exchangeShortName: q.exchange, country: "US", isEtf: false, isFund: false, isActivelyTrading: true });
 }
-return out;
+return out.sort((x, y) => (y.marketCap || 0) - (x.marketCap || 0)); // como FMP: ordenado por capitalización, de mayor a menor
 }
 
 // Reglas de plan (02 §A), solo si ctx.gate.
@@ -2184,7 +2186,7 @@ gainers: E("marketPerformance", () => ({ endpoint: "biggest-gainers" })),
 losers: E("marketPerformance", () => ({ endpoint: "biggest-losers" })),
 active: E("marketPerformance", () => ({ endpoint: "most-active" })),
 sectors: E("marketPerformance", a => ({ endpoint: "sector-performance-snapshot", date: a.date, exchange: a.exchange })),
-screener: E("search", () => ({ endpoint: "search-company-screener", marketCapMoreThan: 2000000000, priceMoreThan: 5, isEtf: false, isFund: false, isActivelyTrading: true, country: "US", limit: 3000 })),
+screener: E("search", () => ({ endpoint: "search-company-screener", marketCapMoreThan: 2000000000, priceMoreThan: 5, isEtf: false, isFund: false, isActivelyTrading: true, country: "US", limit: 500 })), // llega ordenado por capitalización; solo se analizan las UNIVERSE_CAP más grandes
 screenerProbe: E("search", () => ({ endpoint: "search-company-screener", limit: 1, country: "US" })),
 batchQuote: E("quote", a => ({ endpoint: "batch-quote", symbols: a.symbols })),
 batchQuoteShort: E("quote", a => ({ endpoint: "batch-quote-short", symbols: a.symbols })),
@@ -2376,19 +2378,22 @@ const rem = () => (remote.dateET === st.dateET ? remote : { used: 0, limitHit: f
 const budget = {
 get() {
 roll(); const r = rem();
-return { dateET: st.dateET, used: Math.max(0, st.used + r.used), local: st.used, limit: st.limit, limitHit: st.limitHit || r.limitHit, byCat: Object.assign({}, st.byCat),
+// sin límite diario (planes pagados), una marca de límite de un estado Free viejo no cuenta
+return { dateET: st.dateET, used: Math.max(0, st.used + r.used), local: st.used, limit: st.limit, limitHit: isFinite(st.limit) && (st.limitHit || r.limitHit), byCat: Object.assign({}, st.byCat),
 ranToday: st.runDay === st.dateET, suspect: st.suspect === st.dateET || r.suspect };
 },
 remaining() { const b = budget.get(); return b.limitHit ? 0 : b.limit - b.used; },
 local() { roll(); return { dateET: st.dateET, used: st.used, byCat: Object.assign({}, st.byCat), limitHit: st.limitHit, suspect: st.suspect === st.dateET ? st.dateET : null }; },
 setRemote(r) { remote = Object.assign({ used: 0, limitHit: false, suspect: false }, r); emit(); },
 markSuspect() { mutate(v => { v.suspect = v.dateET; }); },
-clearLimit() { mutate(v => { v.limitHit = false; }); },
+// sin la marca de límite; lo que una versión anterior inventó al marcarlo (más que la suma por categoría) se quita
+clearLimit() { mutate(v => { v.limitHit = false; const sum = CATS.reduce((a, c) => a + (v.byCat[c] || 0), 0); if (v.used > sum) v.used = sum; }); },
 note(n, cat) {
 const c = CATS.includes(cat) ? cat : "manual";
 mutate(v => { v.used += n; v.byCat[c] = (v.byCat[c] || 0) + n; if (c === "corrida") v.runDay = v.dateET; }); // la que cruza la medianoche marca el día en que gastó
 },
-markLimitHit() { mutate(v => { const lim = limitOf(); if (isFinite(lim)) v.used = Math.max(v.used, lim); v.limitHit = true; }); },
+// con pocas llamadas contadas hoy (p. ej. la sonda del arranque tras cambiar de plan) no se inventan las que faltan
+markLimitHit() { mutate(v => { const lim = limitOf(); if (isFinite(lim) && v.used >= CFG.LIMIT_TRUST_MIN) v.used = Math.max(v.used, lim); v.limitHit = true; }); },
 reset() { mutate(v => { Object.assign(v, fresh(v.dateET, v.runDay)); }); },
 markRun() { mutate(v => { v.runDay = v.dateET; }); },
 };
@@ -2521,7 +2526,9 @@ pump();
 async function detectPlan(o = {}) {
 const today = C.etParts(clock()).date;
 const cached = store.get("plan");
-if (!o.force && cached && cached.dateET === today && CFG.K[cached.tier]) {
+// un Free guardado hace más de `freeMaxAge` se vuelve a sondear (quien sube de plan lo ve sin tocar "Volver a detectar")
+const staleFree = !!cached && cached.tier === "FREE" && isNum(o.freeMaxAge) && !(isNum(cached.detectedAt) && clock() - cached.detectedAt <= o.freeMaxAge);
+if (!o.force && !staleFree && cached && cached.dateET === today && CFG.K[cached.tier]) {
 setPlan(cached.tier);
 return { tier: cached.tier, source: "cache", probes: cached.probes || {} };
 }
@@ -3348,7 +3355,7 @@ renderSection(sec);
 }
 function pageError(e) {
 const s = App.state;
-s.page.banner = { kind: e.kind, text: errText(e), action: e.kind === "denied_scope" ? "permisos" : null };
+s.page.banner = { kind: e.kind, text: e.kind === "limit_reached" ? limitText() : errText(e), action: e.kind === "denied_scope" ? "permisos" : null };
 if (e.kind === "limit_reached") {
 stopPolling();
 } else {
@@ -3805,7 +3812,7 @@ const s = App.state, cl = App.client;
 if (!cl || !(s.mode === "live" || s.mode === "example")) return { ok: false, reason: "Conectando con FMP…" };
 if (s.run.status === "running") return { ok: false, reason: "La corrida ya está en curso." };
 if (s.stopped) return { ok: false, reason: (s.page.banner && s.page.banner.text) || "Conexión con FMP detenida." };
-if (s.mode === "live" && cl.budget.get().limitHit) return { ok: false, limit: true, reason: "Límite diario agotado; FMP lo reinicia mañana." };
+if (s.mode === "live" && cl.budget.get().limitHit) return { ok: false, limit: true, reason: limitText() === EARLY_LIMIT ? EARLY_LIMIT : "Límite diario agotado; FMP lo reinicia mañana." };
 const cap = runCapNow(auto), pr = estPlan(undefined, cap);
 return pr.fits ? { ok: true, plan: pr } : { ok: false, plan: pr, reason: s.mode === "live" && RC.status().entries > 0 ? RESUME_NO_FIT : fitReason(pr, cl.budget.remaining(), cap) };
 }
@@ -4783,7 +4790,7 @@ const planBlock = h("div", null, h("h3", null, "Plan de FMP"),
 h("span", "badge", ex ? "Modo ejemplo" : `Plan detectado: ${PLAN_NAME[tier]}${tier === "FREE" ? "" : " (no verificado)"}`),
 nota(ex ? "Sin conector: no se consulta FMP." : { probe: "Detectado hoy con una sonda.", cache: "Detectado hoy (guardado en este navegador).", default: s.plan.note || "No se pudo detectar el plan; se asume Free." }[s.plan.source] || ""),
 tier === "FREE" ? nota("Plan FMP Free: 250 llamadas/día, sin lotes, universo de muestra.") : null,
-ex ? null : h("div", "acciones", busyRun() ? nota(WAIT_TXT, "span") : null, h("button", { class: "btn", id: "btn-detectar", disabled: !cl || b.limitHit || busyRun(), onclick: redetectPlan }, "Volver a detectar", h("span", "costo", " (1–3 llamadas)"))));
+ex ? null : h("div", "acciones", busyRun() ? nota(WAIT_TXT, "span") : null, h("button", { class: "btn", id: "btn-detectar", disabled: !cl || busyRun(), onclick: redetectPlan }, "Volver a detectar", h("span", "costo", " (1–3 llamadas)"))));
 let budgetBlock;
 if (ex) budgetBlock = h("div", null, h("h3", null, "Presupuesto"), h("p", { id: "presupuesto", text: "Sin consumo: el modo ejemplo no llama a FMP." }));
 else {
@@ -4810,14 +4817,28 @@ nota(policy), nota("Última corrida: " + lastRun), nota("Conexión: " + conn), e
 h("div", "acciones", h("button", { class: "btn", id: "btn-borrar", onclick: clearData, text: clearArmed ? "Toca otra vez para confirmar" : "Borrar datos guardados en este navegador" })));
 fill(cont, planBlock, budgetBlock, other);
 }
+// "Volver a detectar" nunca se deshabilita por el límite: es la salida tras subir de plan (director, v5.1)
 async function redetectPlan() {
 const s = App.state, cl = App.client;
 if (!cl || s.mode !== "live" || busyRun()) return;
 const dp = await cl.detectPlan({ force: true });
 s.plan = { tier: dp.tier, source: dp.source, detectedAt: App.now(), note: dp.source === "default" ? "No se pudo detectar el plan; se asume " + PLAN_NAME[dp.tier] + "." : null };
-if (dp.error) handleIfPage(dp.error);
+if (dp.source === "probe") Sync.writePlan({ dateET: todayET(), tier: dp.tier, source: dp.source, probes: dp.probes || {} });
+if (paidPlanClears(dp)) { s.live.paused = false; if (!s.liveStarted) { renderAll(); startLive(); return; } }
+else if (dp.error) handleIfPage(dp.error);
 renderAll();
 }
+// plan pagado detectado: la marca de límite de un estado Free viejo se quita, con su aviso
+function paidPlanClears(dp) {
+const s = App.state, cl = App.client;
+if (!cl || !(dp.tier in CFG.PLAN_DAILY_LIMIT) || isFinite(CFG.PLAN_DAILY_LIMIT[dp.tier]) || dp.tier === "EXAMPLE") return false;
+if (cl.budget.local().limitHit) cl.budget.clearLimit();
+if (s.page.banner && s.page.banner.kind === "limit_reached") s.page.banner = null;
+return true;
+}
+const EARLY_LIMIT = "FMP respondió que se agotó el límite; si acabas de cambiar de plan, toca Volver a detectar.";
+// el aviso de límite: con pocas llamadas contadas hoy puede ser un cambio de plan
+const limitText = () => (App.client && App.client.budget.local().used < CFG.LIMIT_TRUST_MIN ? EARLY_LIMIT : C.ERR_TEXT.limit_reached);
 function resetCounter() {
 if (!resetArmed) { resetArmed = true; renderStatus(); App.timer(() => { resetArmed = false; renderStatus(); }, 4000); return; }
 resetArmed = false;
@@ -4999,10 +5020,13 @@ root.addEventListener("pagehide", () => Sync.flush());
 s.budget = App.client.budget.get();
 const hintT = App.timer(() => { s.conn.hint = "Si ves un aviso de claude.ai para permitir FMP, acéptalo."; renderPulse(); }, 2000);
 const planToday = !!cached && cached.dateET === todayET() && !!CFG.K[cached.tier];
-const canProbe = !App.client.budget.get().limitHit && App.client.budget.remaining() - CFG.RESERVE_CALLS >= 1;
+const b0 = App.client.budget.get(), canProbe = !b0.limitHit && App.client.budget.remaining() - CFG.RESERVE_CALLS >= 1;
+// con el límite marcado hoy y el plan Free (o sin detectar): UNA sonda igual; si contesta, el plan es pagado y el límite se quita
+const mustProbe = b0.limitHit && (!planToday || cached.tier === "FREE");
 let dp;
-try { dp = planToday || canProbe ? await App.client.detectPlan() : { tier: tier0, source: "default", probes: {}, error: null, skipped: true }; } // A5
+try { dp = mustProbe ? await App.client.detectPlan({ force: true }) : planToday || canProbe ? await App.client.detectPlan(canProbe ? { freeMaxAge: CFG.FREE_REPROBE_MS } : {}) : { tier: tier0, source: "default", probes: {}, error: null, skipped: true }; } // A5
 finally { clearTimeout(hintT); s.conn.hint = null; }
+paidPlanClears(dp);
 if (dp.error && EXAMPLE_KINDS.has(dp.error.kind)) return enterExample(dp.error);
 s.mode = "live"; s.conn.status = "ok";
 if (dp.error && dp.error.kind === "unexpected_shape") s.shapeErrors = (s.shapeErrors || 0) + 1;
@@ -5015,7 +5039,14 @@ catch (e) { s.sample = { fn: null, status: "hidden" }; }
 await Promise.race([loadHolidays(), new Promise(r => setTimeout(r, 2500))]); // A6 (con tope: si tarda, horario estimado)
 tickClock(true);
 renderAll();
-if (App.client.budget.get().limitHit) { s.page.banner = s.page.banner || { kind: "limit_reached", text: C.ERR_TEXT.limit_reached, action: null }; renderAll(); return; }
+if (App.client.budget.get().limitHit) { s.page.banner = s.page.banner || { kind: "limit_reached", text: limitText(), action: null }; renderAll(); return; }
+await startLive();
+}
+// A7–A10: franja, macro, mercado y la automática (también tras quitar el límite con "Volver a detectar")
+async function startLive() {
+const s = App.state;
+if (s.liveStarted) return;
+s.liveStarted = true;
 startStrip(); // A7
 const macroP = loadMacro(false); // A8
 startBreadth(); // A9
