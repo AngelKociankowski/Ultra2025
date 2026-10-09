@@ -2767,32 +2767,49 @@ globalCounter,
 // Caché de respuestas de la corrida por día ET (corrección de producción): una corrida interrumpida se retoma sin repetir
 // llamadas. Clave `dateET|gen|identidad`; `gen` es la tanda del día: queda abierta hasta que una corrida termina el análisis.
 // IndexedDB si se puede; si no, el almacenamiento local con tope RUN_CACHE_LS_MAX; si tampoco, todo devuelve null (como antes).
-function createRunCache({ idb, storage, now }) {
+// v3 (P1): IndexedDB con tiempo límite (`wait`). Al primer vencimiento o error se apaga por el resto de la sesión y sigue el
+// almacenamiento local; la corrida nunca espera a la caché más que eso. `onDown`: avisa una vez (lo guardado allí ya no cuenta).
+function createRunCache({ idb, storage, now, wait = { open: 1500, get: 1500, put: 2000 }, onDown }) {
 const day = () => C.etParts(now()).date, metaOf = () => { const m = storage.get("rc.meta"); return isObj(m) && isStr(m.dateET) && Number.isInteger(m.gen) ? m : null; };
-let dbp = null;
+const FAIL = {};
+let dbp = null, off = !idb;
+const down = () => {
+if (!off) { off = true; if (onDown) { try { onDown(); } catch (e) { /* el observador no debe romper la caché */ } } }
+return FAIL;
+};
+// resuelve con lo de `p` o con FAIL si vence antes o falla
+const within = (p, ms) => new Promise(res => {
+const t = setTimeout(() => res(FAIL), ms);
+p.then(v => { clearTimeout(t); res(v); }, () => { clearTimeout(t); res(FAIL); });
+});
 function open() {
-if (!dbp) dbp = new Promise(res => {
+if (off) return Promise.resolve(null);
+if (!dbp) dbp = within(new Promise(res => {
 try {
-if (!idb) return res(null);
 const r = idb.open("radar-corrida", 1);
 r.onupgradeneeded = () => { try { r.result.createObjectStore("r"); } catch (e) { /* ya existe */ } };
-r.onsuccess = () => res(r.result); r.onerror = r.onblocked = () => res(null);
-} catch (e) { res(null); }
-});
-return dbp;
+r.onsuccess = () => res(r.result); r.onerror = r.onblocked = () => res(FAIL);
+} catch (e) { res(FAIL); }
+}), wait.open).then(db => (db === FAIL ? (down(), null) : db));
+return dbp.then(db => (off ? null : db));
 }
-const req = (db, mode, fn) => new Promise(res => {
-try { const t = db.transaction("r", mode), q = fn(t.objectStore("r")); t.oncomplete = () => res(q ? q.result : true); t.onerror = t.onabort = () => res(null); } catch (e) { res(null); }
-});
+const req = (db, mode, fn, ms) => within(new Promise(res => {
+try { const t = db.transaction("r", mode), q = fn(t.objectStore("r")); t.oncomplete = () => res({ v: q ? q.result : true }); t.onerror = t.onabort = () => res(FAIL); } catch (e) { res(FAIL); }
+}), ms).then(r => (r === FAIL ? down() : r.v));
 const lsKey = (k) => { let h = 2166136261; for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 16777619); return "rc." + k.slice(0, 10) + "." + (h >>> 0).toString(36); };
-// estado de la tanda de hoy (síncrono, para el botón): abierta, respuestas guardadas y reanudaciones automáticas
-function status() { const m = metaOf(); return m && m.dateET === day() ? { open: !!m.open, entries: m.open ? m.entries || 0 : 0, resumes: m.resumes || 0, held: !!m.held, gen: m.gen } : { open: false, entries: 0, resumes: 0, held: false, gen: 0 }; }
+// estado de la tanda de hoy (síncrono, para el botón): abierta, respuestas guardadas y reanudaciones automáticas.
+// Con IndexedDB apagado solo cuentan las guardadas en el almacenamiento local (`ls`).
+function status() {
+const m = metaOf();
+return m && m.dateET === day() ? { open: !!m.open, entries: m.open ? (off ? m.ls || 0 : m.entries || 0) : 0, resumes: m.resumes || 0, held: !!m.held, gen: m.gen } : { open: false, entries: 0, resumes: 0, held: false, gen: 0 };
+}
 // una corrida empieza: retoma la tanda abierta de hoy o abre otra
 function begin({ autoResume } = {}) {
-const m = metaOf(), d = day(), cur = m && m.dateET === d ? m : { dateET: d, gen: 0, open: false, entries: 0, bytes: 0, resumes: 0 };
-const next = cur.open ? Object.assign({}, cur, { held: false, resumes: (cur.resumes || 0) + (autoResume ? 1 : 0) }) : Object.assign({}, cur, { gen: Math.max(cur.gen + 1, Date.now()), open: true, held: false, entries: 0, bytes: 0 }); // gen único: "Borrar datos" no reutiliza una tanda vieja
+const m = metaOf(), d = day(), cur = m && m.dateET === d ? m : { dateET: d, gen: 0, open: false, entries: 0, bytes: 0, ls: 0, resumes: 0 };
+const next = cur.open ? Object.assign({}, cur, { held: false, resumes: (cur.resumes || 0) + (autoResume ? 1 : 0) }) : Object.assign({}, cur, { gen: Math.max(cur.gen + 1, Date.now()), open: true, held: false, entries: 0, bytes: 0, ls: 0 }); // gen único: "Borrar datos" no reutiliza una tanda vieja
 storage.set("rc.meta", next);
-return { gen: next.gen, resumed: cur.open && (cur.entries || 0) > 0, entries: cur.open ? cur.entries || 0 : 0 };
+const n = status().entries;
+return { gen: next.gen, resumed: cur.open && n > 0, entries: cur.open ? n : 0 };
 }
 function close() { const m = metaOf(); if (m && m.open) storage.set("rc.meta", Object.assign({}, m, { open: false })); }
 // "Detener": la tanda queda para una corrida manual, pero no se retoma sola
@@ -2801,25 +2818,25 @@ const keyOf = id => { const m = status(); return m.open ? `${day()}|${m.gen}|${i
 async function get(id) {
 const k = keyOf(id); if (!k) return null;
 const db = await open();
-const v = db ? await req(db, "readonly", st => st.get(k)) : storage.get(lsKey(k));
+let v = db ? await req(db, "readonly", st => st.get(k), wait.get) : FAIL;
+if (v === FAIL || v === undefined) v = storage.get(lsKey(k)); // apagado, o guardada en el local cuando IndexedDB falló
 return isObj(v) && v.id === k && Array.isArray(v.rows) ? v.rows : null;
 }
 async function put(id, rows) {
 const k = keyOf(id); if (!k || !Array.isArray(rows) || !rows.length) return false;
 const db = await open(), v = { id: k, rows };
-let ok = false, n = 0;
-if (db) ok = !!(await req(db, "readwrite", st => st.put(v, k)));
-else { const m = metaOf(); n = C.bytesOf(v); ok = !!m && (m.bytes || 0) + n <= CFG.RUN_CACHE_LS_MAX && storage.set(lsKey(k), v); }
+let ok = !!db && (await req(db, "readwrite", st => st.put(v, k), wait.put)) !== FAIL, n = 0;
+if (!ok) { const m = metaOf(); n = C.bytesOf(v); ok = !!m && (m.bytes || 0) + n <= CFG.RUN_CACHE_LS_MAX && storage.set(lsKey(k), v); }
 const m = metaOf();
-if (ok && m && m.open && m.dateET === day()) storage.set("rc.meta", Object.assign({}, m, { entries: (m.entries || 0) + 1, bytes: (m.bytes || 0) + n }));
+if (ok && m && m.open && m.dateET === day()) storage.set("rc.meta", Object.assign({}, m, { entries: (m.entries || 0) + 1, bytes: (m.bytes || 0) + n, ls: (m.ls || 0) + (n ? 1 : 0) }));
 return ok;
 }
-// días viejos fuera (una vez al abrir)
+// días viejos fuera (una vez al abrir; también sirve de prueba de IndexedDB antes de la corrida)
 async function purge() {
 const d = day();
 for (const k of storage.keys("rc.")) if (k !== "rc.meta" && !k.startsWith("rc." + d)) storage.remove(k);
 const db = await open(); if (!db) return;
-await req(db, "readwrite", st => { const c = st.openCursor(); c.onsuccess = () => { const x = c.result; if (!x) return; if (!String(x.key).startsWith(d + "|")) x.delete(); x.continue(); }; return null; });
+await req(db, "readwrite", st => { const c = st.openCursor(); c.onsuccess = () => { const x = c.result; if (!x) return; if (!String(x.key).startsWith(d + "|")) x.delete(); x.continue(); }; return null; }, wait.put);
 }
 return Object.freeze({ status, begin, close, hold, get, put, purge });
 }
@@ -2860,7 +2877,7 @@ const TAB = Math.random().toString(36).slice(2, 10), STALE = CFG.SYNC.BEAT_STALE
 const TAB_RUNNING = "Se está analizando en otra ventana de este dispositivo; aparecerá aquí al terminar.";
 const RESUMED_TXT = "El análisis anterior se interrumpió; se retoma sin repetir las llamadas ya hechas.";
 const RESUME_WAIT = "El análisis anterior se interrumpió; se retoma en unos segundos sin repetir las llamadas ya hechas.";
-const RC = D.createRunCache({ idb: (() => { try { return root.indexedDB || null; } catch (e) { return null; } })(), storage: store, now: App.now });
+const RC = D.createRunCache({ idb: (() => { try { return root.indexedDB || null; } catch (e) { return null; } })(), storage: store, now: App.now, onDown: () => renderRunControls() });
 // candado del navegador en el almacenamiento local, con hora real (las pestañas comparten reloj): { holder, dateET, beatAt, state }
 const lockGet = () => { const l = store.get("runlock"); return l && typeof l.holder === "string" && isNum(l.beatAt) ? l : null; };
 const lockMine = l => !!l && l.holder === TAB;
@@ -3029,13 +3046,15 @@ for (const ex of ["NASDAQ", "NYSE"]) if (b.sectors[ex].rows && fresh(ex, b.secto
 if (s.macro.spxDesc && fresh("macro", s.macro)) patch.macro = { spxDesc: s.macro.spxDesc, treasuryDesc: s.macro.treasuryDesc, storedAt: s.macro.storedAt };
 if (!fromSync && Object.keys(patch).length) Sync.patchLive(patch);
 }
-function saveDay(out, dateET) {
+// run: id de la corrida de ESTE dispositivo que lo produjo (lo adoptado de otro dispositivo no lo lleva): al abrir, si `db`
+// no tiene ese día, se sube (v3, P2)
+function saveDay(out, dateET, run) {
 if (!persistOk()) return;
 const key = `day.${dateET}.${out.plan}`;
 const savedAt = App.now();
-if (!store.set(key, { savedAt, output: out })) {
+if (!store.set(key, { savedAt, output: out, run })) {
 const lean = Object.assign({}, out, { rows: out.rows.map(r => Object.assign({}, r, { series: [] })) });
-if (!store.set(key, { savedAt, output: lean })) return;
+if (!store.set(key, { savedAt, output: lean, run })) return;
 const live = store.get("live"); if (live && live.macro) { live.macro.spxDesc = null; store.set("live", live); }
 }
 store.keys("day.").sort().reverse().slice(2).forEach(k => store.remove(k));
@@ -3135,7 +3154,7 @@ const withCached = (cap, cached) => (cap >= CFG.RUN_CAP_FREE ? cap : Math.min(CF
 function estPlan(remainingOverride, capOverride) {
 const s = App.state, cl = App.client, tier = cl ? cl.plan() : "FREE";
 const eligible = (s.result && s.result.counts && s.result.counts.eligible) || (tier === "EXAMPLE" ? 40 : 77);
-const cached = remainingOverride === undefined && s.mode === "live" && !hasTodayRun() ? RC.status().entries : 0;
+const cached = remainingOverride === undefined && s.mode === "live" ? RC.status().entries : 0; // la tanda abierta se reusa, también tras "Detener" (v3, P6)
 const pr = C.planRun({ plan: tier, eligible, have: { spx: !!s.macro.spxDesc, treasury: !!s.macro.treasuryDesc, universe: false }, nonStock: RANKED, etfs: [],
 remaining: (remainingOverride !== undefined ? remainingOverride : cl ? cl.budget.remaining() : 250) + cached, cap: withCached(capOverride !== undefined ? capOverride : runCapNow(false), cached) });
 return cached ? Object.assign({}, pr, { cost: Math.max(0, pr.cost - cached), fullCost: pr.cost, cached }) : pr;
@@ -3794,7 +3813,7 @@ renderRanking();
 }
 // Una sola fuente para botón, motivo y texto vacío (07 §E2, N11)
 function runExplain(auto) {
-const s = App.state, cl = App.client, verb = hasTodayRun() ? "Volver a correr" : s.mode === "live" && RC.status().entries > 0 ? "Reanudar análisis" : "Correr análisis";
+const s = App.state, cl = App.client, verb = s.mode === "live" && RC.status().entries > 0 ? "Reanudar análisis" : hasTodayRun() ? "Volver a correr" : "Correr análisis";
 if (s.run.status === "running") { const t = runningText(); return { label: "Analizando…", enabled: false, reason: t, empty: t }; } // la etapa va en #progreso
 if (s.mode === "example") return { label: "Correr análisis de ejemplo", enabled: true, reason: "", empty: "Datos de ejemplo: corre el análisis de ejemplo." };
 if (s.mode !== "live" || !cl) return { label: "Correr análisis", enabled: false, reason: "Conectando con FMP…", empty: "Conectando con FMP…" };
@@ -3858,10 +3877,11 @@ if (s.run.outage) { outageRun(); return; }
 if (!out) { syncFinish("error"); return; }
 if (!out.rows.length) { finishRun("error", s.run.cut ? `La corrida se cortó (${s.run.cut}) antes de tener resultados; no se guardó nada.` : "La corrida no produjo resultados; no se guardó nada."); syncFinish("error"); return; }
 s.result = out; s.resultSource = s.mode === "example" ? "example" : "run"; s.resultSavedAt = App.now();
-saveDay(out, s.run.dayET);
-if (live && Sync.active && runId) await Sync.saveDay(out, s.run.dayET, runId);
-// la tanda de respuestas queda para retomar si se cortó por límite o el usuario la detuvo; si no, se cierra
+saveDay(out, s.run.dayET, runId || "local");
+// la tanda de respuestas queda para retomar si se cortó por límite o el usuario la detuvo; si no, se cierra.
+// Va antes de subir el día: si la página muere mientras sube, al volver no se reanuda lo que ya terminó (v3, P2)
 if (live) { if (s.run.cut === "detenida") RC.hold(); else if (!["límite", "posible límite"].includes(s.run.cut)) RC.close(); }
+if (live && Sync.active && runId) await Sync.saveDay(out, s.run.dayET, runId); // `corrida` pasa a terminada solo después (syncFinish)
 finishRun(out.partial ? "partial" : "done", null);
 syncFinish(out.partial ? "partial" : "done", out.partialReason);
 if (["PREMIUM", "ULTIMATE"].includes(out.plan)) watchRankingPrices();
@@ -3943,8 +3963,11 @@ const suspicious = seq => {
 if (seq > okSeq) rejSeqs.push(seq);
 if (rejSeqs.length >= CFG.SUSPECT_STREAK && anyOk && !s.run.outage && !s.run.cut) { if (s.mode === "live") cl.budget.markSuspect(); cut("posible límite"); }
 };
-// lo ya traído hoy por una corrida que no terminó sale de la caché: 0 llamadas, no cuenta (corrección de producción)
-const call = (key, args) => { const seq = ++issued, id = cl.identity(key, args); return (useRC ? RC.get(id) : Promise.resolve(null)).then(hit => {
+// lo ya traído hoy por una corrida que no terminó sale de la caché: 0 llamadas, no cuenta (corrección de producción).
+// La lectura tiene su tiempo límite (v3, P1) y "Detener" no la espera.
+const stopped = new Promise((_, rej) => { const f = () => rej(C.makeError("cancelled", "cancelled", { section: "ranking" })); if (ac.signal.aborted) f(); else ac.signal.addEventListener("abort", f, { once: true }); });
+stopped.catch(() => {}); // sin lecturas pendientes al detener, nadie la espera
+const call = (key, args) => { const seq = ++issued, id = cl.identity(key, args); return (useRC ? Promise.race([RC.get(id), stopped]) : Promise.resolve(null)).then(hit => {
 if (hit) { tally.cached++; answered(seq); anyOk = true; okKeys.add(key); return hit; }
 return cl.call(key, args, opt).then(v => {
 tally.calls++; streak = 0; s.run.net++;
@@ -4729,7 +4752,7 @@ initState();
 applyTheme();
 bindEvents();
 root.RadarApp = Object.freeze({ get state() { return App.state; }, version: "1" });
-RC.purge(); // respuestas de corridas de días anteriores fuera
+RC.purge(); // respuestas de corridas de días anteriores fuera (y primera prueba de IndexedDB: si no contesta, se apaga y el botón se repinta)
 try { paintFromCaches(); tickClock(true); renderAll(); } // A1
 catch (e) { // caché que no se puede pintar: se descarta
 if (root.console) root.console.error("[radar] caché local descartada", e);
@@ -4771,6 +4794,15 @@ if (hol && hol.length && !store.get("holidays." + year)) { store.set("holidays."
 if (L.live) adoptLive(L.live);
 if (L.day && L.day.output) adoptDay(L.day);
 s.syncRun = L.run || null;
+}
+// El día que corrió AQUÍ y no llegó a `db` (la página murió mientras lo subía): al abrir se sube y se cierra su `corrida`;
+// el otro dispositivo lo recibe por la suscripción (v3, P2)
+async function repairDay(L) {
+const today = todayET(), dbAt = L.day && L.day.output && L.day.manifest ? L.day.manifest.savedAt || 0 : -1;
+const v = store.keys(`day.${today}.`).map(k => store.get(k)).filter(x => x && isStr(x.run) && isNum(x.savedAt) && validOutput(x.output)).sort((a, b) => b.savedAt - a.savedAt)[0];
+if (!v || dbAt >= v.savedAt || !(await Sync.saveDay(v.output, today, v.run))) return;
+const r = L.run;
+if (r && r.runId === v.run && !["done", "partial"].includes(r.state)) Sync.finishRun({ runId: r.runId, state: v.output.partial ? "partial" : "done", reason: v.output.partialReason || null });
 }
 function adoptDay(d) {
 const s = App.state, out = d.output, m = d.manifest;
@@ -4816,6 +4848,7 @@ onCounters: g => App.client.budget.setRemote(g),
 onLive: v => { if (adoptLive(v)) { renderStrip(); renderBreadth(); evaluateLiveSoon(); } },
 });
 Sync.prune(todayET());
+repairDay(L).catch(e => { if (root.console) root.console.error("[radar] no se pudo subir el análisis guardado aquí", e); });
 root.addEventListener("pagehide", () => Sync.flush());
 }
 s.budget = App.client.budget.get();
