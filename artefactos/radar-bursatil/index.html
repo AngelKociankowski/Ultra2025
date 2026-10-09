@@ -2933,6 +2933,7 @@ const PARTIAL_TXT = {
 "detenida": "Análisis parcial: detenido por ti. Solo incluye lo que se alcanzó a analizar.",
 "muchas consultas rechazadas": "Análisis parcial: FMP rechazó muchas consultas (fallas). Las filas con menos datos tienen confianza menor.",
 "cobertura baja": "Análisis parcial: llegaron datos de muy pocos activos; puede que FMP haya agotado tu límite sin avisar.",
+presupuesto: "Análisis parcial: se pausó para no pasar de las llamadas previstas; se puede reanudar.",
 };
 
 const STRIP = C.NONSTOCK.filter(d => d.strip);
@@ -3141,6 +3142,14 @@ if (!auto || !cl || cl.plan() !== "FREE") return CFG.RUN_CAP_FREE;
 return Math.min(CFG.RUN_CAP_FREE, CFG.COLD_CAP_FREE - cl.budget.get().used);
 }
 // Reserva de la corrida pendiente (Free): solo la que cabe (N2)
+// Techo duro de la corrida (v4, director): llamadas reales (las que no salen de la caché) fijadas al empezar. Es el costo que
+// muestra el botón; la automática, además, lo que cabe en COLD_CAP_FREE con lo gastado hoy. Sin límite diario (planes pagados), sin techo.
+function runCeiling(plan, auto) {
+const cl = App.client;
+if (App.state.mode !== "live" || !cl || !isFinite(CFG.PLAN_DAILY_LIMIT[cl.plan()]) || !plan || !isNum(plan.cost)) return Infinity;
+return auto ? Math.max(0, Math.min(plan.cost, CFG.COLD_CAP_FREE - cl.budget.get().used)) : plan.cost;
+}
+const PAUSE_MSG = n => `Se pausó para no pasar de ≈ ${n} llamadas; se puede reanudar.`, PAUSED = n => `Análisis parcial: se pausó para no pasar de ≈ ${n} llamadas; se puede reanudar.`;
 function runReserve(minimal) {
 const s = App.state;
 if (s.run.status === "running") return Math.max(0, s.run.total - s.run.done);
@@ -3839,7 +3848,7 @@ const prev = s.run, ac = new AbortController(), dayET = auto ? App.bootDay : tod
 const live = s.mode === "live";
 // "running" en el mismo tick del clic, antes de cualquier await (ALTO E2)
 s.run = { status: "running", stage: "claim", stageLabel: "Reservando la corrida…", done: 0, total: g.plan.fullCost || g.plan.cost, plan: g.plan, startedAt: App.now(), t0: Date.now(), net: 0, finishedAt: null, abort: ac, message: null, auto, cap: withCached(runCapNow(auto), live ? RC.status().entries : 0), outage: null, cut: null,
-runId: null, dayET, claiming: live, resumed: false, cachedAtStart: 0 };
+runId: null, dayET, claiming: live, resumed: false, cachedAtStart: 0, techo: runCeiling(g.plan, auto), sent: 0 };
 renderRunControls();
 const back = () => { s.run = prev; renderRunControls(); };
 let runId = null, unlocked = false, takeover = false;
@@ -3880,9 +3889,9 @@ s.result = out; s.resultSource = s.mode === "example" ? "example" : "run"; s.res
 saveDay(out, s.run.dayET, runId || "local");
 // la tanda de respuestas queda para retomar si se cortó por límite o el usuario la detuvo; si no, se cierra.
 // Va antes de subir el día: si la página muere mientras sube, al volver no se reanuda lo que ya terminó (v3, P2)
-if (live) { if (s.run.cut === "detenida") RC.hold(); else if (!["límite", "posible límite"].includes(s.run.cut)) RC.close(); }
+if (live) { if (["detenida", "presupuesto"].includes(s.run.cut)) RC.hold(); else if (!["límite", "posible límite"].includes(s.run.cut)) RC.close(); }
 if (live && Sync.active && runId) await Sync.saveDay(out, s.run.dayET, runId); // `corrida` pasa a terminada solo después (syncFinish)
-finishRun(out.partial ? "partial" : "done", null);
+finishRun(out.partial ? "partial" : "done", s.run.cut === "presupuesto" ? PAUSE_MSG(s.run.techo) : null);
 syncFinish(out.partial ? "partial" : "done", out.partialReason);
 if (["PREMIUM", "ULTIMATE"].includes(out.plan)) watchRankingPrices();
 if (s.ui.selected && !out.rows.some(r => r.symbol === s.ui.selected) && !out.rest.some(r => r.symbol === s.ui.selected)) s.ui.selected = null;
@@ -3969,6 +3978,9 @@ const stopped = new Promise((_, rej) => { const f = () => rej(C.makeError("cance
 stopped.catch(() => {}); // sin lecturas pendientes al detener, nadie la espera
 const call = (key, args) => { const seq = ++issued, id = cl.identity(key, args); return (useRC ? Promise.race([RC.get(id), stopped]) : Promise.resolve(null)).then(hit => {
 if (hit) { tally.cached++; answered(seq); anyOk = true; okKeys.add(key); return hit; }
+// techo duro (v4): con lo ya emitido en el techo, esta no sale; la corrida se pausa con lo que tiene (solo pasa lo que ya estaba en vuelo)
+if (s.run.sent >= s.run.techo) { cut("presupuesto"); throw C.makeError("cancelled", "cancelled", { section: "ranking" }); }
+s.run.sent++;
 return cl.call(key, args, opt).then(v => {
 tally.calls++; streak = 0; s.run.net++;
 if (Array.isArray(v) && !v.length) suspicious(seq); else { answered(seq); anyOk = true; okKeys.add(key); if (useRC) RC.put(id, v); }
@@ -4014,7 +4026,8 @@ if (!uni.stocks.length) notes = notes.concat([uniFailed ? "No se pudo obtener la
 // R2 plan exacto; la automática descuenta todo lo gastado hoy (MEDIO 3)
 const extra = Math.max(0, (s.run.cachedAtStart || 0) - rc.tally.cached); // lo de la caché que aún no se leyó no cuesta
 const b = cl.budget.get(), spent = s.mode === "live" ? (b.byCat.corrida || 0) - startUsed + rc.tally.cached : 0; // lo leído de la caché ocupa plan como lo gastado
-const cap = s.mode !== "live" ? Infinity : s.run.auto ? Math.min(s.run.cap - spent, CFG.COLD_CAP_FREE - b.used + extra) : s.run.cap - spent;
+const left = s.run.techo - s.run.sent + extra; // lo que queda del techo, más lo guardado que aún no se leyó (el botón ya lo descontó)
+const cap = s.mode !== "live" ? Infinity : Math.min(left, s.run.auto ? Math.min(s.run.cap - spent, CFG.COLD_CAP_FREE - b.used + extra) : s.run.cap - spent);
 const planIn = { plan: cl.plan(), eligible: uni.stocks.length, have: { spx: !!s.macro.spxDesc, treasury: !!s.macro.treasuryDesc, universe: true }, nonStock: RANKED, etfs: uni.etfs };
 const pr = C.planRun(Object.assign({ remaining: cl.budget.remaining() + extra, cap }, planIn));
 if (!pr.fits) { finishRun("blocked", fitReason(pr, cl.budget.remaining(), cap)); return null; }
@@ -4027,7 +4040,7 @@ screen = uni.stocks.slice().sort((x, y) => fl.get(y) - fl.get(x) || (x < y ? -1 
 }
 const unscreened = uni.stocks.filter(x => !screen.includes(x)).map(symbol => ({ symbol, reason: "Sin cribar hoy por presupuesto" }));
 // R3 macro (solo si falta)
-if (rc.live() && (!s.macro.spxDesc || !s.macro.treasuryDesc)) { await loadMacro(true); s.run.done += pr.calls.macro; }
+if (rc.live() && (!s.macro.spxDesc || !s.macro.treasuryDesc)) { await loadMacro(true); s.run.done += pr.calls.macro; s.run.sent += pr.calls.macro; }
 if (!s.macro.spxDesc) throw C.makeError("tool_error", "tool_failed");
 // R4 cribado
 rc.stage("stage1", `2/4 · Cribando ${screen.length} acciones`);
@@ -4071,7 +4084,7 @@ if (s.run.outage) return null;
 const withHist = finals.list.filter(f => Array.isArray(f.eodDesc) && f.eodDesc.length).length + nonStocks.filter(n => Array.isArray(n.eodDesc) && n.eodDesc.length).length;
 const planned = st.finalists.length + nonStocks.length, lowCover = planned > 0 && withHist < CFG.COVERAGE_MIN * planned;
 const t = rc.tally, why = s.run.cut || (t.rejected >= CFG.SUSPECT_MIN && t.rejected / Math.max(1, t.calls) >= CFG.SUSPECT_RATIO ? "muchas consultas rechazadas" : lowCover ? "cobertura baja" : null);
-if (why) notes = notes.concat([`Análisis parcial: ${why}`]);
+if (why) notes = notes.concat([why === "presupuesto" ? PAUSED(s.run.techo) : `Análisis parcial: ${why}`]);
 if (why === "cobertura baja") notes = notes.concat([`Llegaron datos de ${withHist} de ${planned} activos planeados.`]);
 rc.stage("scoring", "Calculando…");
 await nextFrame();
@@ -4115,6 +4128,7 @@ const fallback = () => {
 cl.setPlan("FREE");
 s.plan = Object.assign({}, s.plan, { tier: "FREE", note: "Modo Free por compatibilidad" });
 s.run.done = 0;
+if (!isFinite(s.run.techo)) s.run.techo = s.run.sent + runCeiling(estPlan(undefined, runCapNow(s.run.auto)), s.run.auto);
 return runFree(ac, startUsed, ["Modo Free por compatibilidad"]);
 };
 const incompatible = e => e && (e.kind === "plan_denied" || e.code === "bad_request");
@@ -4312,7 +4326,7 @@ const free = $("#aviso-free");
 const tier = App.client ? App.client.plan() : s.plan.tier;
 const notes = [];
 if (tier === "FREE" && s.mode === "live") notes.push(`Plan FMP Free: el análisis profundo cubre ~${(r && r.counts && r.counts.eligible) || 77} acciones grandes de la muestra de FMP; el resto del mercado aparece en “Mercado completo”.`);
-if (r && r.partial) notes.push(PARTIAL_TXT[r.partialReason] || PARTIAL_TXT["límite"]);
+if (r && r.partial) notes.push((r.partialReason === "presupuesto" && r.notes.find(n => /^Análisis parcial: se pausó/.test(n))) || PARTIAL_TXT[r.partialReason] || PARTIAL_TXT["límite"]);
 if (r && r.notes && r.notes.length) notes.push(...r.notes.filter(n => !/^Análisis parcial/.test(n)));
 if (s.plan.note) notes.push(s.plan.note);
 free.hidden = !notes.length;
@@ -4798,7 +4812,10 @@ s.syncRun = L.run || null;
 // El día que corrió AQUÍ y no llegó a `db` (la página murió mientras lo subía): al abrir se sube y se cierra su `corrida`;
 // el otro dispositivo lo recibe por la suscripción (v3, P2)
 async function repairDay(L) {
-const today = todayET(), dbAt = L.day && L.day.output && L.day.manifest ? L.day.manifest.savedAt || 0 : -1;
+const today = todayET(), dbAt = L.day && L.day.output && L.day.manifest ? L.day.manifest.savedAt || 0 : -1, r0 = L.run;
+// el día ya está en db con el runId de una `corrida` que quedó abierta y sin latido: se cierra según el día (v4, V2)
+if (dbAt >= 0 && r0 && r0.dateET === today && r0.runId === L.day.manifest.runId && ["running", "interrumpida"].includes(r0.state) && !C.runAlive(r0, App.now()))
+Sync.finishRun({ runId: r0.runId, state: L.day.output.partial ? "partial" : "done", reason: L.day.output.partialReason || null });
 const v = store.keys(`day.${today}.`).map(k => store.get(k)).filter(x => x && isStr(x.run) && isNum(x.savedAt) && validOutput(x.output)).sort((a, b) => b.savedAt - a.savedAt)[0];
 if (!v || dbAt >= v.savedAt || !(await Sync.saveDay(v.output, today, v.run))) return;
 const r = L.run;
