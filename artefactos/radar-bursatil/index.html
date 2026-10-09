@@ -2213,13 +2213,12 @@ try { ls.setItem(PFX + k, enc(k, val)); return true; } catch (e) { return false;
 function allKeys() { try { const out = []; for (let i = 0; i < ls.length; i++) { const key = ls.key(i); if (key && key.startsWith(PFX)) out.push(key); } return out; } catch (e) { return []; } }
 // Escritura prioritaria (v5.1, director): contador, candado, lo que está en vuelo y la marca del día SIEMPRE se escriben. Si no
 // hay espacio, se libera en este orden hasta que quepa (caché de respuestas, vivo, días viejos, feriados, preferencias) y se
-// reintenta UNA vez. Devuelve si quedó escrito.
-function setCritical(k, val) {
+// reintenta UNA vez. `today`: el día ET que no se toca (los demás `day.*` son viejos). Devuelve si quedó escrito.
+function setCritical(k, val, today) {
 if (set(k, val)) return true;
 if (!ok) return false;
 const keys = allKeys(), rest = p => keys.filter(x => x.startsWith(PFX + p));
-const days = rest("day."), newest = days.map(x => x.slice(PFX.length + 4, PFX.length + 14)).sort().pop();
-const groups = [rest("rc."), rest("live"), days.filter(x => x.slice(PFX.length + 4, PFX.length + 14) !== newest), rest("holidays."), rest("prefs")];
+const groups = [rest("rc."), rest("live"), rest("day.").filter(x => x.slice(PFX.length + 4, PFX.length + 14) !== today), rest("holidays."), rest("prefs")];
 let need = 0;
 try { need = (enc(k, val).length - (ls.getItem(PFX + k) || "").length + k.length + PFX.length) * 2 + 64; } catch (e) { need = Infinity; }
 for (const g of groups) for (const key of g) {
@@ -2389,7 +2388,7 @@ flushing = false;
 if (!ops.length) return;
 const cur = baseNow();
 ops.splice(0).forEach(f => f(cur)); cur.limit = limitOf(); base = cur;
-if (persist()) unsaved = !(store.setCritical || store.set)("budget", { dateET: cur.dateET, used: cur.used, limit: isFinite(cur.limit) ? cur.limit : null, limitHit: cur.limitHit, byCat: cur.byCat, runDay: cur.runDay, suspect: cur.suspect });
+if (persist()) unsaved = !(store.setCritical || store.set)("budget", { dateET: cur.dateET, used: cur.used, limit: isFinite(cur.limit) ? cur.limit : null, limitHit: cur.limitHit, byCat: cur.byCat, runDay: cur.runDay, suspect: cur.suspect }, cur.dateET);
 emit();
 };
 if (!locks || !persist()) return run();
@@ -2935,7 +2934,7 @@ function lockMark(l, state) { if (l) critical("runlock", Object.assign({}, l, { 
 // claves que llevan la cuenta (v5.1): se escriben liberando espacio si hace falta; si aun así no caben, la corrida no arranca o se pausa
 const lsAvailable = !!browserStore();
 const NO_SPACE = "Sin espacio en este navegador para llevar la cuenta; libera espacio o usa otro navegador.";
-function critical(k, v) { const ok = store.setCritical(k, v); if (!ok && lsAvailable && App.state) App.state.noSpace = true; return ok; }
+function critical(k, v) { const ok = store.setCritical(k, v, todayET()); if (!ok && lsAvailable && App.state) App.state.noSpace = true; return ok; }
 const noSpace = () => { const s = App.state; return s.mode === "live" && (!!s.noSpace || !!(App.client && App.client.budget.get().unsaved)); };
 function lockDrop() { const l = lockGet(); if (lockMine(l)) store.remove("runlock"); }
 // ¿sigue viva la pestaña del candado? Le pregunta por BroadcastChannel; si el canal no funciona aquí, vale el latido.
@@ -3213,7 +3212,7 @@ return auto ? Math.max(0, coldLeft()) : plan.cost;
 // pestaña solo estaba congelada y vuelve, sus respuestas ya no se cuentan (`uncounted`) y su corrida se retira.
 function settleFlight() {
 if (!App.client) return;
-const today = todayET(), lost = n => { const x = store.get("flightlost"), prev = x && x.dateET === today && Number.isInteger(x.n) ? x.n : 0; store.set("flightlost", { dateET: today, n: prev + n }); };
+const today = todayET(), lost = n => { const x = store.get("flightlost"), prev = x && x.dateET === today && Number.isInteger(x.n) ? x.n : 0; critical("flightlost", { dateET: today, n: prev + n }); };
 const old = store.get("runflight"); // formato de v4 (una sola clave con n)
 if (old) { if (old.holder !== TAB && old.dateET === today && Number.isInteger(old.n) && old.n > 0 && old.n <= 50) { App.client.budget.note(old.n, "corrida"); lost(old.n); } store.remove("runflight"); }
 for (const k of store.keys("runflight.")) {
@@ -3221,9 +3220,10 @@ const f = store.get(k);
 if (!f || f.holder === TAB) continue;
 if (f.dateET !== today || !Array.isArray(f.ids)) { store.remove(k); continue; }
 if (f.settled) continue;
+// primero se marca como sumado (prioritario); si no cabe, no se suma: así nunca se cuenta dos veces (y la corrida no arranca)
+if (!critical(k, Object.assign({}, f, { settled: true }))) continue;
 const n = Math.min(50, f.ids.length);
 if (n) { App.client.budget.note(n, "corrida"); lost(n); }
-store.set(k, Object.assign({}, f, { settled: true }));
 }
 }
 const flightOf = () => store.get("runflight." + TAB);
