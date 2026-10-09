@@ -1847,9 +1847,11 @@ SPY: "Núcleo: la bolsa de EE.UU. completa; es la referencia del modelo y captur
 TLT: "Núcleo: bonos del Tesoro; suelen amortiguar caídas de la bolsa (no siempre).",
 GLD: "Núcleo: oro; diversifica y suele subir cuando el peso o la bolsa caen.",
 });
-// solo un "$" al inicio y un "MXN" al final (con o sin espacio); en medio, nunca (PF-B3). Miles con comas o espacios.
+// un "$" opcional al inicio y un solo "MXN" al inicio o al final (con o sin espacio, sin importar mayúsculas); en medio o
+// repetido, nunca (PF-B3, ajuste del coordinador). Miles con comas o espacios.
 function parseMXN(text) {
-const t = String(text == null ? "" : text).replace(/[\u00a0\u202f]/g, " ").trim(), n = t.replace(/^\$\s*/, "").replace(/\s*MXN$/i, "");
+const t = String(text == null ? "" : text).replace(/[\u00a0\u202f]/g, " ").trim().replace(/^\$\s*/, ""), lead = /^MXN\s*/i;
+const n = lead.test(t) ? t.replace(lead, "") : t.replace(/\s*MXN$/i, "");
 if (!n) return { ok: false, error: "Escribe un monto." };
 if (![/^\d{1,3}(,\d{3})*(\.\d{1,2})?$/, /^\d{1,3}( \d{3})*(\.\d{1,2})?$/, /^\d+(\.\d{1,2})?$/].some(re => re.test(n))) return { ok: false, error: "Formato no válido. Ejemplo: 150,000.00" };
 const v = Number(n.replace(/[, ]/g, ""));
