@@ -2320,7 +2320,8 @@ const clock = typeof now === "function" ? now : () => 0;
 const bornAt = clock();
 let tier = plan;
 let watchLoad = 0; // ejecuciones por minuto de los watch con refresco
-const reserve = () => watchLoad;
+const paid = () => !isFinite(CFG.PLAN_DAILY_LIMIT[tier]); // el ritmo por minuto solo manda sin límite diario (planes pagados)
+const reserve = () => (paid() ? watchLoad : 0);
 let bucket = makeBucket({ perMin: CFG.PLAN_PER_MIN[tier], now: clock, reserve });
 const gate = makeGate(Math.max(1, concurrency));
 const lastFailed = new Map(), lastSeen = new Map();
@@ -2482,7 +2483,7 @@ safety = setTimeout(free, 20000);
 register();
 });
 function register() {
-bucket.note(); // la primera ejecución del watch ocupa lugar en el minuto (v5.1)
+if (paid()) bucket.note(); // la primera ejecución del watch ocupa lugar en el minuto (v5.1, planes pagados)
 try {
 unsub = mcp.watchTool(CFG.SERVER, ep.tool, input, ev => {
 free();
@@ -2555,7 +2556,7 @@ async function detectPlan(o = {}) {
 const today = C.etParts(clock()).date;
 const cached = store.get("plan");
 // un Free guardado hace más de `freeMaxAge` se vuelve a sondear (quien sube de plan lo ve sin tocar "Volver a detectar")
-const staleFree = !!cached && cached.tier === "FREE" && isNum(o.freeMaxAge) && !(isNum(cached.detectedAt) && clock() - cached.detectedAt <= o.freeMaxAge);
+const staleFree = !!cached && cached.tier === "FREE" && isNum(o.freeMaxAge) && isNum(cached.detectedAt) && clock() - cached.detectedAt > o.freeMaxAge;
 if (!o.force && !staleFree && cached && cached.dateET === today && CFG.K[cached.tier]) {
 setPlan(cached.tier);
 return { tier: cached.tier, source: "cache", probes: cached.probes || {} };
