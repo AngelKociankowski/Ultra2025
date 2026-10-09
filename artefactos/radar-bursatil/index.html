@@ -4814,8 +4814,9 @@ s.syncRun = L.run || null;
 // el otro dispositivo lo recibe por la suscripción (v3, P2)
 async function repairDay(L) {
 const today = todayET(), dbAt = L.day && L.day.output && L.day.manifest ? L.day.manifest.savedAt || 0 : -1, r0 = L.run;
-// el día ya está en db con el runId de una `corrida` que quedó abierta y sin latido: se cierra según el día (v4, V2)
-if (dbAt >= 0 && r0 && r0.dateET === today && r0.runId === L.day.manifest.runId && ["running", "interrumpida"].includes(r0.state) && !C.runAlive(r0, App.now()))
+// el día ya está en db con el runId de una `corrida` que quedó abierta: esa corrida ya terminó de analizar (el manifiesto es lo
+// último que escribe antes de cerrarla), así que se cierra según el día, sin esperar a que venza su latido (v4, V2)
+if (dbAt >= 0 && r0 && r0.dateET === today && r0.runId === L.day.manifest.runId && ["running", "interrumpida"].includes(r0.state))
 Sync.finishRun({ runId: r0.runId, state: L.day.output.partial ? "partial" : "done", reason: L.day.output.partialReason || null });
 const v = store.keys(`day.${today}.`).map(k => store.get(k)).filter(x => x && isStr(x.run) && isNum(x.savedAt) && validOutput(x.output)).sort((a, b) => b.savedAt - a.savedAt)[0];
 if (!v || dbAt >= v.savedAt || !(await Sync.saveDay(v.output, today, v.run))) return;
