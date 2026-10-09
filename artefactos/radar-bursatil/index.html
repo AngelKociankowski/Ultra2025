@@ -1487,6 +1487,7 @@ drivers: { pos: ex.pos, neg: ex.neg }, tags: ex.tags, flags, penalties: sc.pen.m
 blocks: ex.blocks, components: ex.components,
 fundamentals: fundamentalsOf({ km: fz.km, rt: fz.rt, fs: fz.fs, quote: q, ec: fz.ec, isFinancial: fz.isFinancial }),
 tech: technicals(bars), series: seriesOut(bars), nextEarnings: feat.meta.nextEarnDate, isFinancial: !!fz.isFinancial,
+sector: typeof fz.sector === "string" && fz.sector ? fz.sector : fz.isFinancial ? "Financial Services" : null, // P01 (08)
 });
 }
 function s1Of(sym) { const r = (input.stage1?.rows || []).find(x => x.symbol === sym); return r ? fin(r.S1) : null; }
@@ -1510,10 +1511,12 @@ const isEq = cls === "index" || cls === "etf";
 const drop = useQ && (isEq ? marketOpen : true) ? aAsOf : null;
 const hist = normalizeEod(eodDesc, { asOf: aAsOf, dropDate: drop });
 const P_t = useQ ? quote.price : hist.length ? hist[hist.length - 1].close : null;
-const res = nonStockScore({ series: hist, priceLive: P_t, asOf: aAsOf, cls, spx, rf, erp, sigM: reg.sigM, isBenchmark: def.symbol === "^GSPC" });
+// P01 (08): los ETF de metales y bonos se modelan como su activo (materia prima: rf + α, sin prima de la bolsa ni dividendo)
+const asCommodity = cls === "etf" && ["metal", "bond"].includes(PORT.ETF_KIND[def.symbol]), mCls = asCommodity ? "commodity" : cls;
+const res = nonStockScore({ series: hist, priceLive: P_t, asOf: aAsOf, cls: mCls, spx, rf, erp, sigM: reg.sigM, isBenchmark: def.symbol === "^GSPC" });
 if (!res) { excluded.push({ symbol: def.symbol, reason: "Menos de 200 días de historia" }); continue; }
 const sg = signalFromProb({ p: res.pUp, coverage: res.coverage, caps: res.caps, capReasons: res.capReasons });
-const ex = explainNonStock(res, cls);
+const ex = explainNonStock(res, mCls);
 const bars = withLive(hist, P_t, aAsOf);
 const flags = [];
 if (cls === "fx") flags.push(flag("carry", "Sin carry (tasas no disponibles)", "info"));
@@ -1528,7 +1531,7 @@ group: "otros", ref: "sube", pRef: res.pUp, pct: sg.pct, factorPct: Math.round(1
 S: 100 * normCdf(res.zT), zAdj: res.lambda * clamp(res.zT, -2.5, 2.5) - res.pen.reduce((s, p) => s + p[1], 0),
 signal: sg.code, signalLabel: sg.label, capReason: sg.capReason, capShort: sg.capShort, capReasons: sg.capReason ? [sg.capReason] : [],
 pBeat: res.pBeat, pBase: res.pBase, pUp: res.pUp, pUpStock: null, expRet: res.expRet, medRet: res.medRet,
-cone: res.cone, muAnn: res.muAnn, sigAnn: res.sig, divYield: isEq ? CONFIG.IDX_DIV_YIELD : 0,
+cone: res.cone, muAnn: res.muAnn, sigAnn: res.sig, divYield: isEq && !asCommodity ? CONFIG.IDX_DIV_YIELD : 0,
 alpha: res.alpha, ir: res.ir, te: res.te, vol: res.sig, beta: null,
 coverage: res.coverage, confidence: confidenceOf(res.coverage),
 drivers: { pos: ex.pos, neg: ex.neg }, tags: ex.tags, flags, penalties: res.pen.map(([text, z]) => ({ text, z })),
@@ -1692,6 +1695,7 @@ if (x < 1e12) return "$" + fmt.num(x / 1e9, 1) + " mil M";
 return "$" + fmt.num(x / 1e12, 1) + " billones";
 },
 score(x) { return isNum(x) ? String(Math.round(x)) : "—"; },
+mxn(x, d = 2) { return isNum(x) ? "$" + NBSP + nf(d).format(Math.abs(x) < 0.005 ? 0 : x) + NBSP + "MXN" : "—"; }, // "$ 150,000.00 MXN" (08 §4.2)
 timeET(ms) { return isNum(ms) ? etParts(ms).time + " ET" : "—"; },
 dateES(s) {
 if (typeof s !== "string" || s.length < 10) return "—";
@@ -1735,6 +1739,234 @@ out.push({ ref: "sube", p: pUp, text });
 return out;
 }
 
+// ---------------- Portafolio sugerido en pesos (08, P02–P09; enmienda del director: CETES opcional) ----------------
+const PORT = deepFreeze({
+H: 0.25, MIN_POS_MXN: 1000, MIN_POS_FRAC: 0.01, MIN_AMOUNT: 1000, MAX_AMOUNT: 100000000,
+SHRINK: 0.25, WINDOW: 250, MIN_RETURNS: 200, TILT_UNIT: 0.02, TILT_MIN: 0.5, TILT_MAX: 2,
+CAP_METALS: 0.25, CAP_USD: 0.15, ROUND_OVER: 1.25, FRAC_DECIMALS: 3, MIN_REALIZED: 0.5, CETES_MAX: 30,
+PROFILES: {
+conservador: { label: "Conservador", targetVol: 0.06, badYear: 0.10, core: { SPY: 0.50, TLT: 0.30, GLD: 0.20 }, satBudget: 0.20, capStock: 0.05, capFund: 0.15, capSector: 0.20, maxStocks: 4,
+desc: "Priorizas no perder. Aceptas ganar menos a cambio de que un mal año te cueste poco.", line: "Volatilidad objetivo ≈ 6 % anual en pesos · En un año malo (1 de cada 20) podrías perder ≈ 10 %." },
+moderado: { label: "Moderado", targetVol: 0.11, badYear: 0.18, core: { SPY: 0.65, TLT: 0.20, GLD: 0.15 }, satBudget: 0.35, capStock: 0.07, capFund: 0.20, capSector: 0.25, maxStocks: 8,
+desc: "Quieres crecer y aceptas caídas moderadas en el camino.", line: "≈ 11 % anual · año malo ≈ −18 %." },
+agresivo: { label: "Agresivo", targetVol: 0.18, badYear: 0.30, core: { SPY: 0.80, TLT: 0.10, GLD: 0.10 }, satBudget: 0.50, capStock: 0.10, capFund: 0.25, capSector: 0.30, maxStocks: 12,
+desc: "Buscas el mayor crecimiento y toleras caídas fuertes y largas.", line: "≈ 18 % anual · año malo ≈ −30 %." },
+},
+ETF_KIND: { SPY: "equity", QQQ: "equity", IWM: "equity", DIA: "equity", VWO: "equity", EFA: "equity", XLE: "equity", XLF: "equity", XLK: "equity", GLD: "metal", SLV: "metal", TLT: "bond" },
+ETF_SECTOR: { XLE: "Energy", XLF: "Financial Services", XLK: "Technology" },
+});
+// Lo que se compra (§3): fila propia (ETF o USDMXN) o respaldo rotulado (índice o futuro, sin precio: compra por monto)
+const PORT_MAP = deepFreeze([
+{ id: "SPY", kind: "equity", core: "SPY", proxy: "^GSPC", proxyName: "el índice S&P 500" },
+{ id: "TLT", kind: "bond", core: "TLT" },
+{ id: "GLD", kind: "metal", core: "GLD", proxy: "GCUSD", proxyName: "el oro (futuro)" },
+{ id: "QQQ", kind: "fund", proxy: "^IXIC", proxyName: "Nasdaq Composite" }, { id: "DIA", kind: "fund", proxy: "^DJI", proxyName: "Dow Jones" },
+{ id: "IWM", kind: "fund", proxy: "^RUT", proxyName: "Russell 2000" }, { id: "VWO", kind: "fund" }, { id: "EFA", kind: "fund" },
+{ id: "XLE", kind: "fund" }, { id: "XLF", kind: "fund" }, { id: "XLK", kind: "fund" },
+{ id: "SLV", kind: "metal", proxy: "SIUSD", proxyName: "la plata (futuro)" }, { id: "USD", kind: "usd", src: "USDMXN", name: "Dólares" },
+]);
+const PORT_OUT = deepFreeze({
+crypto: "Fuera del portafolio: volatilidad extrema y probabilidad de subir estructuralmente < 50 % en el modelo; sin ETF en los datos",
+BZUSD: "Fuera: los ETF de petróleo no siguen al Brent (renovación de futuros)",
+fx: "Fuera: divisa que no se compra directamente desde pesos",
+});
+const PORT_WHY = deepFreeze({
+SPY: "Núcleo: la bolsa de EE.UU. completa; es la referencia del modelo y captura la prima de las acciones.",
+TLT: "Núcleo: bonos del Tesoro; suelen amortiguar caídas de la bolsa (no siempre).",
+GLD: "Núcleo: oro; diversifica y suele subir cuando el peso o la bolsa caen.",
+});
+function parseMXN(text) {
+const t = String(text == null ? "" : text).replace(/[$\s  ]|MXN/gi, "");
+if (!t) return { ok: false, error: "Escribe un monto." };
+if (!/^\d{1,3}(,\d{3})*(\.\d{1,2})?$/.test(t) && !/^\d+(\.\d{1,2})?$/.test(t)) return { ok: false, error: "Formato no válido. Ejemplo: 150,000.00" };
+const v = Number(t.replace(/,/g, ""));
+if (v < PORT.MIN_AMOUNT) return { ok: false, error: "El monto mínimo es $ 1,000.00 MXN." };
+if (v > PORT.MAX_AMOUNT) return { ok: false, error: "El monto máximo es $ 100,000,000.00 MXN." };
+return { ok: true, value: v };
+}
+// tasa de CETES opcional (enmienda): vacío = 0 %; 0–30 %
+function parseRate(text) {
+const t = String(text == null ? "" : text).replace(/[%\s ]/g, "");
+if (!t) return { ok: true, value: null };
+if (!/^\d{1,2}(\.\d{1,2})?$/.test(t)) return { ok: false, error: "Escribe la tasa como número, por ejemplo 10.5" };
+const v = Number(t);
+return v > PORT.CETES_MAX ? { ok: false, error: "La tasa debe estar entre 0 y 30 %." } : { ok: true, value: v };
+}
+function fxRate({ rows, live }) {
+const r = (rows || []).find(x => x.symbol === "USDMXN"), c = [];
+if (r && isNum(r.price) && r.price > 0) c.push({ rate: r.price, timeMs: isNum(r.priceTime) ? r.priceTime : 0, source: "corrida" });
+const q = live && live.q;
+if (q && isNum(q.price) && q.price > 0) c.push({ rate: q.price, timeMs: isNum(q.timestamp) ? q.timestamp * 1000 : isNum(live.storedAt) ? live.storedAt : 0, source: "franja" });
+return c.sort((a, b) => b.timeMs - a.timeMs)[0] || null;
+}
+// retorno total anual esperado en USD (§4.4; 01 B.9–B.10)
+function muTotOf(row, rf) {
+if (!row || !isNum(row.muAnn)) return null;
+const kind = row.cls === "etf" ? PORT.ETF_KIND[row.symbol] || "equity" : null;
+if (row.cls === "stock") return row.muAnn;
+if (row.cls === "index" || kind === "equity") return row.muAnn + (isNum(row.divYield) ? row.divYield : 0);
+if (row.cls === "commodity" || kind === "metal" || kind === "bond") return row.muAnn + rf;
+if (row.cls === "fx") return row.muAnn;
+return null;
+}
+const signalOut = s => (s === 1 ? "Señal Evitar" : "Señal Mantener (sin ventaja suficiente)");
+function instrumentsFrom({ rows, example }) {
+const by = new Map((rows || []).map(r => [r.symbol, r])), inst = [], excluded = [];
+const ej = id => (example ? "EJ-" + id : id);
+for (const m of PORT_MAP) {
+const own = by.get(m.src || m.id), px = !own && m.proxy ? by.get(m.proxy) : null, row = own || px;
+if (!row) { if (m.core === "TLT") excluded.push({ id: "TLT", reason: "Sin datos de TLT en el análisis: sale del núcleo" }); continue; }
+const proxyOf = own ? null : m.proxy, aprox = proxyOf ? ` (aprox. con ${m.proxyName}; compra por monto).` : "";
+const base = { id: m.id, display: ej(m.id), name: m.name || row.name, kind: m.kind, row, proxyOf, priceUSD: own ? (m.kind === "usd" ? 1 : fin(row.price)) : null,
+sector: PORT.ETF_SECTOR[m.id] || null, signal: row.signal, pct: row.pct, p: row.pRef, ref: row.ref, coreKey: m.core || null, role: null, why: "" };
+if (m.core) {
+if (row.signal === 1) { excluded.push({ id: m.id, reason: "Núcleo en Evitar hoy" }); continue; }
+inst.push(Object.assign(base, { role: "core", why: PORT_WHY[m.id] + (row.signal === 2 ? " Señal Mantener: se conserva por diversificación." : "") + aprox }));
+continue;
+}
+if (m.kind === "fund") {
+const pb = row.pBeat, d = isNum(pb) ? displayPct(pb) : null;
+if (row.signal !== 3) { excluded.push({ id: m.id, reason: signalOut(row.signal) }); continue; }
+if (d === null || d < CONFIG.SIGNAL_BUY_PCT) { excluded.push({ id: m.id, reason: `Compra por subir, pero ${fmt.prob(pb)} de ganarle al S&P 500: el núcleo ya cubre la bolsa` }); continue; }
+inst.push(Object.assign(base, { role: "sat", pct: d, p: pb, ref: "sp500", why: `Compra: ${fmt.prob(pb)} de ganarle al S&P 500 en 3 meses.` + aprox }));
+continue;
+}
+if (row.signal !== 3) { excluded.push({ id: m.id, reason: signalOut(row.signal) }); continue; }
+inst.push(Object.assign(base, { role: "sat", ref: "sube", why: `Compra: ${fmt.prob(row.pRef)} de que suba en 3 meses.` + aprox }));
+}
+for (const r of rows || []) {
+if (r.cls === "stock") {
+if (r.signal !== 3) { excluded.push({ id: r.symbol, reason: signalOut(r.signal) }); continue; }
+inst.push({ id: r.symbol, display: r.display, name: r.name, kind: "stock", row: r, proxyOf: null, priceUSD: fin(r.price), sector: r.sector || null, signal: 3, pct: r.pct, p: r.pRef, ref: "sp500", coreKey: null,
+role: "sat", why: `Compra: ${fmt.prob(r.pRef)} de ganarle al S&P 500 en 3 meses${r.tags && r.tags[0] ? "; " + r.tags[0] : ""}.` });
+} else if (r.cls === "crypto_major" || r.cls === "crypto_alt") excluded.push({ id: r.symbol, reason: PORT_OUT.crypto });
+else if (r.symbol === "BZUSD") excluded.push({ id: r.symbol, reason: PORT_OUT.BZUSD });
+else if (r.cls === "fx" && r.symbol !== "USDMXN") excluded.push({ id: r.symbol, reason: PORT_OUT.fx });
+}
+return { inst, excluded };
+}
+const barsOf = row => (Array.isArray(row && row.series) ? row.series.filter(x => Array.isArray(x) && isNum(x[0]) && isNum(x[1]) && x[1] > 0).map(x => ({ date: dayStr(x[0]), close: x[1] })) : []);
+// rendimientos diarios en pesos, covarianza encogida y retornos esperados (§4.5)
+function mxnUniverse({ inst, rows, rf }) {
+const by = new Map((rows || []).map(r => [r.symbol, r])), fxRow = by.get("USDMXN");
+const calRow = by.get("SPY") || by.get("^GSPC") || fxRow;
+const cal = barsOf(calRow).map(b => b.date).slice(-(PORT.WINDOW + 1));
+const pricesOf = row => { const rs = riskSeries(barsOf(row)).bars; return cal.map(d => closeOnOrBefore(rs, d, 5)); };
+// desde el primer dato con historia continua hasta el final
+const tail = px => { let j = px.length; while (j > 0 && isNum(px[j - 1])) j--; return px.slice(j); };
+const fxP = fxRow && cal.length ? tail(pricesOf(fxRow)) : [];
+if (fxP.length - 1 < PORT.MIN_RETURNS || !isNum(muTotOf(fxRow, rf))) return { error: "sin_fx" };
+const keep = [], series = [], excluded = [];
+for (const it of inst) {
+const px = it.kind === "usd" ? fxP : tail(pricesOf(it.row));
+if (px.length - 1 < PORT.MIN_RETURNS) { excluded.push({ id: it.id, reason: "Menos de 200 días de historia en pesos" }); continue; }
+if (!isNum(muTotOf(it.row, rf))) { excluded.push({ id: it.id, reason: "Sin retorno esperado en el análisis" }); continue; }
+keep.push(it); series.push(px);
+}
+const n = Math.min(PORT.WINDOW, fxP.length - 1, ...series.map(p => p.length - 1));
+const lr = p => { const a = p.slice(-(n + 1)), out = []; for (let i = 1; i < a.length; i++) out.push(Math.log(a[i] / a[i - 1])); return out; };
+const rfx = lr(fxP), R = keep.map((it, k) => (it.kind === "usd" ? rfx.slice() : lr(series[k]).map((v, t) => v + rfx[t])));
+const avg = a => a.reduce((s, v) => s + v, 0) / a.length;
+const cv = (a, b) => { const ma = avg(a), mb = avg(b); let s = 0; for (let t = 0; t < a.length; t++) s += (a[t] - ma) * (b[t] - mb); return (s / (a.length - 1)) * 252; };
+const m = keep.length, sd = R.map(a => Math.sqrt(cv(a, a))), rho = R.map((a, i) => R.map((b, j) => (i === j ? 1 : sd[i] > 0 && sd[j] > 0 ? cv(a, b) / (sd[i] * sd[j]) : 0)));
+let rs = 0, rc = 0; for (let i = 0; i < m; i++) for (let j = 0; j < m; j++) if (i !== j) { rs += rho[i][j]; rc++; }
+const rbar = rc ? Math.max(rs / rc, 0) : 0;
+const cov = rho.map((r, i) => r.map((v, j) => (i === j ? 1 : (1 - PORT.SHRINK) * v + PORT.SHRINK * rbar) * sd[i] * sd[j]));
+const muFx = muTotOf(fxRow, rf);
+const mu = keep.map((it, k) => (it.kind === "usd" ? muFx : muTotOf(it.row, rf) + muFx + cv(lr(series[k]), rfx)));
+const d0 = cal.length - 1 - n;
+return { inst: keep, mu, cov, muFx, window: { n, from: cal[Math.max(0, d0)], to: cal[cal.length - 1] }, excluded };
+}
+const quadForm = (w, c) => { let s = 0; for (let i = 0; i < w.length; i++) for (let j = 0; j < w.length; j++) s += w[i] * w[j] * c[i][j]; return s; };
+// asignación: núcleo fijo, satélite por inversa de la volatilidad × inclinación, topes y escalado sin apalancamiento (§4.6)
+function allocate({ inst, cov, profile }) {
+const P = PORT.PROFILES[profile], n = inst.length, sig = inst.map((_, i) => Math.sqrt(Math.max(0, cov[i][i]))), x = new Array(n).fill(0), capped = [];
+const ix = inst.map((it, i) => ({ it, i })), sats = ix.filter(o => o.it.role === "sat");
+const stocks = sats.filter(o => o.it.kind === "stock").sort((a, b) => b.it.pct - a.it.pct || b.it.p - a.it.p || (a.it.id < b.it.id ? -1 : 1)).slice(0, P.maxStocks);
+const sat = sats.filter(o => o.it.kind !== "stock").concat(stocks);
+const s = sat.map(o => (sig[o.i] > 0 ? clamp((o.it.pct / 100 - 0.5) / PORT.TILT_UNIT, PORT.TILT_MIN, PORT.TILT_MAX) / sig[o.i] : 0)), S = s.reduce((a, b) => a + b, 0);
+sat.forEach((o, k) => { x[o.i] = S > 0 ? (P.satBudget * s[k]) / S : 0; });
+for (const o of sat) { const cap = o.it.kind === "stock" ? P.capStock : P.capFund; if (x[o.i] > cap) { x[o.i] = cap; capped.push({ id: o.it.id, cap: "activo" }); } }
+const sectors = {}; for (const o of sat) if (o.it.sector) (sectors[o.it.sector] = sectors[o.it.sector] || []).push(o);
+for (const [sc, list] of Object.entries(sectors)) { const t = list.reduce((a, o) => a + x[o.i], 0); if (t > P.capSector) { list.forEach(o => { x[o.i] *= P.capSector / t; }); capped.push({ id: sc, cap: "sector" }); } }
+const usd = sat.filter(o => o.it.kind === "usd"), tu = usd.reduce((a, o) => a + x[o.i], 0);
+if (tu > PORT.CAP_USD) { usd.forEach(o => { x[o.i] *= PORT.CAP_USD / tu; }); capped.push({ id: "USD", cap: "dólares" }); }
+const satSum = sat.reduce((a, o) => a + x[o.i], 0), core = ix.filter(o => o.it.role === "core"), cw = core.reduce((a, o) => a + P.core[o.it.coreKey], 0);
+if (cw > 0) core.forEach(o => { x[o.i] = ((1 - satSum) * P.core[o.it.coreKey]) / cw; });
+const met = ix.filter(o => o.it.kind === "metal" && x[o.i] > 0), mt = met.reduce((a, o) => a + x[o.i], 0);
+if (mt > PORT.CAP_METALS) {
+let ex = mt - PORT.CAP_METALS;
+for (const o of met.filter(o => o.it.role === "sat").concat(met.filter(o => o.it.role === "core"))) { const d = Math.min(ex, x[o.i]); x[o.i] -= d; ex -= d; if (ex <= 0) break; }
+const spy = core.find(o => o.it.coreKey === "SPY"); if (spy) x[spy.i] += mt - PORT.CAP_METALS;
+capped.push({ id: "metales", cap: "metales" });
+}
+const sigX = Math.sqrt(Math.max(0, quadForm(x, cov))), k = sigX > 0 ? Math.min(1, P.targetVol / sigX) : 0, w = x.map(v => v * k);
+return { x, sigX, k, w, cashW: 1 - w.reduce((a, b) => a + b, 0), capped };
+}
+// montos, títulos (enteros o fracciones) y mínimos (§4.7)
+function finalizeShares({ inst, w, A, fx, fractional }) {
+const MIN = Math.max(PORT.MIN_POS_MXN, PORT.MIN_POS_FRAC * A), n = inst.length, notes = [];
+const price = inst.map(it => (isNum(it.priceUSD) && it.priceUSD > 0 ? it.priceUSD * fx : null)), tgt = w.map(v => v * A);
+const shares = new Array(n).fill(0), amount = new Array(n).fill(0), small = new Array(n).fill(false);
+inst.forEach((it, i) => {
+if (tgt[i] < MIN) { small[i] = true; if (tgt[i] > 0) notes.push(`${it.id}: menor al mínimo (${fmt.mxn(MIN)})`); return; }
+if (price[i] === null) { shares[i] = null; amount[i] = Math.floor(tgt[i] * 100) / 100; return; }
+shares[i] = fractional ? Math.floor((tgt[i] / price[i]) * 10 ** PORT.FRAC_DECIMALS) / 10 ** PORT.FRAC_DECIMALS : Math.floor(tgt[i] / price[i]);
+});
+const amt = i => Math.round(shares[i] * price[i] * 100) / 100;
+inst.forEach((_, i) => { if (price[i] !== null && !small[i]) amount[i] = amt(i); });
+if (!fractional) {
+let cash = A - amount.reduce((a, b) => a + b, 0);
+const cand = inst.map((it, i) => ({ i, id: it.id, rem: price[i] !== null && !small[i] ? tgt[i] / price[i] - shares[i] : -1 })).filter(o => o.rem >= 0.5)
+.sort((a, b) => b.rem - a.rem || (a.id < b.id ? -1 : 1));
+for (const o of cand) { const p = price[o.i]; if (p <= cash + 1e-9 && (shares[o.i] + 1) * p <= PORT.ROUND_OVER * tgt[o.i] + 1e-9) { shares[o.i]++; amount[o.i] = amt(o.i); cash -= p; } }
+inst.forEach((it, i) => { if (!small[i] && price[i] !== null && shares[i] === 0) notes.push(`${it.id}: un título cuesta más que su asignación`); });
+}
+const inv = amount.reduce((a, b) => a + b, 0), planned = tgt.reduce((a, b) => a + b, 0);
+let mw = 0; inst.forEach((it, i) => { if (it.role === "core" && price[i] !== null && w[i] > 0) mw = Math.max(mw, price[i] / w[i]); });
+return { amount, shares: shares.map((v, i) => (price[i] === null ? null : v)), priceMXN: price, cashMXN: Math.round((A - inv) * 100) / 100, wFinal: amount.map(a => a / A), notes,
+minAmountWhole: mw > 0 ? Math.ceil(mw / 100) * 100 : null, realized: planned > 0 ? inv / planned : 1 };
+}
+// estadísticas en pesos a 3 meses; la liquidez rinde la tasa de CETES si se dio (enmienda; si no, 0 %)
+function portfolioStats({ w, mu, cov, A, h = PORT.H, cetes = 0 }) {
+const inv = w.reduce((a, b) => a + b, 0), muAnn = w.reduce((s, wi, i) => s + wi * mu[i], 0) + (1 - inv) * (isNum(cetes) ? cetes : 0);
+const sigAnn = Math.sqrt(Math.max(0, quadForm(w, cov))), m = (muAnn - (sigAnn * sigAnn) / 2) * h, s = sigAnn * Math.sqrt(h);
+return { muAnn, sigAnn, lo: A * Math.exp(m - 1.2815516 * s), med: A * Math.exp(m), hi: A * Math.exp(m + 1.2815516 * s), pAbove: s > 0 ? normCdf(m / s) : null,
+badYear: 1 - Math.exp(muAnn - (sigAnn * sigAnn) / 2 - 1.6448536 * sigAnn), usdW: inv, mxnW: 1 - inv };
+}
+// orquestación pura (§4.9): la misma entrada da la misma salida
+function buildPortfolio({ output, live, profile, amountMXN, fractional, nowMs, cetesPct = null }) {
+const empty = state => ({ state, positions: [], cashMXN: 0, stats: null, notes: [], excluded: [], meta: null });
+if (!output || !Array.isArray(output.rows)) return empty("sin_analisis");
+const P = PORT.PROFILES[profile];
+if (!P) return empty("sin_perfil");
+if (!(isNum(amountMXN) && amountMXN >= PORT.MIN_AMOUNT && amountMXN <= PORT.MAX_AMOUNT)) return empty("sin_monto");
+const fx = fxRate({ rows: output.rows, live }), cetes = isNum(cetesPct) ? cetesPct / 100 : 0;
+if (!fx) return empty("sin_tc");
+const ins = instrumentsFrom({ rows: output.rows, example: !!output.example }), uni = mxnUniverse({ inst: ins.inst, rows: output.rows, rf: isNum(output.rf) ? output.rf : 0 });
+if (uni.error) return empty("sin_tc");
+const excluded = ins.excluded.concat(uni.excluded), A = amountMXN, inst = uni.inst;
+const al = inst.length ? allocate({ inst, cov: uni.cov, profile }) : { x: [], sigX: 0, k: 0, w: [], cashW: 1, capped: [] };
+const fz = finalizeShares({ inst, w: al.w, A, fx: fx.rate, fractional: !!fractional });
+const st = portfolioStats({ w: fz.wFinal, mu: uni.mu, cov: uni.cov, A, cetes });
+const asOfRun = etParts(isNum(output.nowMs) ? output.nowMs : nowMs).date;
+const meta = { fx, asOf: output.asOf, analysisTime: output.nowMs, stale: asOfRun !== etParts(nowMs).date, partial: !!output.partial, partialReason: output.partialReason || null,
+example: !!output.example, window: uni.window, k: al.k, sigX: al.sigX, targetVol: P.targetVol, belowTarget: inst.length > 0 && al.sigX < P.targetVol - 1e-12,
+minAmountWhole: fz.minAmountWhole, realized: fz.realized, cetes: isNum(cetesPct) ? cetesPct : null, satCount: inst.filter(it => it.role === "sat").length, capped: al.capped };
+const invested = fz.wFinal.reduce((a, b) => a + b, 0);
+let state = "ok";
+if (!fractional && fz.realized < PORT.MIN_REALIZED && invested < 1) state = "monto_insuficiente";
+else if (!inst.length || (invested === 0 && fz.realized >= PORT.MIN_REALIZED)) state = "solo_liquidez";
+const pos = inst.map((it, i) => ({ id: it.id, display: it.display, name: it.name, role: it.role === "core" ? "Núcleo" : "Satélite", kind: it.kind, proxyOf: it.proxyOf, signalLabel: it.row.signalLabel,
+signal: it.signal, pct: it.pct, ref: it.ref, weight: fz.wFinal[i], target: al.w[i], amountMXN: fz.amount[i], priceMXN: fz.priceMXN[i], priceUSD: it.priceUSD, shares: fz.shares[i], sector: it.sector,
+why: it.why, coreKey: it.coreKey })).filter(p => p.amountMXN > 0);
+const coreOrder = { SPY: 0, TLT: 1, GLD: 2 };
+pos.sort((a, b) => (a.role === b.role ? (a.role === "Núcleo" ? coreOrder[a.coreKey] - coreOrder[b.coreKey] : b.amountMXN - a.amountMXN || (a.id < b.id ? -1 : 1)) : a.role === "Núcleo" ? -1 : 1));
+pos.push({ id: "MXN", display: "Liquidez", name: "Liquidez en pesos (p. ej. CETES)", role: "Liquidez", kind: "cash", proxyOf: null, signalLabel: null, signal: null, pct: null, ref: null,
+weight: fz.cashMXN / A, target: al.cashW, amountMXN: fz.cashMXN, priceMXN: null, priceUSD: null, shares: null, sector: null, coreKey: null,
+why: "Baja el riesgo a tu perfil y guarda lo que sobra del redondeo. " + (isNum(cetesPct) ? `Rinde ≈ ${fmt.num(cetesPct, cetesPct % 1 ? 2 : 0)} % anual (tasa de CETES que escribiste).` : "Sin rendimiento estimado.") });
+return { state, positions: state === "monto_insuficiente" ? [] : pos, cashMXN: fz.cashMXN, stats: state === "monto_insuficiente" ? null : st, notes: fz.notes, excluded, meta };
+}
 const RadarCore = {
 CONFIG, NONSTOCK, ETF_FREE, ETF_PAID, FIN_FREE, CLASS, CLS_LABEL, P, BLOCKS, REGIME_LABEL, ERR_TEXT,
 normCdf, normInv, clamp, isNum, sma, ema, rmaFrom, rsiWilder, macd, bollinger, trueRange, atrWilder, adxWilder,
@@ -1746,6 +1978,7 @@ makeError, classifyText, asArray, normalizeEod, riskSeries, filterFloatUniverse,
 stage1Select, regimeFrom, stockFeatures, infoFeatures, stockScore, stockCaps, stockPrediction,
 nonStockScore, displayPct, signalFromProb, stockUpProb, retStats, cleanZeros, extractRows, splitDay, joinDay, bytesOf, explainStock, explainNonStock, technicals, fundamentalsOf, analyze,
 planRun, liveIntervalMs, canAuto, fmt, detailPhrases, runAlive,
+PORT, PORT_MAP, parseMXN, parseRate, fxRate, muTotOf, instrumentsFrom, mxnUniverse, allocate, finalizeShares, portfolioStats, buildPortfolio,
 };
 root.RadarCore = Object.freeze(RadarCore);
 })(globalThis);
