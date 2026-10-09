@@ -2325,6 +2325,8 @@ for (const h of held.get(id)) budget.note(1, h.cat);
 held.delete(id);
 }
 const persist = () => tier !== "EXAMPLE";
+// `o.uncounted()`: la llamada ya la contó otra pestaña (la dio por perdida en vuelo); no se cuenta dos veces (v5, W2)
+const uncounted = o => { try { return typeof o.uncounted === "function" && o.uncounted() === true; } catch (e) { return false; } };
 const limitOf = () => CFG.PLAN_DAILY_LIMIT[tier];
 const emptyCats = () => Object.fromEntries(CATS.map(c => [c, 0]));
 
@@ -2414,7 +2416,7 @@ release();
 } catch (raw) {
 release();
 const e = Object.assign({}, classifyError(raw), { section: o.section });
-if (COUNTED.has(e.code)) { budget.note(1, cat); lastFailed.set(id, clock()); }
+if (COUNTED.has(e.code)) { if (!uncounted(o)) budget.note(1, cat); lastFailed.set(id, clock()); }
 if (e.kind === "limit_reached") budget.markLimitHit();
 log({ key, cat, section: o.section, ok: false, code: e.code, kind: e.kind });
 if (feeds) { inCall.set(id, inCall.get(id) - 1); settleHeld(id, null); }
@@ -2422,7 +2424,7 @@ if (e.retryable && !o.noRetry && attempt === 0) { await sleep(Math.min(60000, is
 throw e;
 }
 const cached = !!(res && res.cache);
-if (!cached) { budget.note(1, cat); lastSeen.set(id, clock()); }
+if (!cached) { if (!uncounted(o)) budget.note(1, cat); lastSeen.set(id, clock()); }
 if (feeds) { inCall.set(id, inCall.get(id) - 1); settleHeld(id, cached ? null : res); }
 log({ key, cat, section: o.section, ok: true, cached });
 try { return C.extractRows(res); } // 07 §E1: payload, structuredContent o texto JSON
@@ -2768,15 +2770,15 @@ globalCounter,
 // llamadas. Clave `dateET|gen|identidad`; `gen` es la tanda del día: queda abierta hasta que una corrida termina el análisis.
 // IndexedDB si se puede; si no, el almacenamiento local con tope RUN_CACHE_LS_MAX; si tampoco, todo devuelve null (como antes).
 // v3 (P1): IndexedDB con tiempo límite (`wait`). Al primer vencimiento o error se apaga por el resto de la sesión y sigue el
-// almacenamiento local; la corrida nunca espera a la caché más que eso. `onDown`: avisa una vez (lo guardado allí ya no cuenta).
-function createRunCache({ idb, storage, now, wait = { open: 1500, get: 1500, put: 2000 }, onDown }) {
+// almacenamiento local; la corrida nunca espera a la caché más que eso.
+// v5 (W1): lo guardado en IndexedDB solo cuenta (botón, techo, plan) después de leerlo en ESTA carga: la purga del arranque
+// cuenta las claves de la tanda abierta (`idbN`). `onChange`: el número cambió (se leyó o se apagó IndexedDB).
+function createRunCache({ idb, storage, now, wait = { open: 1500, get: 1500, put: 2000 }, onChange }) {
 const day = () => C.etParts(now()).date, metaOf = () => { const m = storage.get("rc.meta"); return isObj(m) && isStr(m.dateET) && Number.isInteger(m.gen) ? m : null; };
 const FAIL = {};
-let dbp = null, off = !idb;
-const down = () => {
-if (!off) { off = true; if (onDown) { try { onDown(); } catch (e) { /* el observador no debe romper la caché */ } } }
-return FAIL;
-};
+let dbp = null, off = !idb, idbN = 0, checked = !idb, readyP = null;
+const tell = () => { if (onChange) { try { onChange(); } catch (e) { /* el observador no debe romper la caché */ } } };
+const down = () => { if (!off) { off = true; tell(); } return FAIL; };
 // resuelve con lo de `p` o con FAIL si vence antes o falla
 const within = (p, ms) => new Promise(res => {
 const t = setTimeout(() => res(FAIL), ms);
@@ -2797,16 +2799,20 @@ const req = (db, mode, fn, ms) => within(new Promise(res => {
 try { const t = db.transaction("r", mode), q = fn(t.objectStore("r")); t.oncomplete = () => res({ v: q ? q.result : true }); t.onerror = t.onabort = () => res(FAIL); } catch (e) { res(FAIL); }
 }), ms).then(r => (r === FAIL ? down() : r.v));
 const lsKey = (k) => { let h = 2166136261; for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 16777619); return "rc." + k.slice(0, 10) + "." + (h >>> 0).toString(36); };
-// estado de la tanda de hoy (síncrono, para el botón): abierta, respuestas guardadas y reanudaciones automáticas.
-// Con IndexedDB apagado solo cuentan las guardadas en el almacenamiento local (`ls`).
+// estado de la tanda de hoy (síncrono, para el botón): abierta, respuestas que se pueden leer AHORA y reanudaciones automáticas.
+// Las del almacenamiento local (`ls`) siempre; las de IndexedDB, solo ya contadas en esta carga y con IndexedDB vivo.
 function status() {
 const m = metaOf();
-return m && m.dateET === day() ? { open: !!m.open, entries: m.open ? (off ? m.ls || 0 : m.entries || 0) : 0, resumes: m.resumes || 0, held: !!m.held, gen: m.gen } : { open: false, entries: 0, resumes: 0, held: false, gen: 0 };
+return m && m.dateET === day() ? { open: !!m.open, entries: m.open ? (off || !checked ? 0 : idbN) + (m.ls || 0) : 0, resumes: m.resumes || 0, held: !!m.held, gen: m.gen } : { open: false, entries: 0, resumes: 0, held: false, gen: 0 };
 }
+// plan de la tanda abierta (v5): la reanudación pide exactamente lo que le falta a ese plan
+function plan() { const m = metaOf(); return m && m.open && m.dateET === day() && isObj(m.plan) ? m.plan : null; }
+function setPlan(p) { const m = metaOf(); if (m && m.open) storage.set("rc.meta", Object.assign({}, m, { plan: Object.assign({}, isObj(m.plan) ? m.plan : {}, p) })); }
 // una corrida empieza: retoma la tanda abierta de hoy o abre otra
 function begin({ autoResume } = {}) {
 const m = metaOf(), d = day(), cur = m && m.dateET === d ? m : { dateET: d, gen: 0, open: false, entries: 0, bytes: 0, ls: 0, resumes: 0 };
-const next = cur.open ? Object.assign({}, cur, { held: false, resumes: (cur.resumes || 0) + (autoResume ? 1 : 0) }) : Object.assign({}, cur, { gen: Math.max(cur.gen + 1, Date.now()), open: true, held: false, entries: 0, bytes: 0, ls: 0 }); // gen único: "Borrar datos" no reutiliza una tanda vieja
+const next = cur.open ? Object.assign({}, cur, { held: false, resumes: (cur.resumes || 0) + (autoResume ? 1 : 0) }) : Object.assign({}, cur, { gen: Math.max(cur.gen + 1, Date.now()), open: true, held: false, entries: 0, bytes: 0, ls: 0, plan: null }); // gen único: "Borrar datos" no reutiliza una tanda vieja
+if (!cur.open) idbN = 0;
 storage.set("rc.meta", next);
 const n = status().entries;
 return { gen: next.gen, resumed: cur.open && n > 0, entries: cur.open ? n : 0 };
@@ -2826,19 +2832,27 @@ async function put(id, rows) {
 const k = keyOf(id); if (!k || !Array.isArray(rows) || !rows.length) return false;
 const db = await open(), v = { id: k, rows };
 let ok = !!db && (await req(db, "readwrite", st => st.put(v, k), wait.put)) !== FAIL, n = 0;
+if (ok) idbN++;
 if (!ok) { const m = metaOf(); n = C.bytesOf(v); ok = !!m && (m.bytes || 0) + n <= CFG.RUN_CACHE_LS_MAX && storage.set(lsKey(k), v); }
 const m = metaOf();
 if (ok && m && m.open && m.dateET === day()) storage.set("rc.meta", Object.assign({}, m, { entries: (m.entries || 0) + 1, bytes: (m.bytes || 0) + n, ls: (m.ls || 0) + (n ? 1 : 0) }));
 return ok;
 }
-// días viejos fuera (una vez al abrir; también sirve de prueba de IndexedDB antes de la corrida)
-async function purge() {
-const d = day();
+// días viejos fuera (una vez al abrir) y, a la vez, cuenta lo que se puede leer de la tanda abierta: es la prueba de IndexedDB
+function purge() {
+if (!readyP) readyP = (async () => {
+const d = day(), m = metaOf(), pre = m && m.open && m.dateET === d ? `${d}|${m.gen}|` : null;
 for (const k of storage.keys("rc.")) if (k !== "rc.meta" && !k.startsWith("rc." + d)) storage.remove(k);
-const db = await open(); if (!db) return;
-await req(db, "readwrite", st => { const c = st.openCursor(); c.onsuccess = () => { const x = c.result; if (!x) return; if (!String(x.key).startsWith(d + "|")) x.delete(); x.continue(); }; return null; }, wait.put);
+const db = await open();
+let n = 0;
+if (db) await req(db, "readwrite", st => { const c = st.openCursor(); c.onsuccess = () => { const x = c.result; if (!x) return; const key = String(x.key); if (!key.startsWith(d + "|")) x.delete(); else if (pre && key.startsWith(pre)) n++; x.continue(); }; return null; }, wait.put);
+if (!off) idbN = n;
+checked = true; tell();
+})();
+return readyP;
 }
-return Object.freeze({ status, begin, close, hold, get, put, purge });
+const ready = () => readyP || Promise.resolve();
+return Object.freeze({ status, begin, close, hold, get, put, purge, ready, plan, setPlan });
 }
 
 root.RadarData = Object.freeze({ create, createSync, createRunCache, makeStorage, classifyError, makeBucket, ENDPOINTS, stable });
@@ -2877,7 +2891,7 @@ const TAB = Math.random().toString(36).slice(2, 10), STALE = CFG.SYNC.BEAT_STALE
 const TAB_RUNNING = "Se está analizando en otra ventana de este dispositivo; aparecerá aquí al terminar.";
 const RESUMED_TXT = "El análisis anterior se interrumpió; se retoma sin repetir las llamadas ya hechas.";
 const RESUME_WAIT = "El análisis anterior se interrumpió; se retoma en unos segundos sin repetir las llamadas ya hechas.";
-const RC = D.createRunCache({ idb: (() => { try { return root.indexedDB || null; } catch (e) { return null; } })(), storage: store, now: App.now, onDown: () => renderRunControls() });
+const RC = D.createRunCache({ idb: (() => { try { return root.indexedDB || null; } catch (e) { return null; } })(), storage: store, now: App.now, onChange: () => renderRunControls() });
 // candado del navegador en el almacenamiento local, con hora real (las pestañas comparten reloj): { holder, dateET, beatAt, state }
 const lockGet = () => { const l = store.get("runlock"); return l && typeof l.holder === "string" && isNum(l.beatAt) ? l : null; };
 const lockMine = l => !!l && l.holder === TAB;
@@ -3053,6 +3067,7 @@ function saveDay(out, dateET, run) {
 if (!persistOk()) return;
 const key = `day.${dateET}.${out.plan}`;
 const savedAt = App.now();
+if (run) store.set("daymark", { dateET, run, at: Date.now() }); // marca pequeña para que otra corrida de hoy se retire (W2)
 if (!store.set(key, { savedAt, output: out, run })) {
 const lean = Object.assign({}, out, { rows: out.rows.map(r => Object.assign({}, r, { series: [] })) });
 if (!store.set(key, { savedAt, output: lean, run })) return;
@@ -3153,21 +3168,39 @@ return auto ? Math.max(0, coldLeft()) : plan.cost;
 // Llamadas de la corrida en vuelo, en el almacenamiento local: si la página muere, FMP ya las contó y el contador no (P3).
 // La siguiente carga de este navegador que no vea a otra pestaña corriendo, o la siguiente corrida con el candado, las suma.
 // Son el margen "en vuelo" del director: hasta CONCURRENCY de ellas al día no le quitan lugar a la automática.
+// v5 (W2): un registro por pestaña (`runflight.<pestaña>`) con las llamadas en vuelo. Al sumarlas se marca `settled`: si esa
+// pestaña solo estaba congelada y vuelve, sus respuestas ya no se cuentan (`uncounted`) y su corrida se retira.
 function settleFlight() {
-const f = store.get("runflight");
-if (!f || f.holder === TAB || !App.client) return;
-if (f.dateET === todayET() && Number.isInteger(f.n) && f.n > 0 && f.n <= 50) {
-App.client.budget.note(f.n, "corrida");
-const x = store.get("flightlost"), prev = x && x.dateET === f.dateET && Number.isInteger(x.n) ? x.n : 0;
-store.set("flightlost", { dateET: f.dateET, n: prev + f.n });
+if (!App.client) return;
+const today = todayET(), lost = n => { const x = store.get("flightlost"), prev = x && x.dateET === today && Number.isInteger(x.n) ? x.n : 0; store.set("flightlost", { dateET: today, n: prev + n }); };
+const old = store.get("runflight"); // formato de v4 (una sola clave con n)
+if (old) { if (old.holder !== TAB && old.dateET === today && Number.isInteger(old.n) && old.n > 0 && old.n <= 50) { App.client.budget.note(old.n, "corrida"); lost(old.n); } store.remove("runflight"); }
+for (const k of store.keys("runflight.")) {
+const f = store.get(k);
+if (!f || f.holder === TAB) continue;
+if (f.dateET !== today || !Array.isArray(f.ids)) { store.remove(k); continue; }
+if (f.settled) continue;
+const n = Math.min(50, f.ids.length);
+if (n) { App.client.budget.note(n, "corrida"); lost(n); }
+store.set(k, Object.assign({}, f, { settled: true }));
 }
-store.remove("runflight");
+}
+const flightOf = () => store.get("runflight." + TAB);
+// ¿otra corrida tomó el día? (v5, W2) Barato y síncrono: se mira antes de cada llamada real, en el latido y al volver a estar visible
+function superseded() {
+const r = App.state.run;
+if (r.superseded) return true;
+if (r.lockOwned) { const l = lockGet(); if (!l || l.holder !== TAB) return true; }
+const d = store.get("daymark"); if (d && d.dateET === r.dayET && d.run !== (r.runId || r.uid) && isNum(d.at) && d.at > r.t0) return true;
+const f = flightOf(); return !!(f && f.settled);
 }
 // lo que le queda a la automática hoy: arranque + corrida ≤ COLD_CAP_FREE (MEDIO 3), más el margen de lo que quedó en vuelo
 function coldLeft() {
 const x = store.get("flightlost"), lost = x && x.dateET === todayET() && Number.isInteger(x.n) ? Math.min(CFG.CONCURRENCY, x.n) : 0;
 return CFG.COLD_CAP_FREE - App.client.budget.get().used + lost;
 }
+const NO_WORSE = "La reanudación dio un análisis con menos datos; se mantiene el anterior y ya no se ofrece reanudar.";
+const NO_PROGRESS = "La reanudación no agregó datos; se mantiene el análisis anterior y ya no se ofrece reanudar.";
 const PAUSE_MSG = n => `Se pausó para no pasar de ≈ ${n} llamadas; se puede reanudar.`, PAUSED = n => `Análisis parcial: se pausó para no pasar de ≈ ${n} llamadas; se puede reanudar.`;
 function runReserve(minimal) {
 const s = App.state;
@@ -3179,10 +3212,24 @@ return minimal ? estPlan(0, 0).cost : pr.cost;
 // lo que ya está en la caché de la tanda de hoy no se vuelve a pedir: el costo (botón, guarda, reserva) es lo que falta.
 // El tope solo sube por lo ya guardado hasta el de una corrida nueva: el plan nunca crece por estar reanudando.
 const withCached = (cap, cached) => (cap >= CFG.RUN_CAP_FREE ? cap : Math.min(CFG.RUN_CAP_FREE, cap + cached));
-function estPlan(remainingOverride, capOverride) {
+const RESUME_NO_FIT = "No alcanza para terminar hoy; se reanuda mañana.";
+const validPlan = sp => !!sp && [sp.items, sp.pages, sp.stage1, sp.K, sp.per].every(Number.isInteger) && Array.isArray(sp.nonStock) && Array.isArray(sp.etfs);
+// Reanudación (v5, W1): el plan de la tanda abierta tal cual, menos lo que se puede leer AHORA de la caché. Cabe solo si lo que
+// queda del día (límite − gastado − reserva) y el tope alcanzan para terminarlo; si no, no se ofrece ("se reanuda mañana").
+function resumePlan(sp, cached, cap) {
+const s = App.state, cl = App.client, macro = (s.macro.spxDesc ? 0 : 1) + (s.macro.treasuryDesc ? 0 : 1);
+const cost = Math.max(0, sp.items - cached) + macro, left = Math.min((cl ? cl.budget.remaining() : 250) - CFG.RESERVE_CALLS, cap);
+return { fits: cost <= left, resume: true, cost, fullCost: sp.items + macro, cached, K: sp.K, perFinalist: sp.per, nonStockHist: sp.nonStock, etfs: sp.etfs,
+calls: { universe: 0, macro, stage1: sp.stage1, nonStock: sp.nonStock.length, etf: 2 * sp.etfs.length, finalists: sp.K * sp.per }, trims: Array.isArray(sp.trims) ? sp.trims : [] };
+}
+function estPlan(remainingOverride, capOverride, auto) {
 const s = App.state, cl = App.client, tier = cl ? cl.plan() : "FREE";
 const eligible = (s.result && s.result.counts && s.result.counts.eligible) || (tier === "EXAMPLE" ? 40 : 77);
 const cached = remainingOverride === undefined && s.mode === "live" ? RC.status().entries : 0; // la tanda abierta se reusa, también tras "Detener" (v3, P6)
+if (cached > 0 && tier === "FREE" && validPlan(RC.plan())) { // la automática que no termina el plan guardado vuelve a planear (y puede pausarse)
+const rp = resumePlan(RC.plan(), cached, capOverride !== undefined ? capOverride : runCapNow(false));
+if (rp.fits || !auto) return rp;
+}
 const pr = C.planRun({ plan: tier, eligible, have: { spx: !!s.macro.spxDesc, treasury: !!s.macro.treasuryDesc, universe: false }, nonStock: RANKED, etfs: [],
 remaining: (remainingOverride !== undefined ? remainingOverride : cl ? cl.budget.remaining() : 250) + cached, cap: withCached(capOverride !== undefined ? capOverride : runCapNow(false), cached) });
 return cached ? Object.assign({}, pr, { cost: Math.max(0, pr.cost - cached), fullCost: pr.cost, cached }) : pr;
@@ -3757,8 +3804,8 @@ if (!cl || !(s.mode === "live" || s.mode === "example")) return { ok: false, rea
 if (s.run.status === "running") return { ok: false, reason: "La corrida ya está en curso." };
 if (s.stopped) return { ok: false, reason: (s.page.banner && s.page.banner.text) || "Conexión con FMP detenida." };
 if (s.mode === "live" && cl.budget.get().limitHit) return { ok: false, limit: true, reason: "Límite diario agotado; FMP lo reinicia mañana." };
-const cap = runCapNow(auto), pr = estPlan(undefined, cap);
-return pr.fits ? { ok: true, plan: pr } : { ok: false, plan: pr, reason: fitReason(pr, cl.budget.remaining(), cap) };
+const cap = runCapNow(auto), pr = estPlan(undefined, cap, auto);
+return pr.fits ? { ok: true, plan: pr } : { ok: false, plan: pr, reason: pr.resume ? RESUME_NO_FIT : fitReason(pr, cl.budget.remaining(), cap) };
 }
 // MEDIO 4: espera la 1.ª entrega (o falla) de lo arrancado, con tope, antes de la corrida automática
 async function bootSettled(maxMs) {
@@ -3867,13 +3914,14 @@ const prev = s.run, ac = new AbortController(), dayET = auto ? App.bootDay : tod
 const live = s.mode === "live";
 // "running" en el mismo tick del clic, antes de cualquier await (ALTO E2)
 s.run = { status: "running", stage: "claim", stageLabel: "Reservando la corrida…", done: 0, total: g.plan.fullCost || g.plan.cost, plan: g.plan, startedAt: App.now(), t0: Date.now(), net: 0, finishedAt: null, abort: ac, message: null, auto, cap: withCached(runCapNow(auto), live ? RC.status().entries : 0), outage: null, cut: null,
-runId: null, dayET, claiming: live, resumed: false, cachedAtStart: 0, techo: Infinity, sent: 0, flying: 0 };
+runId: null, dayET, claiming: live, resumed: false, cachedAtStart: 0, techo: Infinity, sent: 0, uid: TAB + "-" + Date.now(), lockOwned: false, superseded: false };
 renderRunControls();
 const back = () => { s.run = prev; renderRunControls(); };
 let runId = null, unlocked = false, takeover = false;
 if (live) { // 1) candado del navegador (pestañas); 2) reclamo entre dispositivos (07 §5.4)
 const lk = await lockClaim();
 if (!lk.ok) { back(); s.localOther = { state: "tab" }; watchLock(); renderRanking(); return; }
+s.run.lockOwned = lockMine(lockGet()); // con candado escrito: si deja de ser de esta pestaña, la corrida se retira (W2)
 takeover = lk.takeover || !!(opts && opts.takeover);
 if (Sync.active) {
 const cl = await Sync.claimRun({ dayET, plan: App.client.plan(), auto, resume: resume || takeover, takeover });
@@ -3902,12 +3950,25 @@ renderAll();
 try {
 const tier = App.client.plan();
 const out = tier === "FREE" || tier === "EXAMPLE" ? await runFree(ac, startUsed, []) : await runPaid(ac, startUsed);
-if (s.run.handoff) { finishRun("idle", "El análisis siguió en otra ventana de este dispositivo."); return; }
+if (s.run.handoff) { retire(); return; }
 if (s.run.outage) { outageRun(); return; }
 if (!out) { syncFinish("error"); return; }
 if (!out.rows.length) { finishRun("error", s.run.cut ? `La corrida se cortó (${s.run.cut}) antes de tener resultados; no se guardó nada.` : "La corrida no produjo resultados; no se guardó nada."); syncFinish("error"); return; }
+// una reanudación nunca cambia el ranking de hoy por uno con menos filas o menos datos, y si no avanza se cierra la tanda (W1)
+const prevToday = live && rcb.resumed && hasTodayRun() ? s.result : null;
+if (prevToday) {
+const q = r => [r.rows.length, r.rows.reduce((a, x) => a + (isNum(x.coverage) ? x.coverage : 0), 0)];
+const [n1, c1] = q(out), [n0, c0] = q(prevToday);
+const worse = n1 < n0 || (n1 === n0 && c1 < c0 - 1e-9), better = n1 > n0 || c1 > c0 + 1e-9 || (!!prevToday.partial && !out.partial);
+if (worse || !better) {
+RC.close();
+finishRun(prevToday.partial ? "partial" : "done", worse ? NO_WORSE : NO_PROGRESS);
+syncFinish(prevToday.partial ? "partial" : "done", prevToday.partialReason);
+return;
+}
+}
 s.result = out; s.resultSource = s.mode === "example" ? "example" : "run"; s.resultSavedAt = App.now();
-saveDay(out, s.run.dayET, runId || "local");
+saveDay(out, s.run.dayET, runId || s.run.uid);
 // la tanda de respuestas queda para retomar si se cortó por límite o el usuario la detuvo; si no, se cierra.
 // Va antes de subir el día: si la página muere mientras sube, al volver no se reanuda lo que ya terminó (v3, P2)
 if (live) { if (["detenida", "presupuesto"].includes(s.run.cut)) RC.hold(); else if (!["límite", "posible límite"].includes(s.run.cut)) RC.close(); }
@@ -3919,7 +3980,7 @@ if (s.ui.selected && !out.rows.some(r => r.symbol === s.ui.selected) && !out.res
 renderAll();
 } catch (raw) {
 const e = D.classifyError(raw);
-if (s.run.handoff) { finishRun("idle", "El análisis siguió en otra ventana de este dispositivo."); return; }
+if (s.run.handoff) { retire(); return; }
 if (s.run.outage) { outageRun(); return; }
 finishRun("error", errText(e));
 if (e.kind !== "cancelled") handleError("ranking", e);
@@ -3934,12 +3995,21 @@ clearTimeout(beatT); beatT = null;
 const s = App.state, run = s.run;
 if (run.status !== "running" || s.mode !== "live") return;
 const l = lockGet();
-if (l && !lockMine(l) && l.state === "running") { handoff(); return; }
+if ((l && !lockMine(l) && l.state === "running") || superseded()) { handoff(); return; } // W2: un candado que ya no es suyo no se reescribe
 store.set("runlock", { holder: TAB, dateET: run.dayET || todayET(), beatAt: Date.now(), state: "running" });
 if (run.runId) Sync.beat(run.runId).then(ok => { if (!ok && Sync.active && s.run === run && run.status === "running") handoff(); });
 beatT = App.timer(runBeat, CFG.SYNC.BEAT_MS);
 }
 function handoff() { const s = App.state; if (s.run.abort) { s.run.handoff = true; s.run.abort.abort(); } }
+// la corrida se retira sin guardar nada y muestra el día que guardó la otra (de esta pestaña o de otro dispositivo)
+function retire() {
+const s = App.state, other = s.run.superseded || superseded();
+finishRun("idle", other ? "El análisis de hoy lo terminó otra ventana u otro dispositivo; se muestra ese." : "El análisis siguió en otra ventana de este dispositivo.");
+if (s.pendingDay) { adoptDay(s.pendingDay); s.pendingDay = null; }
+const v = store.keys(`day.${todayET()}.`).map(k => store.get(k)).filter(x => x && validOutput(x.output) && isNum(x.savedAt)).sort((a, b) => b.savedAt - a.savedAt)[0];
+if (v && !hasTodayRun()) Object.assign(s, { result: v.output, resultSource: "cache", resultSavedAt: v.savedAt });
+renderAll();
+}
 // Pantalla despierta durante la corrida (se tolera el rechazo)
 let wake = null;
 function wakeOn() { try { const w = root.navigator && root.navigator.wakeLock; if (w && !wake && !doc.hidden) w.request("screen").then(x => { wake = x; if (App.state.run.status !== "running") wakeOff(); }, () => {}); } catch (e) { /* sin wake lock */ } }
@@ -3995,21 +4065,29 @@ if (rejSeqs.length >= CFG.SUSPECT_STREAK && anyOk && !s.run.outage && !s.run.cut
 };
 // lo ya traído hoy por una corrida que no terminó sale de la caché: 0 llamadas, no cuenta (corrección de producción).
 // La lectura tiene su tiempo límite (v3, P1) y "Detener" no la espera.
-const fly = d => { if (useRC) { s.run.flying = Math.max(0, (s.run.flying || 0) + d); store.set("runflight", { holder: TAB, dateET: s.run.dayET || today, n: s.run.flying }); } };
+const flying = s.run.flyIds = s.run.flyIds || new Set();
+const fly = (tok, on) => {
+if (!useRC) return;
+if (on) flying.add(tok); else flying.delete(tok);
+const f = flightOf(); if (f && f.settled) return; // otra pestaña ya las contó: este registro ya no es de esta corrida
+store.set("runflight." + TAB, { holder: TAB, dateET: s.run.dayET || today, ids: [...flying] });
+};
+const settledTok = tok => { const f = flightOf(); return !!(f && f.settled && Array.isArray(f.ids) && f.ids.includes(tok)); };
 const stopped = new Promise((_, rej) => { const f = () => rej(C.makeError("cancelled", "cancelled", { section: "ranking" })); if (ac.signal.aborted) f(); else ac.signal.addEventListener("abort", f, { once: true }); });
 stopped.catch(() => {}); // sin lecturas pendientes al detener, nadie la espera
 const call = (key, args) => { const seq = ++issued, id = cl.identity(key, args); return (useRC ? Promise.race([RC.get(id), stopped]) : Promise.resolve(null)).then(hit => {
 if (hit) { tally.cached++; answered(seq); anyOk = true; okKeys.add(key); return hit; }
 // techo duro (v4): con lo ya emitido en el techo, esta no sale; la corrida se pausa con lo que tiene (solo pasa lo que ya estaba en vuelo)
+if (useRC && superseded()) { handoff(); throw C.makeError("cancelled", "cancelled", { section: "ranking" }); } // W2: no sale
 if (s.run.sent >= s.run.techo) { cut("presupuesto"); throw C.makeError("cancelled", "cancelled", { section: "ranking" }); }
-s.run.sent++; fly(1);
-return cl.call(key, args, opt).then(v => {
-fly(-1);
+const tok = (s.run.uid || TAB) + ":" + ++s.run.sent; fly(tok, true);
+return cl.call(key, args, Object.assign({ uncounted: () => settledTok(tok) }, opt)).then(v => {
+fly(tok, false);
 tally.calls++; streak = 0; s.run.net++;
 if (Array.isArray(v) && !v.length) suspicious(seq); else { answered(seq); anyOk = true; okKeys.add(key); if (useRC) RC.put(id, v); }
 return v;
 }, raw => {
-fly(-1);
+fly(tok, false);
 const e = D.classifyError(raw);
 if (e.kind === "cancelled") throw e;
 tally.calls++;
@@ -4031,9 +4109,10 @@ async function runFree(ac, startUsed, notes) {
 const rc = runCtx(ac), { s, cl, sig } = rc, nowMs = App.now();
 // R1 universo
 rc.stage("universe", "1/4 · Universo");
-let floatRows = [], uniFailed = false;
+let floatRows = [], uniFailed = false, pages = 0;
 try {
 for (let page = 0; page < 3; page++) {
+pages++;
 const rows = await rc.call("floatAll", { page }); rc.tick();
 floatRows = floatRows.concat(rows);
 if (rows.length < 100) break;
@@ -4047,15 +4126,21 @@ uniFailed = true;
 if (s.run.outage) return null;
 const uni = C.filterFloatUniverse(floatRows, { nowMs, etfList: s.mode === "example" ? [] : C.ETF_FREE.slice() });
 if (!uni.stocks.length) notes = notes.concat([uniFailed ? "No se pudo obtener la muestra de acciones de FMP; el ranking incluye solo materias primas, cripto, divisas e índices." : "FMP no devolvió acciones en la muestra de hoy; el ranking incluye solo materias primas, cripto, divisas e índices."]);
-// R2 plan exacto; la automática descuenta todo lo gastado hoy (MEDIO 3)
+// R2 plan exacto; la automática descuenta todo lo gastado hoy (MEDIO 3). La reanudación usa el plan de la tanda tal cual (v5)
+const sp = s.mode === "live" && s.run.plan && s.run.plan.resume ? RC.plan() : null;
+let pr;
+if (validPlan(sp)) { pr = s.run.plan; s.run.total = sp.items + pr.calls.macro; }
+else {
 const extra = Math.max(0, (s.run.cachedAtStart || 0) - rc.tally.cached); // lo de la caché que aún no se leyó no cuesta
 const b = cl.budget.get(), spent = s.mode === "live" ? (b.byCat.corrida || 0) - startUsed + rc.tally.cached : 0; // lo leído de la caché ocupa plan como lo gastado
 const left = s.run.techo - s.run.sent + extra; // lo que queda del techo, más lo guardado que aún no se leyó (el botón ya lo descontó)
 const cap = s.mode !== "live" ? Infinity : Math.min(left, s.run.auto ? Math.min(s.run.cap - spent, coldLeft() + extra) : s.run.cap - spent);
 const planIn = { plan: cl.plan(), eligible: uni.stocks.length, have: { spx: !!s.macro.spxDesc, treasury: !!s.macro.treasuryDesc, universe: true }, nonStock: RANKED, etfs: uni.etfs };
-const pr = C.planRun(Object.assign({ remaining: cl.budget.remaining() + extra, cap }, planIn));
+pr = C.planRun(Object.assign({ remaining: cl.budget.remaining() + extra, cap }, planIn));
 if (!pr.fits) { finishRun("blocked", fitReason(pr, cl.budget.remaining(), cap)); return null; }
 s.run.plan = pr; s.run.total = s.run.done + pr.cost - pr.calls.universe;
+if (s.mode === "live" && cl.plan() === "FREE") RC.setPlan({ pages, stage1: pr.calls.stage1, K: pr.K, per: pr.perFinalist, nonStock: pr.nonStockHist, etfs: pr.etfs, trims: pr.trims, items: pages + pr.cost - pr.calls.macro, finalists: null });
+}
 // MEDIO 5: cribado recortado → las de mayor flotante
 let screen = uni.stocks;
 if (pr.calls.stage1 < uni.stocks.length) {
@@ -4084,6 +4169,9 @@ if (screen.length && !quotes.length && rc.live()) { const e = (qres.find(r => !r
 const fq = C.filterQuotes(quotes, { nowMs, holidays: s.clock.holidays, mode: "core" });
 const st = C.stage1Select({ quotes: fq.pass, K: pr.K });
 st.excluded = excluded.concat(fq.excluded);
+// la reanudación profundiza en los mismos finalistas que la tanda (lo guardado de ellos sirve); la primera corrida los guarda
+if (validPlan(sp) && Array.isArray(sp.finalists)) { const ok = new Set(fq.pass.map(q => q.symbol)); st.finalists = sp.finalists.filter(x => ok.has(x)); }
+else if (s.mode === "live" && cl.plan() === "FREE") RC.setPlan({ finalists: st.finalists });
 return deepSteps(rc, { pr, st, quotes, finOf: sym => ({ isFinancial: C.FIN_FREE.includes(sym) }), notes: notes.concat(pr.trims),
 meta: { universe: floatRows.length, eligible: uni.stocks.length, quoted: quotes.length } });
 }
@@ -4350,7 +4438,7 @@ const free = $("#aviso-free");
 const tier = App.client ? App.client.plan() : s.plan.tier;
 const notes = [];
 if (tier === "FREE" && s.mode === "live") notes.push(`Plan FMP Free: el análisis profundo cubre ~${(r && r.counts && r.counts.eligible) || 77} acciones grandes de la muestra de FMP; el resto del mercado aparece en “Mercado completo”.`);
-if (r && r.partial) notes.push((r.partialReason === "presupuesto" && r.notes.find(n => /^Análisis parcial: se pausó/.test(n))) || PARTIAL_TXT[r.partialReason] || PARTIAL_TXT["límite"]);
+if (r && r.partial) notes.push(partialText(r));
 if (r && r.notes && r.notes.length) notes.push(...r.notes.filter(n => !/^Análisis parcial/.test(n)));
 if (s.plan.note) notes.push(s.plan.note);
 free.hidden = !notes.length;
@@ -4358,6 +4446,12 @@ fill(free, ...notes.map((n, i) => (i ? [h("br"), n] : n)).flat());
 setDataState();
 }
 
+// la pausa por presupuesto solo ofrece reanudar si de verdad se puede ahora (tanda abierta con algo leído y que cabe hoy; W1)
+function partialText(r) {
+if (r.partialReason !== "presupuesto") return PARTIAL_TXT[r.partialReason] || PARTIAL_TXT["límite"];
+const t = r.notes.find(n => /^Análisis parcial: se pausó/.test(n)) || PARTIAL_TXT.presupuesto, st = RC.status();
+return App.state.mode === "live" && st.open && st.entries > 0 && runGuard(false).ok ? t : t.replace("; se puede reanudar.", ".");
+}
 // detalle
 function selectSymbol(sym, focus) {
 const s = App.state;
@@ -4886,7 +4980,11 @@ if (L.ok) {
 App.client.budget.setRemote(L.counters);
 Sync.subscribe(todayET(), {
 onRun: r => { s.syncRun = r; if (s.syncOther && r && r.dateET === todayET()) setOther(otherFrom(r)); renderRunControls(); renderTable(); },
-onDay: d => { if (adoptDay(d)) { setOther(null); renderAll(); } },
+onDay: d => {
+const r = s.run;
+if (r.status === "running" && d && d.manifest && d.manifest.runId !== r.runId) { r.superseded = true; s.pendingDay = d; handoff(); return; } // W2
+if (adoptDay(d)) { setOther(null); renderAll(); }
+},
 onCounters: g => App.client.budget.setRemote(g),
 onLive: v => { if (adoptLive(v)) { renderStrip(); renderBreadth(); evaluateLiveSoon(); } },
 });
@@ -4919,6 +5017,7 @@ const macroP = loadMacro(false); // A8
 startBreadth(); // A9
 await macroP;
 await bootSettled(20000);
+await RC.ready(); // lo guardado en IndexedDB cuenta solo ya leído (v5, W1); tiene su propio tiempo límite
 maybeAutoRun(); // A10
 }
 async function loadHolidays() {
@@ -4945,8 +5044,9 @@ $("#btn-junk").addEventListener("click", () => { App.state.breadth.showAll = !Ap
 $("#btn-actualizar-mercado").addEventListener("click", refreshBreadth);
 doc.addEventListener("visibilitychange", () => {
 if (doc.hidden) { markInterrupted(); return; } // best effort: si el sistema la congela, otra pestaña o la recarga la retoman
+// de vuelta: si otra corrida tomó el día mientras estaba congelada, se retira antes de nada (W2); si no, latido y pantalla
+if (App.state.run.status === "running" && App.state.mode === "live") { if (superseded()) handoff(); else { runBeat(); wakeOn(); } }
 tickClock(false); evaluateLive();
-if (App.state.run.status === "running") { runBeat(); wakeOn(); } // de vuelta: latido (vuelve a "running") y pantalla despierta
 });
 root.addEventListener("pagehide", markInterrupted);
 // otra pestaña de este navegador: soltó el candado o guardó el análisis del día
