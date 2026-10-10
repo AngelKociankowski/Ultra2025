@@ -1982,12 +1982,12 @@ const sigX = Math.sqrt(Math.max(0, quadForm(x, cov))), k = sigX > 0 ? Math.min(1
 return { x, sigX, k, w, cashW: 1 - w.reduce((a, b) => a + b, 0), capped };
 }
 // montos, títulos (enteros o fracciones) y mínimos (§4.7)
-function finalizeShares({ inst, w, A, fx, fractional }) {
-const MIN = Math.max(PORT.MIN_POS_MXN, PORT.MIN_POS_FRAC * A), n = inst.length, notes = [];
+function finalizeShares({ inst, w, A, fx, fractional, quiet }) { // quiet: sin textos (la búsqueda del mínimo solo necesita montos)
+const MIN = Math.max(PORT.MIN_POS_MXN, PORT.MIN_POS_FRAC * A), n = inst.length, notes = [], note = t => { if (!quiet) notes.push(t()); };
 const price = inst.map(it => (isNum(it.priceUSD) && it.priceUSD > 0 ? it.priceUSD * fx : null)), tgt = w.map(v => v * A);
 const shares = new Array(n).fill(0), amount = new Array(n).fill(0), small = new Array(n).fill(false);
 inst.forEach((it, i) => {
-if (tgt[i] < MIN) { small[i] = true; if (tgt[i] > 0) notes.push(`${it.display || it.id}: menor al mínimo (${fmt.mxn(MIN)})`); return; }
+if (tgt[i] < MIN) { small[i] = true; if (tgt[i] > 0) note(() => `${it.display || it.id}: menor al mínimo (${fmt.mxn(MIN)})`); return; }
 if (price[i] === null) { shares[i] = null; amount[i] = Math.floor(tgt[i] * 100) / 100; return; }
 shares[i] = fractional ? Math.floor((tgt[i] / price[i]) * 10 ** PORT.FRAC_DECIMALS) / 10 ** PORT.FRAC_DECIMALS : Math.floor(tgt[i] / price[i]);
 });
@@ -1998,7 +1998,7 @@ let cash = A - amount.reduce((a, b) => a + b, 0);
 const cand = inst.map((it, i) => ({ i, id: it.id, rem: price[i] !== null && !small[i] ? tgt[i] / price[i] - shares[i] : -1 })).filter(o => o.rem >= 0.5)
 .sort((a, b) => b.rem - a.rem || (a.id < b.id ? -1 : 1));
 for (const o of cand) { const p = price[o.i]; if (p <= cash + 1e-9 && (shares[o.i] + 1) * p <= PORT.ROUND_OVER * tgt[o.i] + 1e-9) { shares[o.i]++; amount[o.i] = amt(o.i); cash -= p; } }
-inst.forEach((it, i) => { if (!small[i] && price[i] !== null && shares[i] === 0) notes.push(`${it.display || it.id}: un título cuesta más que su asignación`); });
+inst.forEach((it, i) => { if (!small[i] && price[i] !== null && shares[i] === 0) note(() => `${it.display || it.id}: un título cuesta más que su asignación`); });
 }
 const inv = amount.reduce((a, b) => a + b, 0), planned = tgt.reduce((a, b) => a + b, 0);
 let mw = 0; inst.forEach((it, i) => { if (it.role === "core" && price[i] !== null && w[i] > 0) mw = Math.max(mw, price[i] / w[i]); });
@@ -2021,7 +2021,7 @@ const MIN_MEMO = new Map(); // mismo portafolio con otro monto: el mínimo no ca
 function minAmountStable({ inst, w, fx }) {
 const key = fx + "|" + inst.map((it, i) => (isNum(it.priceUSD) ? it.priceUSD : "-") + ":" + w[i] + ":" + it.role).join(",");
 if (MIN_MEMO.has(key)) return MIN_MEMO.get(key);
-const enough = a => { const z = finalizeShares({ inst, w, A: a, fx, fractional: false }); return z.realized >= PORT.MIN_REALIZED || z.wFinal.reduce((x, y) => x + y, 0) >= 1 - 1e-12; };
+const enough = a => { const z = finalizeShares({ inst, w, A: a, fx, fractional: false, quiet: true }); return z.realized >= PORT.MIN_REALIZED || z.wFinal.reduce((x, y) => x + y, 0) >= 1 - 1e-12; };
 // por encima de ≈ 4 títulos de cada posición grande (≥ 10 %) el redondeo ya no baja de la mitad
 const big = inst.reduce((m, it, i) => (isNum(it.priceUSD) && w[i] >= 0.1 ? Math.max(m, (it.priceUSD * fx) / w[i]) : m), 0);
 const top = Math.min(PORT.MAX_AMOUNT, Math.max(300000, 4 * big));
