@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { usuarioActual } from '@/lib/auth';
-import { obtenerServicio } from '@/lib/servicios';
+import { obtenerServicio, corregiblesHoy } from '@/lib/servicios';
 import { loQueFalta } from '@/lib/alta';
 import { gruposEditables, puede, camposCorregibles } from '@/lib/rbac';
 import { CAMPOS } from '@/lib/campos';
@@ -64,6 +64,16 @@ export default function DetalleServicio({ params }) {
   const conTipo = (lista) => lista.map((c) => ({ ...c, ...CAMPOS[c.campo] }));
   const faltaCrudo = loQueFalta(s);
   const falta = { ...faltaCrudo, operar: conTipo(faltaCrudo.operar), cobrar: conTipo(faltaCrudo.cobrar) };
+
+  /**
+   * Y lo que este usuario puede corregir hoy, que casi siempre es nada.
+   *
+   * La regla —solo tu dato, solo el mismo día— la contesta `corregiblesHoy()` y
+   * no se vuelve a escribir aquí: si la pantalla la calculara por su cuenta, el
+   * día que cambie el plazo habría dos respuestas y una de las dos ofrecería un
+   * campo que el servidor va a rechazar.
+   */
+  const corregibles = conTipo(corregiblesHoy(s.id, usuario));
 
   const turnos = Object.entries(s.turnos || {});
   const sumaTurnos = turnos.reduce((a, [, v]) => a + (Number(v) || 0), 0);
@@ -266,11 +276,19 @@ export default function DetalleServicio({ params }) {
 
       {/* Solo cuando falta algo y el servicio está vivo. En uno dado de baja no
           hay nada que completar: no se va a operar ni se va a facturar, y
-          pedirle datos sería trabajo para un expediente cerrado. */}
-      {falta.total > 0 && s.estatus === 'ACTIVO' && (
+          pedirle datos sería trabajo para un expediente cerrado.
+
+          O cuando no falta nada pero esta persona capturó hoy algo que todavía
+          puede corregir: si el panel desapareciera al llenar el último hueco,
+          quien acabara de teclear mal el precio se quedaría sin camino —y es el
+          momento exacto en que se descubre el error de dedo—. `corregiblesHoy()`
+          ya devuelve vacío para un servicio que no está ACTIVO y para los roles
+          que no llenan huecos, así que esto no abre nada de más. */}
+      {(falta.total > 0 || corregibles.length > 0) && s.estatus === 'ACTIVO' && (
         <Completar
           servicioId={s.id}
           falta={falta}
+          corregibles={corregibles}
           opciones={cat}
           puedeCompletar={puede(usuario.rol, 'apertura')}
         />

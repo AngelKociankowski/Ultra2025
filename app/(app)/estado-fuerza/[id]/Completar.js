@@ -7,8 +7,34 @@ import CampoCatalogo from '@/components/CampoCatalogo';
 const input =
   'w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
 
+/** El control que le toca a un campo, que es el mismo al llenar y al corregir. */
+function Control({ campo, valor, opciones, onChange, id }) {
+  if (campo.tipo === 'catalogo') {
+    return (
+      <CampoCatalogo
+        id={id}
+        valor={valor ?? ''}
+        opciones={opciones?.[campo.catalogo] || []}
+        onChange={onChange}
+        vacio="— sin capturar —"
+        className={input}
+      />
+    );
+  }
+  return (
+    <input
+      id={id}
+      type={campo.tipo === 'date' ? 'date' : ['money', 'number', 'int'].includes(campo.tipo) ? 'number' : 'text'}
+      step={campo.tipo === 'int' ? '1' : ['money', 'number'].includes(campo.tipo) ? 'any' : undefined}
+      value={valor ?? ''}
+      onChange={(e) => onChange(e.target.value)}
+      className={input}
+    />
+  );
+}
+
 /**
- * El panel que termina de capturar un alta.
+ * El panel que termina de capturar un alta, y corrige lo que se capturó hoy.
  *
  * Es la otra mitad de haber partido el alta en dos. Si el formulario deja abrir
  * un servicio con cinco datos y después no hay por dónde volver a entrar,
@@ -19,9 +45,15 @@ const input =
  *
  * Lo que este panel hace y lo que deliberadamente no hace:
  *
- *   · Solo enseña los campos que están en blanco. No es un editor: un campo con
+ *   · Arriba, los campos que están en blanco. No es un editor: un campo con
  *     valor ya no es un hueco, y cambiarlo es una edición con sus permisos de
  *     siempre, que viven en el bloque «Editar» de más abajo.
+ *   · Abajo, y solo si existe, lo que ESTA persona capturó HOY. Es la única
+ *     excepción, y vive aquí —en la misma ficha y pegada al hueco que se acaba
+ *     de llenar— porque es donde se descubre el error de dedo: a quien acaba de
+ *     teclear 95000 en vez de 9500 no se le puede pedir que adivine que existe
+ *     un camino para arreglarlo. Mañana el bloque ya no está y el dato se cambia
+ *     desde «Editar».
  *   · No borra. Guardar en blanco no hace nada; el servidor ignora lo vacío.
  *   · Quien no registra aperturas ve la lista y no los campos. Saber qué le
  *     falta a un servicio le sirve a cualquiera que lo consulte —es la
@@ -33,11 +65,18 @@ const input =
  * antes del primer turno; la segunda, ventas o cobranza antes de la primera
  * factura. Doce campos revueltos no le dicen a nadie qué le toca a él.
  */
-export default function Completar({ servicioId, falta, opciones, puedeCompletar }) {
+export default function Completar({ servicioId, falta, corregibles = [], opciones, puedeCompletar }) {
   const router = useRouter();
   const [valores, setValores] = useState({});
   const [estado, setEstado] = useState(null);
   const [guardando, setGuardando] = useState(false);
+  // Las correcciones nacen con lo que el campo dice hoy: se corrige un dato
+  // escrito, así que el punto de partida es verlo, no volver a teclearlo entero.
+  const [arreglos, setArreglos] = useState(() =>
+    Object.fromEntries(corregibles.map((c) => [c.campo, c.valor === null || c.valor === undefined ? '' : String(c.valor)]))
+  );
+  const [estadoArreglo, setEstadoArreglo] = useState(null);
+  const [corrigiendo, setCorrigiendo] = useState(false);
 
   const campos = [...falta.operar, ...falta.cobrar];
   const resumen = [
@@ -47,6 +86,15 @@ export default function Completar({ servicioId, falta, opciones, puedeCompletar 
 
   function fijar(campo, valor) {
     setValores((prev) => ({ ...prev, [campo]: valor }));
+  }
+
+  async function enviar(cuerpo) {
+    const res = await fetch(`/api/servicios/${servicioId}/completar`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo),
+    });
+    return { res, data: await res.json() };
   }
 
   async function guardar(e) {
@@ -65,12 +113,7 @@ export default function Completar({ servicioId, falta, opciones, puedeCompletar 
 
     setGuardando(true);
     try {
-      const res = await fetch(`/api/servicios/${servicioId}/completar`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
+      const { res, data } = await enviar(payload);
       if (!res.ok) {
         setEstado({ tipo: 'error', mensaje: data.error || 'No se pudo guardar.' });
         return;
@@ -94,6 +137,66 @@ export default function Completar({ servicioId, falta, opciones, puedeCompletar 
     }
   }
 
+  async function corregir(e) {
+    e.preventDefault();
+    setEstadoArreglo(null);
+
+    // Solo lo que de verdad cambió. Mandar un campo con el mismo valor no es una
+    // corrección, y el servidor lo descarta: pedirlo igual dejaría a la pantalla
+    // diciendo «1 dato corregido» cuando no se corrigió nada.
+    const cambios = Object.fromEntries(
+      corregibles
+        .map((c) => [c.campo, arreglos[c.campo]])
+        .filter(([campo, v]) => {
+          const antes = corregibles.find((c) => c.campo === campo)?.valor;
+          return v !== '' && v !== null && v !== undefined && String(v) !== String(antes ?? '');
+        })
+    );
+    if (Object.keys(cambios).length === 0) {
+      setEstadoArreglo({ tipo: 'info', mensaje: 'No cambiaste ningún dato.' });
+      return;
+    }
+
+    setCorrigiendo(true);
+    try {
+      const { res, data } = await enviar({ correcciones: cambios });
+      if (!res.ok) {
+        setEstadoArreglo({ tipo: 'error', mensaje: data.error || 'No se pudo corregir.' });
+        return;
+      }
+      const hechos = Object.entries(data.corregidos || {});
+      setEstadoArreglo({
+        tipo: hechos.length > 0 ? 'ok' : 'info',
+        mensaje: hechos.length
+          ? `${hechos.length} dato${hechos.length === 1 ? '' : 's'} corregido${
+              hechos.length === 1 ? '' : 's'
+            }, con tu nombre y la fecha: ${hechos
+              .map(([, { antes, despues }]) => `«${antes}» → «${despues}»`)
+              .join(', ')}.`
+          : 'No cambió nada.',
+      });
+      router.refresh();
+    } catch {
+      setEstadoArreglo({ tipo: 'error', mensaje: 'Error de red.' });
+    } finally {
+      setCorrigiendo(false);
+    }
+  }
+
+  const aviso = (e) => (
+    <p
+      className={`text-sm rounded-lg px-3 py-2 border ${
+        e.tipo === 'ok'
+          ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'
+          : e.tipo === 'error'
+            ? 'text-red-300 bg-red-500/10 border-red-500/30'
+            : 'text-slate-300 bg-slate-700/30 border-slate-600/40'
+      }`}
+    >
+      {e.mensaje}
+    </p>
+  );
+
   const cuerpo = (
     <>
       {/* En ámbar tenue y sin caja de alarma, a propósito. A los 217 servicios
@@ -112,6 +215,55 @@ export default function Completar({ servicioId, falta, opciones, puedeCompletar 
     </>
   );
 
+  /**
+   * El bloque de corrección, que solo existe si de verdad hay algo que corregir.
+   *
+   * No se dibuja vacío con el texto «aquí podrías corregir»: un bloque que
+   * aparece siempre y casi nunca sirve se vuelve parte del fondo, y entonces el
+   * día que sirve tampoco se ve. Si está, es porque hay al menos un dato que
+   * esta persona capturó hoy.
+   */
+  const arregloPropio = puedeCompletar && corregibles.length > 0 && (
+    <div className={`${campos.length > 0 ? 'mt-5 pt-5 border-t border-amber-500/20' : ''}`}>
+      <h3 className="text-sm font-semibold text-amber-200">Corregir lo que capturaste hoy</h3>
+      <p className="text-xs text-slate-500 max-w-3xl mt-0.5">
+        {corregibles.length === 1 ? 'Este dato lo capturaste' : 'Estos datos los capturaste'} tú hoy, así que
+        {corregibles.length === 1 ? ' lo' : ' los'} puedes corregir aquí mismo. La corrección queda registrada
+        con tu nombre, la fecha y lo que decía antes; el llenado original no se borra. Mañana ya no:
+        pasada la medianoche se cambia desde «Editar», con los permisos de siempre.
+      </p>
+
+      <form onSubmit={corregir} className="mt-3 space-y-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {corregibles.map((c) => (
+            <div key={c.campo}>
+              <label htmlFor={`corregir-${c.campo}`} className="block text-xs text-slate-400 mb-1">
+                {c.etiqueta} <span className="text-slate-600">· ahora dice «{String(c.valor)}»</span>
+              </label>
+              <Control
+                id={`corregir-${c.campo}`}
+                campo={c}
+                valor={arreglos[c.campo]}
+                opciones={opciones}
+                onChange={(v) => setArreglos((prev) => ({ ...prev, [c.campo]: v }))}
+              />
+            </div>
+          ))}
+        </div>
+
+        {estadoArreglo && aviso(estadoArreglo)}
+
+        <button
+          type="submit"
+          disabled={corrigiendo}
+          className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-ultra-blanco text-sm rounded-lg px-4 py-2"
+        >
+          {corrigiendo ? 'Corrigiendo…' : 'Guardar la corrección'}
+        </button>
+      </form>
+    </div>
+  );
+
   if (!puedeCompletar) {
     return (
       <section
@@ -125,60 +277,40 @@ export default function Completar({ servicioId, falta, opciones, puedeCompletar 
 
   return (
     <section id="completar" className="scroll-mt-20 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
-      {cuerpo}
+      {campos.length > 0 && cuerpo}
 
-      <form onSubmit={guardar} className="mt-4 space-y-4">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {campos.map((c) => (
-            <div key={c.campo} className={c.tipo === 'textarea' ? 'sm:col-span-2 lg:col-span-3' : ''}>
-              <label htmlFor={`completar-${c.campo}`} className="block text-xs text-slate-400 mb-1">
-                {c.etiqueta}
-              </label>
-              {c.tipo === 'catalogo' ? (
-                <CampoCatalogo
+      {campos.length > 0 && (
+        <form onSubmit={guardar} className="mt-4 space-y-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {campos.map((c) => (
+              <div key={c.campo} className={c.tipo === 'textarea' ? 'sm:col-span-2 lg:col-span-3' : ''}>
+                <label htmlFor={`completar-${c.campo}`} className="block text-xs text-slate-400 mb-1">
+                  {c.etiqueta}
+                </label>
+                <Control
                   id={`completar-${c.campo}`}
-                  valor={valores[c.campo] ?? ''}
-                  opciones={opciones?.[c.catalogo] || []}
+                  campo={c}
+                  valor={valores[c.campo]}
+                  opciones={opciones}
                   onChange={(v) => fijar(c.campo, v)}
-                  vacio="— sin capturar —"
-                  className={input}
                 />
-              ) : (
-                <input
-                  id={`completar-${c.campo}`}
-                  type={c.tipo === 'date' ? 'date' : ['money', 'number', 'int'].includes(c.tipo) ? 'number' : 'text'}
-                  step={c.tipo === 'int' ? '1' : ['money', 'number'].includes(c.tipo) ? 'any' : undefined}
-                  value={valores[c.campo] ?? ''}
-                  onChange={(e) => fijar(c.campo, e.target.value)}
-                  className={input}
-                />
-              )}
-            </div>
-          ))}
-        </div>
+              </div>
+            ))}
+          </div>
 
-        {estado && (
-          <p
-            className={`text-sm rounded-lg px-3 py-2 border ${
-              estado.tipo === 'ok'
-                ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'
-                : estado.tipo === 'error'
-                  ? 'text-red-300 bg-red-500/10 border-red-500/30'
-                  : 'text-slate-300 bg-slate-700/30 border-slate-600/40'
-            }`}
+          {estado && aviso(estado)}
+
+          <button
+            type="submit"
+            disabled={guardando}
+            className="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-ultra-blanco text-sm rounded-lg px-4 py-2"
           >
-            {estado.mensaje}
-          </p>
-        )}
+            {guardando ? 'Guardando…' : 'Guardar lo que capturé'}
+          </button>
+        </form>
+      )}
 
-        <button
-          type="submit"
-          disabled={guardando}
-          className="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-ultra-blanco text-sm rounded-lg px-4 py-2"
-        >
-          {guardando ? 'Guardando…' : 'Guardar lo que capturé'}
-        </button>
-      </form>
+      {arregloPropio}
     </section>
   );
 }
