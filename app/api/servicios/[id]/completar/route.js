@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { conPermiso, leerJson } from '@/lib/api';
+import { conPermiso, leerObjeto } from '@/lib/api';
 import { completarAlta } from '@/lib/servicios';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +21,9 @@ export const dynamic = 'force-dynamic';
  * y solo de vacío a valor— lo impone `completarAlta()`, que es quien escribe.
  */
 export const PATCH = conPermiso('apertura', async (request, { params, usuario }) => {
-  const body = await leerJson(request);
+  // `leerObjeto` y no `leerJson`: con el cuerpo `"texto"` se recorrían los
+  // índices de la cadena y la respuesta contestaba 200 diciendo que había
+  // rechazado cinco campos llamados «0», «1», «2»…
+  const body = await leerObjeto(request);
   return NextResponse.json(completarAlta(Number(params.id), body, usuario));
 });

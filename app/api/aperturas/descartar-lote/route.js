@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { conPermiso, leerJson } from '@/lib/api';
+import { conPermiso, leerObjeto } from '@/lib/api';
 import { descartarAperturasEnLote } from '@/lib/servicios';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +18,9 @@ export const dynamic = 'force-dynamic';
  * siga siendo reversible con `reactivarApertura()`.
  */
 export const POST = conPermiso('apertura', async (request, { usuario }) => {
-  const { ids, motivo } = await leerJson(request);
+  // `leerObjeto` y no `leerJson`: desestructurar un cuerpo `null` reventaba y
+  // contestaba 500, o sea «el error es nuestro», cuando lo que faltaba era el
+  // cuerpo.
+  const { ids, motivo } = await leerObjeto(request);
   return NextResponse.json(descartarAperturasEnLote(ids, { motivo }, usuario));
 });

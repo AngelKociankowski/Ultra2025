@@ -53,14 +53,33 @@ export default function Paginador({ ruta, parametros = {}, pagina, porPagina, to
   };
 
   /**
-   * Los números que se enseñan: las dos primeras, las dos últimas y la vecindad
-   * de la actual. Con cinco páginas salen las cinco; el recorte está para el día
-   * que la lista crezca y no para hoy.
+   * Los números que se enseñan: una tira de siete alrededor de la actual, más la
+   * primera y la última.
+   *
+   * La versión anterior enseñaba las dos primeras, las dos últimas y la vecindad
+   * inmediata, y con once páginas eso dejaba «Anterior 1 2 … 10 11 Siguiente»:
+   * cuatro números de once, y las páginas 3 a 9 solo alcanzables dando
+   * «Siguiente» siete veces o escribiendo la URL a mano. Con siete seguidos se
+   * llega a casi cualquier página de un clic, y la tira se desplaza al avanzar.
+   * Con pocas páginas salen todas, que es el caso de hoy.
    */
+  const ANCHO = 7;
+  const inicio = Math.max(1, Math.min(pagina - Math.floor(ANCHO / 2), paginas - ANCHO + 1));
+  const fin = Math.min(paginas, inicio + ANCHO - 1);
+
   const numeros = [];
-  for (let n = 1; n <= paginas; n++) {
-    if (n <= 2 || n > paginas - 2 || Math.abs(n - pagina) <= 1) numeros.push(n);
-    else if (numeros[numeros.length - 1] !== '…') numeros.push('…');
+  if (inicio > 1) {
+    numeros.push(1);
+    // El «…» solo cuando de verdad se salta algo: con un hueco de una página
+    // sería más corto enseñar la página que los puntos.
+    if (inicio > 3) numeros.push('…');
+    else if (inicio === 3) numeros.push(2);
+  }
+  for (let n = inicio; n <= fin; n++) numeros.push(n);
+  if (fin < paginas) {
+    if (fin < paginas - 2) numeros.push('…');
+    else if (fin === paginas - 2) numeros.push(paginas - 1);
+    numeros.push(paginas);
   }
 
   const boton = 'text-xs rounded-lg px-2.5 py-1.5 border';

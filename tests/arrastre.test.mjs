@@ -4,11 +4,16 @@
  * El hallazgo que motiva todo esto es incómodo. La pantalla de Aperturas abría
  * con una caja ámbar que decía «219 aperturas sin aplicar · 875 guardias que no
  * están sumando», y llevaba meses diciendo lo mismo. No podía bajar: las 219
- * son todas de la importación inicial —`registrarApertura()` siempre crea o
- * amplía un servicio, así que la plataforma no puede generar una apertura
- * pendiente nueva— y las viejas describen servicios que hace años no operan.
- * Aplicarlas inventaría doscientos servicios que no están en la calle; no
- * aplicarlas dejaba el aviso encendido para siempre.
+ * vinieron todas en el archivo de la importación inicial, y las viejas describen
+ * servicios que hace años no operan. Aplicarlas inventaría doscientos servicios
+ * que no están en la calle; no aplicarlas dejaba el aviso encendido para
+ * siempre.
+ *
+ * Una corrección, porque este comentario repetía una afirmación falsa del plan:
+ * la plataforma SÍ puede generar una apertura pendiente nueva. Deshacer una
+ * apertura aplicada por error deja `servicio_id` en nulo, y devolver una
+ * descartada a la cola hace lo propio. Esas no son arrastre del archivo y se
+ * cuentan aparte; su prueba es `tests/devueltas-a-la-cola.test.mjs`.
  *
  * El costo no era el aviso: era que enseñaba a pasar por encima de los avisos
  * ámbar, y con él puesto los que sí piden algo se leían igual de poco.

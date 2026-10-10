@@ -11,7 +11,7 @@ import {
   comparativoCorte,
 } from '@/lib/queries';
 import { formatCurrency, formatNumber } from '@/lib/utils';
-import { gruposEditables } from '@/lib/rbac';
+import { gruposEditables, puede } from '@/lib/rbac';
 import { conteoComentarios } from '@/lib/comentarios';
 import { facturasDelPeriodoPorServicio, numerosDelCorte, idsPorNombre } from '@/lib/facturacion';
 import {
@@ -187,6 +187,10 @@ export default function EstadoFuerza({ searchParams }) {
   // Un solo GROUP BY para toda la tabla, no una consulta por renglón.
   const notas = esCorte ? new Map() : conteoComentarios();
   const grupos = gruposEditables(usuario.rol);
+  // El desglose por jornada se arregla en `CorreccionServicio`, que la ficha
+  // solo monta para quien puede corregir. Sin esta condición, ventas, finanzas,
+  // jurídico y el espectador veían un enlace a un ancla que su ficha no trae.
+  const puedeCorregir = puede(usuario.rol, 'corregir');
 
   // El número de factura y el contrato se resuelven de una vez para toda la
   // tabla: una consulta agrupada, no una por renglón.
@@ -414,10 +418,30 @@ export default function EstadoFuerza({ searchParams }) {
                  * mandaría a un bloque que no está en la pantalla.
                  */
                 const falta = editable ? loQueFalta(s) : null;
-                const captura = editable
-                  ? `/estado-fuerza/${s.id}#${falta.total > 0 ? 'completar' : 'editar'}`
-                  : null;
-                const corregir = editable ? `/estado-fuerza/${s.id}#corregir` : null;
+
+                /**
+                 * Y una marca sin destino se queda como texto.
+                 *
+                 * El enlace se ofrecía mirando solo si la vista es editable, no
+                 * si la ficha de ESE servicio y de ESE rol monta de verdad el
+                 * bloque. En un servicio dado de baja o suspendido no se monta
+                 * ni «Falta por capturar» ni el editor —los dos piden ACTIVO—,
+                 * y el editor tampoco existe para quien no edita ningún grupo
+                 * de campos: el espectador acababa con un enlace a `#editar`
+                 * que lo dejaba arriba de la ficha, sin arreglo y sin
+                 * explicación. Lo mismo con `#corregir`, que solo se monta para
+                 * quien tiene permiso de corregir.
+                 *
+                 * Es exactamente lo que el componente `Marca` ya hace bien en
+                 * los cortes cerrados: señalar el hueco sin prometer un arreglo
+                 * que al llegar no está.
+                 */
+                const activo = s.estatus === 'ACTIVO';
+                const captura =
+                  editable && activo && (falta.total > 0 || grupos.length > 0)
+                    ? `/estado-fuerza/${s.id}#${falta.total > 0 ? 'completar' : 'editar'}`
+                    : null;
+                const corregir = editable && puedeCorregir ? `/estado-fuerza/${s.id}#corregir` : null;
 
                 return (
                 <tr key={s.id} className="group hover:bg-slate-800/40 [&>td]:border-t [&>td]:border-slate-800/70">
@@ -447,17 +471,35 @@ export default function EstadoFuerza({ searchParams }) {
                           llevarlo a cero: es el mismo error que el aviso
                           permanente de aperturas sin aplicar, que enseñó a la
                           operación a pasar por encima de los avisos ámbar. */}
-                      {falta?.total > 0 && (
-                        <Link
-                          href={captura}
-                          title={`Faltan por capturar: ${[...falta.operar, ...falta.cobrar]
+                      {falta?.total > 0 &&
+                        (() => {
+                          const titulo = `Faltan por capturar: ${[...falta.operar, ...falta.cobrar]
                             .map((c) => c.etiqueta)
-                            .join(', ')}`}
-                          className="text-[10px] bg-amber-500/10 text-amber-300/80 border border-amber-500/25 rounded px-1.5 shrink-0 whitespace-nowrap hover:text-amber-200"
-                        >
-                          faltan {falta.total} dato{falta.total === 1 ? '' : 's'}
-                        </Link>
-                      )}
+                            .join(', ')}`;
+                          const clase =
+                            'text-[10px] bg-amber-500/10 text-amber-300/80 border border-amber-500/25 rounded px-1.5 shrink-0 whitespace-nowrap';
+                          /*
+                           * Sin destino —un servicio que ya no está activo— la
+                           * etiqueta sigue diciendo lo que falta, pero no
+                           * promete un arreglo que la ficha no va a tener.
+                           *
+                           * El texto va interpolado en las dos ramas y no
+                           * guardado en una variable, aunque se repita: con una
+                           * sola cadena, «faltan 11 datos» aparece completa en
+                           * los datos que React deja al final del documento, y
+                           * las pruebas que cuentan etiquetas sobre el HTML
+                           * encontraban el doble de las que se dibujaron.
+                           */
+                          return captura ? (
+                            <Link href={captura} title={titulo} className={`${clase} hover:text-amber-200`}>
+                              faltan {falta.total} dato{falta.total === 1 ? '' : 's'}
+                            </Link>
+                          ) : (
+                            <span title={titulo} className={clase}>
+                              faltan {falta.total} dato{falta.total === 1 ? '' : 's'}
+                            </span>
+                          );
+                        })()}
                       {!esCorte && notas.get(s.id) > 0 && (
                         <Link
                           href={`/estado-fuerza/${s.id}#comentarios`}
@@ -629,7 +671,18 @@ export default function EstadoFuerza({ searchParams }) {
 
         <Paginador
           ruta="/estado-fuerza"
-          parametros={searchParams}
+          /**
+           * Los filtros que la pantalla de verdad respeta, no los que vengan en
+           * la URL.
+           *
+           * Con `searchParams` crudo, paginar arrastraba parámetros que esta
+           * pantalla había descartado —`falta=1` dentro de un corte cerrado, por
+           * ejemplo, donde no se etiqueta ni se filtra— y un parámetro repetido
+           * (`?zona=A&zona=B`) llegaba como el arreglo `['A','B']` y se pegaba
+           * en el enlace como `zona=A,B`, que no es ninguna zona. Lo que se
+           * conserva al cambiar de página es el filtro que está puesto.
+           */
+          parametros={{ ...filtros, dia: esDia ? dia : '' }}
           pagina={hoja.pagina}
           porPagina={POR_PAGINA}
           total={hoja.total}

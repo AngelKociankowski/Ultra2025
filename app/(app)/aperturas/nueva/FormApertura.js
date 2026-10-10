@@ -354,12 +354,27 @@ export default function FormApertura({ catalogos, opciones, esquemas, serviciosA
           </div>
           {opciones.turnos.length === 0 && <SinCatalogo que="jornadas" />}
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-            {opciones.turnos.map((t) => (
+            {opciones.turnos.map((t, i) => (
               <div key={t}>
                 <label className="block text-[11px] text-slate-500 mb-0.5">{t}</label>
                 <input
                   type="number"
                   min="0"
+                  /**
+                   * Obligatoria mientras la rejilla esté vacía.
+                   *
+                   * Las jornadas son el quinto dato del mínimo para abrir, pero
+                   * son veinte casillas y una sola respuesta: poner `required`
+                   * en todas pediría veinte números, y un campo oculto con
+                   * `required` el navegador no lo sabe señalar —se niega a
+                   * enviar y no dice dónde—. Así, hasta que haya un guardia
+                   * capturado la primera casilla es la que el navegador marca,
+                   * que es donde hay que mirar; en cuanto el total sube, deja de
+                   * exigirse. Antes solo lo frenaban el JavaScript del botón y
+                   * el servidor, y la rejilla no salía en los `required` del
+                   * formulario.
+                   */
+                  required={total === 0 && i === 0}
                   value={turnos[t] ?? ''}
                   onChange={(e) => {
                     const v = e.target.value;

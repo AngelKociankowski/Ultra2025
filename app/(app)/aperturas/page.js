@@ -120,8 +120,21 @@ export default function Aperturas({ searchParams }) {
               {formatNumber(pendientes.recientes.guardias)} guardias que no están sumando
             </p>
             <p className="text-xs text-amber-400 max-w-3xl mt-0.5">
-              De los últimos {MESES_RECIENTE} meses. Están anotadas, pero nunca se les creó el servicio, así que no
-              aparecen en el estado de fuerza.
+              {/* Si hay devueltas dentro, «de los últimos doce meses» ya no
+                  describe lo que la caja cuenta, y decirlo igual sería contar
+                  mal a propósito: una apertura deshecha hoy puede ser de 2023 y
+                  aun así es lo más vivo que hay en esta lista. */}
+              {pendientes.recientes.devueltas > 0 ? (
+                <>
+                  De los últimos {MESES_RECIENTE} meses, más {formatNumber(pendientes.recientes.devueltas)} que la
+                  plataforma devolvió a la cola —al deshacer una apertura aplicada o al sacarla de las
+                  descartadas—, que cuentan aquí sin importar su fecha porque alguien las volvió a poner sobre la
+                  mesa.{' '}
+                </>
+              ) : (
+                <>De los últimos {MESES_RECIENTE} meses. </>
+              )}
+              Están anotadas y hoy no tienen servicio creado, así que no aparecen en el estado de fuerza.
               {puedeAplicar
                 ? ' Aplicar crea el servicio con los datos que la propia apertura ya trae. Si el servicio ya no opera, Descartar la saca de esta cuenta sin borrarla del histórico.'
                 : ' Ventas, operaciones o el administrador pueden aplicarlas o descartarlas.'}
@@ -165,11 +178,20 @@ export default function Aperturas({ searchParams }) {
         </p>
       )}
 
-      {pendientes.total.n === 0 && descartadas > 0 && (
-        // Cuando ya no queda ninguna pendiente el aviso de arriba desaparece, y
-        // con él la única puerta a las descartadas. Esta la deja abierta.
+      {/* La puerta a las descartadas, cuando la caja ámbar no está para ofrecerla.
+          El enlace «N descartadas» vive dentro de esa caja, que solo se dibuja
+          si hay pendientes recientes; y este párrafo de respaldo exigía además
+          que no quedara ninguna pendiente de ninguna clase. Con el arrastre
+          todavía abierto y cero recientes —que es un estado perfectamente
+          normal— no había forma de llegar a las descartadas más que escribiendo
+          la URL, y ahí es donde están las 204 que alguien acaba de cerrar en
+          lote: justo las que hay que poder revisar y devolver. */}
+      {descartadas > 0 && pendientes.recientes.n === 0 && (
         <p className="text-xs text-slate-500">
-          No queda ninguna apertura pendiente de aplicar ·{' '}
+          {pendientes.total.n === 0
+            ? 'No queda ninguna apertura pendiente de aplicar'
+            : 'No hay aperturas recientes sin aplicar'}{' '}
+          ·{' '}
           <Link href={soloDescartadas ? '/aperturas' : '/aperturas?descartadas=1'} className="text-cyan-400 hover:underline">
             {soloDescartadas ? 'volver al mes' : `ver las ${formatNumber(descartadas)} descartadas`}
           </Link>

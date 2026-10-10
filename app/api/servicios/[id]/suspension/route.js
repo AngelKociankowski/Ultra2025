@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { conPermiso, leerJson } from '@/lib/api';
+import { conPermiso, leerObjeto } from '@/lib/api';
 import { suspenderServicio, reactivarServicio } from '@/lib/servicios';
 
 export const dynamic = 'force-dynamic';
@@ -12,12 +12,12 @@ export const dynamic = 'force-dynamic';
  * administrador—, que son los que saben si el cliente paró o se fue.
  */
 export const POST = conPermiso('cancelacion', async (request, { params, usuario }) => {
-  const { motivo, desde } = await leerJson(request).catch(() => ({}));
+  const { motivo, desde } = await leerObjeto(request).catch(() => ({}));
   return NextResponse.json(suspenderServicio(params.id, { motivo, desde }, usuario));
 });
 
 /** Y de vuelta a la operación, con la plantilla que tenía. */
 export const DELETE = conPermiso('cancelacion', async (request, { params, usuario }) => {
-  const { motivo } = await leerJson(request).catch(() => ({}));
+  const { motivo } = await leerObjeto(request).catch(() => ({}));
   return NextResponse.json(reactivarServicio(params.id, { motivo }, usuario));
 });
