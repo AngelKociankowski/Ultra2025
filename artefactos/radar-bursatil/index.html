@@ -562,10 +562,12 @@ PLAN_DAILY_LIMIT: { FREE: 250, STARTER: Infinity, PREMIUM: Infinity, ULTIMATE: I
 PLAN_PER_MIN: { FREE: 250, STARTER: 250, PREMIUM: 700, ULTIMATE: 2500, EXAMPLE: Infinity }, // no verificado (pagados)
 RESERVE_CALLS: 10,
 OUTAGE_STREAK: 3, // corte de la corrida: errores reintentables seguidos (director, ronda 2)
+// 09 P0: "Limit Reach" sin tope diario = freno por minuto: pausa (≥ 60 s o lo que diga FMP); más de THROTTLE_MAX en una corrida, parcial
+THROTTLE_PAUSE_MS: 60000, THROTTLE_MAX: 5,
 SUSPECT_STREAK: 12, SUSPECT_MIN: 10, SUSPECT_RATIO: 0.25, // "posible límite" con texto desconocido (07 §E5)
 COVERAGE_MIN: 0.6, // corrida con menos filas que esta fracción de lo planeado → parcial "cobertura baja" (director, E4)
 SIGNAL_BUY_PCT: 52, SIGNAL_AVOID_PCT: 48, PROB_BAR_SPAN: 15, // señal gobernada por la probabilidad mostrada (07 §1)
-SYNC: { LOAD_TIMEOUT_MS: 4000, DOC_MAX_BYTES: 200000, COUNTER_DEBOUNCE_MS: 5000, LIVE_DEBOUNCE_MS: 3000, LIVE_SET_DEBOUNCE_MS: 10000, RUN_LEASE_MS: 30000, RUN_STALE_MIN: 15, KEEP_DAYS: 2, LIVE_GRACE_MS: 300000, COUNTER_MAX: 100000, BEAT_MS: 20000, BEAT_STALE_MS: 75000 },
+SYNC: { LOAD_TIMEOUT_MS: 4000, DOC_MAX_BYTES: 150000, COUNTER_DEBOUNCE_MS: 5000, LIVE_DEBOUNCE_MS: 3000, LIVE_SET_DEBOUNCE_MS: 10000, RUN_LEASE_MS: 30000, RUN_STALE_MIN: 15, KEEP_DAYS: 2, LIVE_GRACE_MS: 300000, COUNTER_MAX: 100000, BEAT_MS: 20000, BEAT_STALE_MS: 75000 },
 LIMIT_TRUST_MIN: 50, FREE_REPROBE_MS: 2 * 3600000, // con menos llamadas contadas hoy, un "límite" de FMP no infla el contador (puede ser un cambio de plan)
 RESUME_MAX: 3, RUN_CACHE_LS_MAX: 1500000, // corrida que se retoma: reanudaciones automáticas por día y tope del respaldo local
 STAGE1_MIN_FREE: 77, // cribado recortable solo sobre la muestra Free nominal
@@ -2010,17 +2012,26 @@ const sigAnn = Math.sqrt(Math.max(0, quadForm(w, cov))), m = (muAnn - (sigAnn * 
 return { muAnn, sigAnn, lo: A * Math.exp(m - 1.2815516 * s), med: A * Math.exp(m), hi: A * Math.exp(m + 1.2815516 * s), pAbove: s > 0 ? normCdf(m / s) : null,
 badYear: 1 - Math.exp(muAnn - (sigAnn * sigAnn) / 2 - 1.6448536 * sigAnn), usdW: inv, mxnW: 1 - inv };
 }
-// monto sugerido que SÍ alcanza (PF-B1): desde el de la fórmula de §4.7.8, el primero (de 100 en 100) que con títulos enteros
-// compra todo el núcleo con precio y deja realized ≥ MIN_REALIZED; se simula, no se estima por cociente
-function minAmountEnough({ inst, w, A, fx, from }) {
-const core = inst.map((it, i) => (it.role === "core" && isNum(it.priceUSD) && w[i] > 0 ? i : -1)).filter(i => i >= 0);
-let a = Math.ceil(Math.max(isNum(from) ? from : 0, A + 1) / 100) * 100;
-for (let k = 0; k < 5000 && a <= PORT.MAX_AMOUNT; k++, a += a < 100000 ? 100 : 1000) {
-const z = finalizeShares({ inst, w, A: a, fx, fractional: false });
-if (z.realized >= PORT.MIN_REALIZED && core.every(i => z.shares[i] >= 1)) return a;
+// 09 P0: UN solo criterio para el estado y el mínimo. Con títulos enteros, un monto "alcanza" si lo comprado es ≥ MIN_REALIZED de
+// lo planeado (o queda todo invertido). El mínimo es el primer monto de la rejilla (de 100 en 100; de 1 000 en 1 000 desde 100 000)
+// desde el que alcanza en TODA la rejilla hasta el tope revisado: si más arriba vuelve a no alcanzar, sube al primero estable.
+// `monto_insuficiente` ⇔ monto < mínimo, así que el estado es monótono en el monto.
+const minStep = a => (a < 100000 ? 100 : 1000);
+const MIN_MEMO = new Map(); // mismo portafolio con otro monto: el mínimo no cambia (depende de precios, pesos y tipo de cambio)
+function minAmountStable({ inst, w, fx }) {
+const key = fx + "|" + inst.map((it, i) => (isNum(it.priceUSD) ? it.priceUSD : "-") + ":" + w[i] + ":" + it.role).join(",");
+if (MIN_MEMO.has(key)) return MIN_MEMO.get(key);
+const enough = a => { const z = finalizeShares({ inst, w, A: a, fx, fractional: false }); return z.realized >= PORT.MIN_REALIZED || z.wFinal.reduce((x, y) => x + y, 0) >= 1 - 1e-12; };
+// por encima de ≈ 4 títulos de cada posición grande (≥ 10 %) el redondeo ya no baja de la mitad
+const big = inst.reduce((m, it, i) => (isNum(it.priceUSD) && w[i] >= 0.1 ? Math.max(m, (it.priceUSD * fx) / w[i]) : m), 0);
+const top = Math.min(PORT.MAX_AMOUNT, Math.max(300000, 4 * big));
+let min = PORT.MIN_AMOUNT;
+for (let a = PORT.MIN_AMOUNT; a <= top; a += minStep(a)) if (!enough(a)) min = a + minStep(a);
+if (MIN_MEMO.size >= 32) MIN_MEMO.delete(MIN_MEMO.keys().next().value);
+MIN_MEMO.set(key, min);
+return min;
 }
-return null;
-}
+const UNI_MEMO = new WeakMap();
 // orquestación pura (§4.9): la misma entrada da la misma salida
 function buildPortfolio({ output, live, profile, amountMXN, fractional, nowMs, cetesPct = null }) {
 const empty = state => ({ state, positions: [], cashMXN: 0, stats: null, notes: [], excluded: [], meta: null });
@@ -2030,7 +2041,10 @@ if (!P) return empty("sin_perfil");
 if (!(isNum(amountMXN) && amountMXN >= PORT.MIN_AMOUNT && amountMXN <= PORT.MAX_AMOUNT)) return empty("sin_monto");
 const fx = fxRate({ rows: output.rows, live }), cetes = isNum(cetesPct) ? cetesPct / 100 : 0;
 if (!fx) return empty("sin_tc");
-const ins = instrumentsFrom({ rows: output.rows, example: !!output.example }), uni = mxnUniverse({ inst: ins.inst, rows: output.rows, rf: isNum(output.rf) ? output.rf : 0 });
+// instrumentos y universo en pesos dependen solo de la corrida: se calculan una vez por análisis (otro monto o perfil los reusa)
+let cu = UNI_MEMO.get(output);
+if (!cu) { const i0 = instrumentsFrom({ rows: output.rows, example: !!output.example }); cu = { ins: i0, uni: mxnUniverse({ inst: i0.inst, rows: output.rows, rf: isNum(output.rf) ? output.rf : 0 }) }; UNI_MEMO.set(output, cu); }
+const ins = cu.ins, uni = cu.uni;
 if (uni.error) return empty("sin_tc");
 const excluded = ins.excluded.concat(uni.excluded), A = amountMXN, inst = uni.inst;
 const al = inst.length ? allocate({ inst, cov: uni.cov, profile }) : { x: [], sigX: 0, k: 0, w: [], cashW: 1, capped: [] };
@@ -2042,8 +2056,8 @@ example: !!output.example, window: uni.window, k: al.k, sigX: al.sigX, targetVol
 minAmountWhole: fz.minAmountWhole, realized: fz.realized, cetes: isNum(cetesPct) ? cetesPct : null, satCount: inst.filter(it => it.role === "sat").length, capped: al.capped };
 const invested = fz.wFinal.reduce((a, b) => a + b, 0);
 let state = "ok";
-if (!fractional && fz.realized < PORT.MIN_REALIZED && invested < 1) { state = "monto_insuficiente"; meta.minAmountWhole = minAmountEnough({ inst, w: al.w, A, fx: fx.rate, from: fz.minAmountWhole }); }
-else if (!inst.length || (invested === 0 && fz.realized >= PORT.MIN_REALIZED)) state = "solo_liquidez";
+if (!fractional) { meta.minAmountWhole = minAmountStable({ inst, w: al.w, fx: fx.rate }); if (A < meta.minAmountWhole) state = "monto_insuficiente"; }
+if (state === "ok" && (!inst.length || (invested === 0 && fz.realized >= PORT.MIN_REALIZED))) state = "solo_liquidez";
 const pos = inst.map((it, i) => ({ id: it.id, display: it.display, name: it.name, role: it.role === "core" ? "Núcleo" : "Satélite", kind: it.kind, proxyOf: it.proxyOf, signalLabel: it.row.signalLabel,
 signal: it.signal, pct: it.pct, ref: it.ref, weight: fz.wFinal[i], target: al.w[i], amountMXN: fz.amount[i], priceMXN: fz.priceMXN[i], priceUSD: it.priceUSD, shares: fz.shares[i], sector: it.sector,
 why: it.why, coreKey: it.coreKey })).filter(p => p.amountMXN > 0);
@@ -2065,7 +2079,7 @@ makeError, classifyText, asArray, normalizeEod, riskSeries, filterFloatUniverse,
 stage1Select, regimeFrom, stockFeatures, infoFeatures, stockScore, stockCaps, stockPrediction,
 nonStockScore, displayPct, signalFromProb, stockUpProb, retStats, cleanZeros, extractRows, splitDay, joinDay, bytesOf, explainStock, explainNonStock, technicals, fundamentalsOf, analyze,
 planRun, liveIntervalMs, canAuto, fmt, detailPhrases, runAlive,
-PORT, PORT_MAP, parseMXN, parseRate, fxRate, muTotOf, instrumentsFrom, mxnUniverse, allocate, finalizeShares, portfolioStats, buildPortfolio,
+PORT, PORT_MAP, parseMXN, parseRate, fxRate, muTotOf, instrumentsFrom, mxnUniverse, allocate, finalizeShares, portfolioStats, buildPortfolio, minAmountStable,
 };
 root.RadarCore = Object.freeze(RadarCore);
 })(globalThis);
@@ -2678,6 +2692,15 @@ const persist = () => tier !== "EXAMPLE";
 // `o.uncounted()`: la llamada ya la contó otra pestaña (la dio por perdida en vuelo); no se cuenta dos veces (v5, W2)
 const uncounted = o => { try { return typeof o.uncounted === "function" && o.uncounted() === true; } catch (e) { return false; } };
 const limitOf = () => CFG.PLAN_DAILY_LIMIT[tier];
+// 09 P0: en un plan sin tope diario, "Limit Reach" es un freno por minuto, no el fin del día: la cola entera se pausa hasta
+// `pauseUntil` (≥ THROTTLE_PAUSE_MS o el retryAfter de FMP) y el error pasa a "throttled" (sin aviso de límite diario)
+let pauseUntil = 0;
+function limitSeen(e) {
+if (e.kind !== "limit_reached") return e;
+if (!paid()) { budget.markLimitHit(); return e; }
+pauseUntil = Math.max(pauseUntil, clock() + Math.max(CFG.THROTTLE_PAUSE_MS, isNum(e.retryAfterMs) ? e.retryAfterMs : 0));
+return Object.assign(e, { kind: "throttled", userText: C.ERR_TEXT.rate, retryAfterMs: pauseUntil - clock() });
+}
 const emptyCats = () => Object.fromEntries(CATS.map(c => [c, 0]));
 
 // runDay: marca "corrida lanzada hoy"; no la borran reset() ni el cambio de día (ronda 2)
@@ -2755,8 +2778,12 @@ const ep = ENDPOINTS[key];
 if (!ep) throw C.makeError("bad_request", "bug", { raw: "endpoint desconocido: " + key, section: o.section });
 const input = ep.build(args), id = ep.tool + "|" + stable(input), cat = o.cat || "manual";
 const cache = o.cache === false ? false : o.refresh ? Object.assign({}, DAY, { refresh: true }) : Object.assign({}, DAY);
+// freno por minuto: la corrida decide con `o.onThrottle` (false = no reintentar); fuera de ella, un solo reintento tras la pausa
+let thr = 0;
+const again = e => e.kind === "throttled" && (++thr, o.onThrottle ? o.onThrottle(e) !== false : thr <= 1);
 for (let attempt = 0; ; attempt++) {
 if (o.signal && o.signal.aborted) throw C.makeError("cancelled", "cancelled", { section: o.section });
+while (clock() < pauseUntil) { if (o.signal && o.signal.aborted) throw C.makeError("cancelled", "cancelled", { section: o.section }); await sleep(Math.min(250, pauseUntil - clock())); }
 let w; while ((w = bucket.take()) > 0) await sleep(Math.min(w, 250)); // sondeo corto: el reloj inyectado puede ir más rápido
 const release = await gate.acquire();
 let res;
@@ -2769,11 +2796,11 @@ res = await mcp.callTool(CFG.SERVER, ep.tool, input, opts);
 release();
 } catch (raw) {
 release();
-const e = Object.assign({}, classifyError(raw), { section: o.section });
+const e = limitSeen(Object.assign({}, classifyError(raw), { section: o.section }));
 if (COUNTED.has(e.code)) { if (!uncounted(o)) budget.note(1, cat); lastFailed.set(id, clock()); }
-if (e.kind === "limit_reached") budget.markLimitHit();
 log({ key, cat, section: o.section, ok: false, code: e.code, kind: e.kind });
 if (feeds) { inCall.set(id, inCall.get(id) - 1); settleHeld(id, null); }
+if (again(e)) continue;
 if (e.retryable && !o.noRetry && attempt === 0) { await sleep(Math.min(60000, isNum(e.retryAfterMs) ? e.retryAfterMs : 500 + Math.random() * 1000)); continue; }
 throw e;
 }
@@ -2782,7 +2809,7 @@ if (!cached) { if (!uncounted(o)) budget.note(1, cat); lastSeen.set(id, clock())
 if (feeds) { inCall.set(id, inCall.get(id) - 1); settleHeld(id, cached ? null : res); }
 log({ key, cat, section: o.section, ok: true, cached });
 try { return C.extractRows(res); } // 07 §E1: payload, structuredContent o texto JSON
-catch (err) { const pe = classifyError(err); if (pe.kind === "limit_reached") budget.markLimitHit(); throw Object.assign(pe, { section: o.section }); }
+catch (err) { const pe = limitSeen(Object.assign({}, classifyError(err), { section: o.section })); if (again(pe)) continue; throw pe; }
 }
 }
 
@@ -2826,12 +2853,11 @@ lastSeen.set(id, Math.max(lastSeen.get(id) || 0, mark && isNum(mark.storedAt) ? 
 log({ key, cat, section: o.section, ok: true, cached: !!mark, watch: true });
 let rows;
 try { rows = C.extractRows(res); }
-catch (err) { const pe = classifyError(err); if (pe.kind === "limit_reached") budget.markLimitHit(); emit({ type: "error", error: Object.assign(pe, { section: o.section }) }); return; }
+catch (err) { emit({ type: "error", error: limitSeen(Object.assign({}, classifyError(err), { section: o.section })) }); return; }
 emit({ type: "data", rows, storedAt: mark && isNum(mark.storedAt) ? mark.storedAt : t, fresh: !mark });
 } else if (ev.type === "error") {
-const e = Object.assign({}, classifyError(ev.error), { section: o.section });
+const e = limitSeen(Object.assign({}, classifyError(ev.error), { section: o.section }));
 if (COUNTED.has(e.code) && !callBusy(id) && !failedRecently(id, clock())) budget.note(1, cat); // misma regla que call() (S3); la llamada en vuelo cuenta su propio fallo
-if (e.kind === "limit_reached") budget.markLimitHit();
 log({ key, cat, section: o.section, ok: false, code: e.code, kind: e.kind, watch: true });
 emit({ type: "error", error: e });
 }
@@ -3309,7 +3335,8 @@ const OTHER_RUNNING = "Otro dispositivo está corriendo el análisis de hoy; apa
 function runningText() {
 const r = App.state.run, secs = Math.max(1, (Date.now() - (r.t0 || Date.now())) / 1000), rate = r.net >= 10 ? r.net / secs : 2;
 const min = Math.max(1, Math.ceil(Math.max(0, (r.total || 0) - (r.done || 0)) / rate / 60));
-return (r.resumed ? RESUMED_TXT + " " : "") + `Mantén esta pantalla abierta mientras se analiza (≈ ${min} min).`;
+const pause = isNum(r.throttleUntil) && App.now() < r.throttleUntil ? `FMP pidió una pausa por minuto; la corrida sigue sola en ≈ ${Math.ceil((r.throttleUntil - App.now()) / 1000)} s. ` : "";
+return (r.resumed ? RESUMED_TXT + " " : "") + pause + `Mantén esta pantalla abierta mientras se analiza (≈ ${min} min).`;
 }
 // el aviso de un parcial dice su causa verdadera (MEDIO E3)
 const PARTIAL_TXT = {
@@ -3320,6 +3347,7 @@ const PARTIAL_TXT = {
 "cobertura baja": "Análisis parcial: llegaron datos de muy pocos activos; puede que FMP haya agotado tu límite sin avisar.",
 presupuesto: "Análisis parcial: se pausó para no pasar de las llamadas previstas; se puede reanudar.",
 "sin espacio": "Análisis parcial: se pausó porque no hay espacio en este navegador para llevar la cuenta; libera espacio o usa otro navegador.",
+"por minuto": "Análisis parcial: FMP limitó las consultas por minuto; se puede reanudar.", // 09 P0 (planes sin tope diario)
 };
 
 const STRIP = C.NONSTOCK.filter(d => d.strip);
@@ -3739,7 +3767,7 @@ function applyPageRule() {
 const s = App.state, by = {};
 for (const k of ["strip", "ranking", "breadth", "macro", "status"]) {
 const e = s.sections[k].err;
-if (e && e.kind !== "transient" && s.sections[k].state !== "ok") (by[e.kind] = by[e.kind] || []).push(k);
+if (e && e.kind !== "transient" && e.kind !== "throttled" && s.sections[k].state !== "ok") (by[e.kind] = by[e.kind] || []).push(k); // el freno por minuto no bloquea la página (09)
 }
 for (const [kind, secs] of Object.entries(by)) {
 if (secs.length < 2) continue;
@@ -4353,9 +4381,9 @@ s.result = out; s.resultSource = s.mode === "example" ? "example" : "run"; s.res
 saveDay(out, s.run.dayET, runId || s.run.uid);
 // la tanda de respuestas queda para retomar si se cortó por límite o el usuario la detuvo; si no, se cierra.
 // Va antes de subir el día: si la página muere mientras sube, al volver no se reanuda lo que ya terminó (v3, P2)
-if (live) { if (["detenida", "presupuesto", "sin espacio"].includes(s.run.cut)) RC.hold(); else if (!["límite", "posible límite"].includes(s.run.cut)) RC.close(); }
+if (live) { if (["detenida", "presupuesto", "sin espacio", "por minuto"].includes(s.run.cut)) RC.hold(); else if (!["límite", "posible límite"].includes(s.run.cut)) RC.close(); }
 if (live && Sync.active && runId) await Sync.saveDay(out, s.run.dayET, runId); // `corrida` pasa a terminada solo después (syncFinish)
-finishRun(out.partial ? "partial" : "done", s.run.cut === "presupuesto" ? PAUSE_MSG(s.run.techo) : s.run.cut === "sin espacio" ? NO_SPACE : null);
+finishRun(out.partial ? "partial" : "done", s.run.cut === "presupuesto" ? PAUSE_MSG(s.run.techo) : s.run.cut === "sin espacio" ? NO_SPACE : s.run.cut === "por minuto" ? PARTIAL_TXT["por minuto"] : null);
 syncFinish(out.partial ? "partial" : "done", out.partialReason);
 if (["PREMIUM", "ULTIMATE"].includes(out.plan)) watchRankingPrices();
 if (s.ui.selected && !out.rows.some(r => r.symbol === s.ui.selected) && !out.rest.some(r => r.symbol === s.ui.selected)) s.ui.selected = null;
@@ -4434,7 +4462,16 @@ const DEEP_KEYS = ["eodLight", "keyMetrics", "scores", "ratios", "earnings", "pt
 // Corte por fallas (ronda 2, D-R2-2): 3 seguidas de errores reintentables o tool_error de un endpoint sin éxito previo
 const OUTAGE_CODES = new Set(["server_unavailable", "upstream_error"]);
 function runCtx(ac) {
-const s = App.state, today = todayET(), cl = App.client, opt = { section: "ranking", cat: "corrida", signal: ac.signal };
+const s = App.state, today = todayET(), cl = App.client;
+// 09 P0: freno por minuto (plan sin tope diario). La cola espera la pausa y sigue; más de THROTTLE_MAX en la corrida → parcial reanudable
+const onThrottle = e => {
+s.run.throttles = (s.run.throttles || 0) + 1;
+if (s.run.throttles > CFG.THROTTLE_MAX) { cut("por minuto"); return false; }
+s.run.throttleUntil = Math.max(s.run.throttleUntil || 0, App.now() + (isNum(e.retryAfterMs) ? e.retryAfterMs : CFG.THROTTLE_PAUSE_MS));
+renderProgress(); App.timer(renderProgress, s.run.throttleUntil - App.now() + 50);
+return true;
+};
+const opt = { section: "ranking", cat: "corrida", signal: ac.signal, onThrottle };
 let streak = 0, anyOk = false, issued = 0, okSeq = 0, rejSeqs = [];
 const okKeys = new Set(), tally = s.run.tally = { calls: 0, rejected: 0, cached: 0, saved: 0 }, useRC = s.mode === "live";
 const cut = why => { if (!s.run.cut && !s.run.outage) s.run.cut = why; }; // la cola se detiene; lo que ya está en vuelo termina
@@ -4579,7 +4616,7 @@ if (s.run.outage) return null;
 const withHist = finals.list.filter(f => Array.isArray(f.eodDesc) && f.eodDesc.length).length + nonStocks.filter(n => Array.isArray(n.eodDesc) && n.eodDesc.length).length;
 const planned = st.finalists.length + nonStocks.length, lowCover = planned > 0 && withHist < CFG.COVERAGE_MIN * planned;
 const t = rc.tally, why = s.run.cut || (t.rejected >= CFG.SUSPECT_MIN && t.rejected / Math.max(1, t.calls) >= CFG.SUSPECT_RATIO ? "muchas consultas rechazadas" : lowCover ? "cobertura baja" : null);
-if (why) notes = notes.concat([why === "presupuesto" ? PAUSED(s.run.techo) : `Análisis parcial: ${why}`]);
+if (why) notes = notes.concat([why === "presupuesto" ? PAUSED(s.run.techo) : why === "por minuto" ? PARTIAL_TXT[why] : `Análisis parcial: ${why}`]);
 if (why === "cobertura baja") notes = notes.concat([`Llegaron datos de ${withHist} de ${planned} activos planeados.`]);
 rc.stage("scoring", "Calculando…");
 await nextFrame();
@@ -4617,7 +4654,7 @@ else if (r.error.kind === "symbol_denied") f.denied = true;
 return { list: symbols.map(sym => by[sym]) };
 }
 async function runPaid(ac, startUsed) {
-// Ramas pagadas: NO VERIFICADO CON DATOS REALES.
+// Ramas pagadas: Starter ya corrió completa con datos reales (09); Premium y Ultimate siguen sin verificar.
 const rc = runCtx(ac), { s, cl, sig } = rc, tier = cl.plan();
 const fallback = () => {
 cl.setPlan("FREE");
@@ -4661,7 +4698,7 @@ if (sig.aborted) return null;
 const fq = C.filterQuotes(quotes, { nowMs: App.now(), holidays: s.clock.holidays, mode: "core" });
 const st = C.stage1Select({ quotes: fq.pass, K: pr.K }); st.excluded = fq.excluded;
 return deepSteps(rc, { pr, st, quotes, finOf: sym => ({ isFinancial: sectorOf[sym] === "Financial Services", sector: sectorOf[sym] || null }),
-notes: ["Plan " + PLAN_NAME[tier] + ": rama no verificada con datos reales"], meta: { universe: screen.length, eligible: universe.length, quoted: quotes.length } });
+notes: tier === "STARTER" ? [] : ["Plan " + PLAN_NAME[tier] + ": rama no verificada con datos reales"], meta: { universe: screen.length, eligible: universe.length, quoted: quotes.length } });
 }
 function watchRankingPrices() {
 const s = App.state, cl = App.client;
@@ -5386,7 +5423,7 @@ if (s.mode === "boot") return;
 const ex = s.mode === "example", cl = App.client, b = s.budget;
 const tier = ex ? "EXAMPLE" : (cl ? cl.plan() : s.plan.tier);
 const planBlock = h("div", null, h("h3", null, "Plan de FMP"),
-h("span", "badge", ex ? "Modo ejemplo" : `Plan detectado: ${PLAN_NAME[tier]}${tier === "FREE" ? "" : " (no verificado)"}`),
+h("span", "badge", ex ? "Modo ejemplo" : `Plan detectado: ${PLAN_NAME[tier]}${tier === "FREE" || tier === "STARTER" ? "" : " (no verificado)"}`),
 nota(ex ? "Sin conector: no se consulta FMP." : { probe: "Detectado hoy con una sonda.", cache: "Detectado hoy (guardado en este navegador).", default: s.plan.note || "No se pudo detectar el plan; se asume Free." }[s.plan.source] || ""),
 tier === "FREE" ? nota("Plan FMP Free: 250 llamadas/día, sin lotes, universo de muestra.") : null,
 ex ? null : h("div", "acciones", busyRun() ? nota(WAIT_TXT, "span") : null, h("button", { class: "btn", id: "btn-detectar", disabled: !cl || busyRun(), onclick: redetectPlan }, "Volver a detectar", h("span", "costo", " (1–3 llamadas)"))));
