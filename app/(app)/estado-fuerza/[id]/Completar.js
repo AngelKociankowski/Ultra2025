@@ -70,13 +70,33 @@ export default function Completar({ servicioId, falta, corregibles = [], opcione
   const [valores, setValores] = useState({});
   const [estado, setEstado] = useState(null);
   const [guardando, setGuardando] = useState(false);
-  // Las correcciones nacen con lo que el campo dice hoy: se corrige un dato
-  // escrito, así que el punto de partida es verlo, no volver a teclearlo entero.
-  const [arreglos, setArreglos] = useState(() =>
-    Object.fromEntries(corregibles.map((c) => [c.campo, c.valor === null || c.valor === undefined ? '' : String(c.valor)]))
-  );
+  /**
+   * Las correcciones nacen con lo que el campo dice hoy: se corrige un dato
+   * escrito, así que el punto de partida es verlo, no volver a teclearlo entero.
+   *
+   * El estado guarda SOLO lo que se teclea, y lo que se dibuja sale del valor del
+   * servidor mientras nadie haya tecleado. Antes el estado nacía ya lleno con un
+   * inicializador de `useState`, que corre una sola vez al montar: después de
+   * llenar un hueco, `router.refresh()` trae el campo recién capturado como
+   * corregible y el control nacía VACÍO al lado de la etiqueta que dice «ahora
+   * dice «95000»» —justo el caso para el que se hizo esto—. Derivarlo no se puede
+   * desincronizar.
+   */
+  const [arreglos, setArreglos] = useState({});
+  const [motivo, setMotivo] = useState('');
   const [estadoArreglo, setEstadoArreglo] = useState(null);
   const [corrigiendo, setCorrigiendo] = useState(false);
+
+  const comoTexto = (v) => (v === null || v === undefined ? '' : String(v));
+  const loQueDice = (c) => arreglos[c.campo] ?? comoTexto(c.valor);
+
+  /**
+   * Los campos cuya corrección pasa por el control de siempre: motivo escrito,
+   * registro aparte y aviso al área dueña. Lo contesta el servidor
+   * (`corregiblesHoy()`), que es donde vive la regla; aquí solo se dibuja.
+   */
+  const conMotivo = corregibles.filter((c) => c.exigeMotivo);
+  const areasAvisadas = [...new Set(conMotivo.flatMap((c) => c.avisaA || []))];
 
   const campos = [...falta.operar, ...falta.cobrar];
   const resumen = [
@@ -146,7 +166,7 @@ export default function Completar({ servicioId, falta, corregibles = [], opcione
     // diciendo «1 dato corregido» cuando no se corrigió nada.
     const cambios = Object.fromEntries(
       corregibles
-        .map((c) => [c.campo, arreglos[c.campo]])
+        .map((c) => [c.campo, loQueDice(c)])
         .filter(([campo, v]) => {
           const antes = corregibles.find((c) => c.campo === campo)?.valor;
           return v !== '' && v !== null && v !== undefined && String(v) !== String(antes ?? '');
@@ -157,24 +177,49 @@ export default function Completar({ servicioId, falta, corregibles = [], opcione
       return;
     }
 
+    // El motivo se pide solo cuando de verdad hace falta: cuando entre lo que se
+    // cambió hay un campo con régimen propio. Para los demás no se pide nada,
+    // igual que antes.
+    const piden = conMotivo.filter((c) => Object.hasOwn(cambios, c.campo));
+    if (piden.length > 0 && motivo.trim().length < 5) {
+      setEstadoArreglo({
+        tipo: 'error',
+        mensaje:
+          `Escribe el motivo: ${piden.map((c) => `«${c.etiqueta}»`).join(', ')} se corrige con explicación, ` +
+          `queda en el registro de correcciones y se le avisa a ${areasAvisadas.join(' y ') || 'el área dueña'}.`,
+      });
+      return;
+    }
+
     setCorrigiendo(true);
     try {
-      const { res, data } = await enviar({ correcciones: cambios });
+      const { res, data } = await enviar({
+        correcciones: cambios,
+        ...(motivo.trim() ? { motivo: motivo.trim() } : {}),
+      });
       if (!res.ok) {
         setEstadoArreglo({ tipo: 'error', mensaje: data.error || 'No se pudo corregir.' });
         return;
       }
       const hechos = Object.entries(data.corregidos || {});
+      // Y lo que el servidor dice que NO guardó se dice también. Callarlo dejaba
+      // la pantalla contestando «No cambió nada» a una petición que el servidor
+      // había rechazado campo por campo: el fallo silencioso de siempre.
+      const rechazados = data.rechazados?.length
+        ? ` No se reconoc${data.rechazados.length === 1 ? 'ió' : 'ieron'}: ${data.rechazados.join(', ')}.`
+        : '';
       setEstadoArreglo({
-        tipo: hechos.length > 0 ? 'ok' : 'info',
-        mensaje: hechos.length
-          ? `${hechos.length} dato${hechos.length === 1 ? '' : 's'} corregido${
-              hechos.length === 1 ? '' : 's'
-            }, con tu nombre y la fecha: ${hechos
-              .map(([, { antes, despues }]) => `«${antes}» → «${despues}»`)
-              .join(', ')}.`
-          : 'No cambió nada.',
+        tipo: hechos.length > 0 ? 'ok' : rechazados ? 'error' : 'info',
+        mensaje:
+          (hechos.length
+            ? `${hechos.length} dato${hechos.length === 1 ? '' : 's'} corregido${
+                hechos.length === 1 ? '' : 's'
+              }, con tu nombre y la fecha: ${hechos
+                .map(([, { antes, despues }]) => `«${antes}» → «${despues}»`)
+                .join(', ')}.`
+            : 'No cambió nada.') + rechazados,
       });
+      setMotivo('');
       router.refresh();
     } catch {
       setEstadoArreglo({ tipo: 'error', mensaje: 'Error de red.' });
@@ -243,13 +288,39 @@ export default function Completar({ servicioId, falta, corregibles = [], opcione
               <Control
                 id={`corregir-${c.campo}`}
                 campo={c}
-                valor={arreglos[c.campo]}
+                valor={loQueDice(c)}
                 opciones={opciones}
                 onChange={(v) => setArreglos((prev) => ({ ...prev, [c.campo]: v }))}
               />
             </div>
           ))}
         </div>
+
+        {/* El motivo, solo si entre lo corregible hay un campo que lo exige, y
+            diciendo por qué se pide: es el nombre legal con el que se factura, y
+            su corrección se registra aparte y se le avisa al área dueña, venga de
+            jurídico o de quien lo acaba de teclear. Un campo corriente se sigue
+            corrigiendo sin explicar nada. */}
+        {conMotivo.length > 0 && (
+          <div>
+            <label htmlFor="corregir-motivo" className="block text-xs text-slate-400 mb-1">
+              Motivo de la corrección
+              <span className="text-slate-600">
+                {' · '}
+                {conMotivo.map((c) => c.etiqueta).join(', ')} queda en el registro de correcciones
+                {areasAvisadas.length > 0 && ` y se le avisa a ${areasAvisadas.join(' y ')}`}
+              </span>
+            </label>
+            <input
+              id="corregir-motivo"
+              type="text"
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Qué estaba mal capturado"
+              className={input}
+            />
+          </div>
+        )}
 
         {estadoArreglo && aviso(estadoArreglo)}
 
