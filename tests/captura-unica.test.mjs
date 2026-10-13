@@ -39,6 +39,11 @@ import { arrancar, ROLES } from './servidor.mjs';
  * mejor fuente todavía.
  */
 import { GRUPOS_CAMPOS, CAMPOS_CORREGIBLES } from '../lib/rbac.js';
+/**
+ * El censo de los caminos de escritura, leído del código y no escrito aquí. Es
+ * lo que hace que U1.11 avise de una puerta nueva: ver su cabecera.
+ */
+import { censo, nombreLargo } from './_puertas-de-escritura.mjs';
 
 /** Los topes medidos. Los decide `lib/captura.js`; aquí se escriben para medir. */
 const TOPE_TEXTO = 500;
@@ -416,15 +421,293 @@ describe('U1 · lo que puede valer un dato, por los cuatro caminos', () => {
       );
     }
 
+    /**
+     * 4) Y los otros cuatro caminos de escritura, que faltaban.
+     *
+     * Esta prueba medía tres —editar, completar, corregir— y el conteo que
+     * imprimía era cierto, pero la afirmación «una puerta nueva que no pase por
+     * ahí la delata» solo valía para esos tres: los otros cuatro que el commit
+     * decía haber redirigido —la apertura, la cancelación, el arreglo del
+     * movimiento pendiente y el libro de facturas— no estaban, y por dos de ellos
+     * —el desglose de turnos de la apertura y el desglose por puesto— entraron
+     * los dos bloqueantes de la vuelta siguiente.
+     *
+     * Se mandan por cada camino los datos que ese camino escribe, con el mismo
+     * valor que no es respuesta a ninguna pregunta de captura: una lista.
+     */
+    const porLosDemasCaminos = [];
+    const sumar = async (etiqueta, enviar) => {
+      const r = await enviar();
+      if (r.status !== 400) porLosDemasCaminos.push(`${etiqueta} → ${r.status}: ${r.texto.slice(0, 120)}`);
+    };
+
+    // 4a) La apertura: el movimiento y el servicio nacen aquí.
+    for (const campo of ['precio_guardia', 'razon_social', 'dias_credito', 'fecha', 'hora_apertura', 'comentarios']) {
+      await sumar(`apertura:${campo}`, () => abrir(operaciones, `U1 PUERTA AP ${campo}`, { [campo]: [] }));
+    }
+    // `guardias` solo se consulta cuando no hay desglose: con desglose manda su
+    // suma. Se pregunta por su camino de verdad, sin desglose.
+    await sumar('apertura:guardias', () =>
+      abrir(operaciones, 'U1 PUERTA AP GUARDIAS', { turnos: {}, guardias: [] })
+    );
+    // El desglose de turnos y el desglose por puesto son estructuras, y cada
+    // número de dentro es un dato capturado: es por donde se escribieron
+    // `total_guardias` y `importe_factura` sin pasar por el sitio único.
+    await sumar('apertura:turnos', () =>
+      abrir(operaciones, 'U1 PUERTA AP TURNOS', { turnos: { '24 HRS': '0x10' } })
+    );
+    await sumar('apertura:equipo', () =>
+      abrir(operaciones, 'U1 PUERTA AP EQUIPO', { equipo: { patrulla: '0x10' } })
+    );
+    const paraPartidas = await abrirId(admin, 'U1 PUERTA PARTIDAS');
+    for (const [campo, valor] of [['precio_unitario', '0x10'], ['cantidad', '0x10'], ['sueldo', '0x10']]) {
+      await sumar(`partidas:${campo}`, () =>
+        admin.pedir(`/api/servicios/${paraPartidas}/partidas`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            partidas: [{ puesto: opciones.puestos[0], cantidad: 1, precio_unitario: 1000, [campo]: valor }],
+          }),
+        })
+      );
+    }
+
+    // 4b) La cancelación: el otro movimiento que escribe columnas.
+    const paraCancelar = await abrirId(operaciones, 'U1 PUERTA CANCELAR', { precio_guardia: '1000' });
+    for (const campo of ['cxc', 'motivo_detalle', 'auditoria', 'reporta', 'fecha']) {
+      await sumar(`cancelación:${campo}`, () =>
+        operaciones.pedir('/api/cancelaciones', {
+          method: 'POST',
+          body: JSON.stringify({
+            tipo: 'CANCELACION',
+            servicio_id: paraCancelar,
+            motivo: opciones.motivosBaja[0],
+            [campo]: [],
+          }),
+        })
+      );
+    }
+
+    // 4c) El arreglo de un movimiento pendiente, y el de aplicarlo: los dos
+    //     escriben las columnas de catálogo de la apertura.
+    const pendientes = await admin.pedir('/api/aperturas?periodo=2023-04');
+    const pendiente = (pendientes.json.aperturas || []).find((a) => !a.servicio_id && !a.descartada);
+    assert.ok(pendiente, 'hacen falta aperturas pendientes del archivo para medir estos dos caminos');
+    for (const campo of ['zona', 'asesor', 'gerente', 'supervisor', 'estado_geo', 'tipo_repse', 'uniforme']) {
+      await sumar(`corregirApertura:${campo}`, () =>
+        admin.pedir(`/api/aperturas/${pendiente.id}/corregir`, {
+          method: 'PATCH',
+          body: JSON.stringify({ [campo]: [] }),
+        })
+      );
+      // Al aplicar, el cuerpo ES el objeto de correcciones (ver la ruta): si se
+      // manda anidado, los campos no se miran y la apertura se aplica tal cual.
+      await sumar(`aplicarApertura:${campo}`, () =>
+        admin.pedir(`/api/aperturas/${pendiente.id}/aplicar`, {
+          method: 'POST',
+          body: JSON.stringify({ [campo]: [] }),
+        })
+      );
+    }
+
+    // 4d) El libro de facturas: otra tabla, y el mismo dato capturado.
+    const paraFacturar = await abrirId(admin, 'U1 PUERTA FACTURA', { precio_guardia: '1000' });
+    for (const campo of ['importe', 'guardias', 'concepto', 'folio', 'fecha_factura', 'dias_credito']) {
+      await sumar(`factura:${campo}`, () =>
+        admin.pedir('/api/facturas', {
+          method: 'POST',
+          body: JSON.stringify({
+            servicio_id: paraFacturar,
+            periodo: '2027-11',
+            importe: 5000,
+            guardias: 2,
+            fecha_factura: '2027-11-30',
+            [campo]: [],
+          }),
+        })
+      );
+    }
+    const emitida = await admin.pedir('/api/facturas', {
+      method: 'POST',
+      body: JSON.stringify({
+        servicio_id: paraFacturar,
+        periodo: '2027-12',
+        importe: 5000,
+        guardias: 2,
+        fecha_factura: '2027-12-31',
+      }),
+    });
+    assert.equal(emitida.status, 201, emitida.texto);
+    const facturaId = emitida.json.factura?.id ?? emitida.json.id;
+    for (const campo of ['importe', 'guardias', 'concepto', 'folio']) {
+      await sumar(`corregirFactura:${campo}`, () =>
+        admin.pedir('/api/facturas', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            id: facturaId,
+            correccion: { [campo]: [], motivo: 'Una lista no es un dato.' },
+          }),
+        })
+      );
+    }
+    await sumar('pago:importe', () =>
+      admin.pedir('/api/facturas', {
+        method: 'PATCH',
+        body: JSON.stringify({ id: facturaId, pago: { importe: [], fecha: '2027-12-31' } }),
+      })
+    );
+
     assert.deepEqual(
-      escapados,
+      [...escapados, ...porLosDemasCaminos],
       [],
-      `estos campos aceptaron una lista en vez de un dato: ${escapados.join(' · ')}`
+      `estos campos aceptaron una lista en vez de un dato: ${[...escapados, ...porLosDemasCaminos].join(' · ')}`
     );
     console.log(
       `    # U1.10 puertas comprobadas: ${editables.length} al editar, ${completables.length} al completar, ` +
-        `${CAMPOS_CORREGIBLES.filter(sinValorSuelto).length} al corregir`
+        `${CAMPOS_CORREGIBLES.filter(sinValorSuelto).length} al corregir, y los otros cuatro caminos ` +
+        '(apertura con turnos/equipo/partidas, cancelación, movimiento pendiente, libro de facturas)'
     );
+  });
+
+  /**
+   * ------------------------------------------------------------------ U1.11
+   *
+   * El guardián: las puertas no se escriben, se derivan del código.
+   *
+   * U1.10 manda un valor imposible por cada camino que conoce, y eso es lo que
+   * hay que hacer con los caminos que se conocen. Lo que no puede hacer es avisar
+   * de un camino NUEVO: cuando se escribió cubría tres de los siete, el conteo
+   * que imprimía era cierto y aun así la afirmación «una puerta nueva que no pase
+   * por ahí la delata» era falsa. Un tester lo midió una vuelta después, con dos
+   * bloqueantes por los cuatro caminos que faltaban. Una lista de puertas escrita
+   * a mano se queda corta, y se queda corta en silencio.
+   *
+   * Así que esta prueba no sabe cuáles son las puertas: las lee del código. Una
+   * puerta es una función de `lib/` que escribe en una tabla de datos, y hay dos
+   * preguntas que se le hacen:
+   *
+   *   A. ¿Pasa por el sitio único? Ella o algo a lo que llame tiene que preguntar
+   *      por `exigirDato()`. Si no puede —hay unas cuantas que de verdad no
+   *      escriben nada capturado—, tiene que estar aquí abajo con su nombre y su
+   *      razón. Nombrada, no omitida.
+   *   B. ¿Hay un lector de números a mano en ella o en algo que la alimente? Esta
+   *      es la que faltaba, y es la que habría cazado los dos bloqueantes:
+   *      `normalizarTurnos()` y `limpiarNumero()` no escribían ninguna tabla
+   *      —no eran puertas— pero sus números acababan en `total_guardias` y en
+   *      `importe_factura`. Quien mira solo las puertas no ve ninguno de los dos.
+   *
+   * Ver `tests/_puertas-de-escritura.mjs` para cómo se lee el código y qué error
+   * puede cometer al leerlo.
+   */
+  describe('U1.11 · el guardián de las puertas, derivado del código', () => {
+    /**
+     * Las puertas que NO pueden pasar por el sitio único, una por una y con su
+     * razón. Es la única lista escrita a mano de esta prueba, y es la que hay que
+     * defender: una entrada nueva aquí es una excepción que alguien tiene que
+     * justificar, no un olvido.
+     *
+     * La razón válida es una sola y se repite: lo que esa función escribe no es un
+     * dato que llegue de fuera.
+     */
+    const SIN_DATO_CAPTURADO = {
+      // Escriben constantes, nulos, o un número que la plataforma calcula.
+      'facturacion.js:recalcular': 'suma los pagos y las facturas que ya están guardados; no recibe nada de fuera',
+      'facturacion.js:adjuntarArchivo': 'guarda la referencia de un archivo subido, que gobierna lib/archivos.js',
+      'partidas.js:aplicarFactor': 'multiplica los precios ya guardados por el factor del aumento anual',
+      'precios.js:aplicar': 'el aumento anual: aplica un factor ya juzgado sobre el precio que ya estaba',
+      'servicios.js:adjuntarContrato': 'guarda el PDF del contrato y marca que lo tiene; no captura datos',
+      'servicios.js:quitarContrato': 'pone a nulo lo que el adjunto había puesto',
+      'servicios.js:reactivarApertura': 'borra las marcas de descarte: escribe nulos y un cero',
+      'servicios.js:reactivarServicio': 'vuelve el estatus a ACTIVO y limpia la pausa; el motivo solo va a la bitácora',
+      'servicios.js:deshacerApertura': 'devuelve los guardias que el propio movimiento había sumado',
+      'servicios.js:alinearPrecioDelMovimiento':
+        'copia en el movimiento el precio que la ficha acaba de aceptar, ya juzgado por quien la llamó',
+      'servicios.js:alinearGuardiasDelMovimiento':
+        'copia en el movimiento los guardias que la ficha acaba de aceptar, ya juzgados por quien la llamó',
+      // Las dos de verdad distintas.
+      'catalogos.js:renombrarColumna':
+        'propaga a las filas el renombre de un valor de catálogo; qué valores existen lo contesta la otra ' +
+        'autoridad, exigirDelCatalogo()',
+      'db.js:migrar': 'mueve datos ya guardados al cambiar el esquema; no hay nadie capturando',
+      'facturacion.js:cargarFacturas':
+        'la importación de archivos, que es la excepción escrita en la cabecera de lib/captura.js: un archivo se ' +
+        'tolera como venga escrito. Lo que NO es formato son los topes de cordura y el plazo, y esos sí los aplica ' +
+        '(ver el tope de importe y el plazo de este mismo archivo)',
+    };
+
+    /**
+     * Y los lectores de números a mano que se quedan, con su razón. Misma regla:
+     * nombrados.
+     */
+    const LECTORES_PERMITIDOS = {
+      'csv.js:leerImporte':
+        'es el lector del archivo, y su trabajo es justamente tolerar «$ 1,234.56» y «1.234,56»; quien lo usa ' +
+        'aplica después el tope',
+      'db.js:siguienteFolio': 'lee el consecutivo de un folio que la propia plataforma generó, no de una persona',
+      'servicios.js:mezclarTurnos':
+        'hace la aritmética de dos desgloses que YA pasaron por el sitio único: sus nueve llamadas le pasan o el ' +
+        'turnos_json guardado o la salida de normalizarTurnos(), nunca el cuerpo de la petición',
+      'servicios.js:conciliarDetalle':
+        'lo mismo un nivel más abajo: recibe el turnos_detalle_json guardado y la salida de ' +
+        'normalizarTurnosDetalle(). Si algún día se le llama con lo que llegó de fuera, esta excepción deja de ' +
+        'ser cierta y hay que quitarla',
+    };
+
+    test('U1.11 ninguna puerta escribe sin pasar por el sitio único', () => {
+      const { puertas } = censo();
+      assert.ok(puertas.length >= 20, `el censo encontró ${puertas.length} puertas: algo falló al leer lib/`);
+
+      const escapadas = puertas
+        .filter((p) => !p.pasaPorElSitio && !Object.hasOwn(SIN_DATO_CAPTURADO, nombreLargo(p)))
+        .map((p) => `${nombreLargo(p)} (lib/${p.archivo}:${p.linea})`);
+
+      assert.deepEqual(
+        escapadas,
+        [],
+        'estas funciones escriben en una tabla de datos y no pasan por exigirDato(). Si de verdad no escriben ' +
+          `nada capturado, nómbralas en SIN_DATO_CAPTURADO con su razón: ${escapadas.join(' · ')}`
+      );
+
+      // Y al revés: una excepción que ya no existe, o que ya pasa por el sitio,
+      // también es información. Una lista de excepciones que nadie limpia acaba
+      // tapando la siguiente.
+      const porNombre = new Map(puertas.map((p) => [nombreLargo(p), p]));
+      const sobran = Object.keys(SIN_DATO_CAPTURADO).filter((n) => {
+        const p = porNombre.get(n);
+        return !p || p.pasaPorElSitio;
+      });
+      assert.deepEqual(sobran, [], `estas excepciones ya no hacen falta, quítalas: ${sobran.join(' · ')}`);
+
+      console.log(
+        `    # U1.11 puertas derivadas del código: ${puertas.length}, de las que ` +
+          `${puertas.filter((p) => p.pasaPorElSitio).length} pasan por exigirDato() y ` +
+          `${Object.keys(SIN_DATO_CAPTURADO).length} son excepciones nombradas`
+      );
+    });
+
+    test('U1.11b nada que alimente una puerta lee los números a mano', () => {
+      const { alimentan } = censo();
+      const culpables = alimentan
+        .filter((f) => f.lectores.length && !Object.hasOwn(LECTORES_PERMITIDOS, nombreLargo(f)))
+        .map((f) => `${nombreLargo(f)} (lib/${f.archivo}:${f.linea}) → ${f.lectores.join(', ')}`);
+
+      assert.deepEqual(
+        culpables,
+        [],
+        'estas funciones pueden poner un valor en una columna y lo convierten con su propio lector, que es por ' +
+          'donde volvieron a entrar el hexadecimal y la notación científica las cuatro vueltas pasadas. ' +
+          `Pregúntale a exigirDato(): ${culpables.join(' · ')}`
+      );
+
+      const sobran = Object.keys(LECTORES_PERMITIDOS).filter(
+        (n) => !alimentan.some((f) => nombreLargo(f) === n && f.lectores.length)
+      );
+      assert.deepEqual(sobran, [], `estos permisos ya no hacen falta, quítalos: ${sobran.join(' · ')}`);
+
+      console.log(
+        `    # U1.11b funciones que pueden escribir una columna: ${alimentan.length}, ` +
+          `con ${Object.keys(LECTORES_PERMITIDOS).length} lectores propios permitidos y nombrados`
+      );
+    });
   });
 });
 
