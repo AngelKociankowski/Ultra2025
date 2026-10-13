@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { conPermiso, leerJson } from '@/lib/api';
+import { conPermiso, leerObjeto } from '@/lib/api';
 import { descartarApertura, reactivarApertura } from '@/lib/servicios';
 
 export const dynamic = 'force-dynamic';
 
 /** «Esta no se va a aplicar»: sale de la cola de pendientes, no del histórico. */
 export const POST = conPermiso('apertura', async (request, { params, usuario }) => {
-  const { motivo } = await leerJson(request).catch(() => ({}));
+  const { motivo } = await leerObjeto(request).catch(() => ({}));
   return NextResponse.json(descartarApertura(params.id, { motivo }, usuario));
 });
 

@@ -251,13 +251,24 @@ describe('en cobranza sale el nombre legal, no solo el corto', () => {
   });
 
   test('cuando la razón social es igual al nombre, no se repite', async () => {
-    // Repetir el mismo texto dos veces solo alarga el renglón.
+    /**
+     * Repetir el mismo texto dos veces solo alarga el renglón.
+     *
+     * El nombre empieza con «AAA» a propósito, y la pantalla se corta antes de
+     * la sección siguiente. «Por facturar» dibuja la lista por tandas de
+     * cuarenta —al día 1 del mes son 219 renglones y recorrerlos era veinte
+     * pantallas—, y la lista va alfabética: un nombre que empiece por R no se
+     * pinta en la primera tanda. Sin esas dos cosas, la búsqueda encontraba el
+     * nombre en la carga de datos que React deja al final del documento, donde
+     * sí aparece dos veces —una por `servicio` y otra por `razon_social`— y la
+     * prueba acusaba a un renglón que ni se había dibujado.
+     */
     const r = await admin.pedir('/api/aperturas', {
       method: 'POST',
       body: JSON.stringify({
         tipo: 'APERTURA',
-        servicio: 'RS IGUALITO',
-        razon_social: 'RS IGUALITO',
+        servicio: 'AAA RS IGUALITO',
+        razon_social: 'AAA RS IGUALITO',
         turnos: { '12 HRS': 1 },
       }),
     });
@@ -267,10 +278,11 @@ describe('en cobranza sale el nombre legal, no solo el corto', () => {
       body: JSON.stringify({ importe_factura: 5000 }),
     });
 
-    const html = comoSeLee((await admin.pedir('/cobranza')).texto);
-    const i = html.indexOf('RS IGUALITO');
-    assert.notEqual(i, -1);
+    const pagina = comoSeLee((await admin.pedir('/cobranza')).texto);
+    const html = pagina.slice(0, pagina.indexOf('Cartera vencida'));
+    const i = html.indexOf('AAA RS IGUALITO');
+    assert.notEqual(i, -1, 'tiene que estar dibujado en la primera tanda');
     const renglon = html.slice(i, i + 400);
-    assert.equal(renglon.split('RS IGUALITO').length - 1, 1, 'debería salir una sola vez en su renglón');
+    assert.equal(renglon.split('AAA RS IGUALITO').length - 1, 1, 'debería salir una sola vez en su renglón');
   });
 });

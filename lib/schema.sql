@@ -223,6 +223,26 @@ CREATE TABLE IF NOT EXISTS aperturas (
   descartada_motivo  TEXT,
   descartada_en      TEXT,
   descartada_por     INTEGER REFERENCES usuarios(id),
+  -- 1 = la plataforma la devolvió a la cola de pendientes (se deshizo una
+  -- apertura aplicada, o se sacó una del cajón de las descartadas). 0 = vino en
+  -- el archivo de la importación y nunca se le creó el servicio.
+  --
+  -- Son dos cosas distintas y se estaban contando como una. El plan daba por
+  -- hecho que la plataforma no podía generar una apertura pendiente nueva, y es
+  -- falso: `deshacerApertura()` deja `servicio_id` en nulo, que es exactamente
+  -- eso. Sin esta marca, una apertura deshecha con fecha vieja caía en la lista
+  -- gris que afirma «quedaron sin aplicar al importar el archivo: describen
+  -- servicios que ya no operan» —mentira para ella—, quedaba fuera del aviso
+  -- ámbar y el cierre en lote se la podía llevar con el arrastre. O sea: un
+  -- error de dedo desaparecía de la vista y sus guardias dejaban de contarse y
+  -- de cobrarse sin que nadie lo viera.
+  --
+  -- Es una columna y no un dato derivado porque no hay de dónde derivarlo:
+  -- deshacer borra el servicio o le resta los guardias, y no queda nada en la
+  -- fila que diga que esta apertura estuvo aplicada. La bitácora lo cuenta, pero
+  -- clasificar una cola de la operación leyendo el texto de un renglón de
+  -- bitácora es apoyar una regla de negocio en una cadena de caracteres.
+  devuelta_a_la_cola INTEGER NOT NULL DEFAULT 0,
   -- servicio_id destino: nuevo servicio (APERTURA) o existente (INCREMENTO)
   servicio_id        INTEGER REFERENCES servicios(id),
   creado_por         INTEGER REFERENCES usuarios(id),

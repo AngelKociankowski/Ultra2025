@@ -1,5 +1,5 @@
 import { conPermiso } from '@/lib/api';
-import { carteraJuridica, COLUMNAS_CSV, filaParaCSV, ESTADOS } from '@/lib/juridico';
+import { carteraJuridica, COLUMNAS_CSV, filaParaCSV, ESTADOS, RAROS_VALIDOS } from '@/lib/juridico';
 import { escribirCSV } from '@/lib/csv';
 import { hoy } from '@/lib/fechas';
 
@@ -24,6 +24,12 @@ export const GET = conPermiso('ver', async (request) => {
     zona: p('zona'),
     asesor: p('asesor'),
     pdf: ['con', 'sin'].includes(p('pdf')) ? p('pdf') : '',
+    // El mes de la agenda y el tipo de contradicción también viajan. El botón
+    // de bajar a Excel manda la URL de la pantalla tal cual: si la ruta los
+    // ignorara, quien filtra por «marzo del 27» se llevaría los 223 renglones
+    // y tendría que volver a filtrar en la hoja de cálculo.
+    vence: /^\d{4}-\d{2}$/.test(p('vence')) ? p('vence') : '',
+    raro: RAROS_VALIDOS.includes(p('raro')) ? p('raro') : '',
     q: p('q'),
   });
 

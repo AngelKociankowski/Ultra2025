@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { conPermiso, leerJson } from '@/lib/api';
+import { conPermiso, leerObjeto } from '@/lib/api';
 import { deshacerApertura } from '@/lib/servicios';
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +14,6 @@ export const dynamic = 'force-dynamic';
  * cancelación, que es la única salida con folio y motivo.
  */
 export const POST = conPermiso('apertura', async (request, { params, usuario }) => {
-  const { motivo } = await leerJson(request).catch(() => ({}));
+  const { motivo } = await leerObjeto(request).catch(() => ({}));
   return NextResponse.json(deshacerApertura(params.id, { motivo }, usuario));
 });

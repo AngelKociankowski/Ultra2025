@@ -110,7 +110,11 @@ export default function CorreccionServicio({ servicio, correcciones, opciones, c
   }
 
   return (
-    <section id="correccion" className="bg-slate-800/30 border border-amber-600/30 rounded-2xl p-5 scroll-mt-20">
+    // El ancla se llama `corregir` y no `correccion` porque es a donde apuntan
+    // los enlaces de arreglo del estado de fuerza —«sin desglose» lleva aquí—, y
+    // el verbo es lo que dice qué se va a hacer al llegar. Nadie enlazaba al
+    // nombre anterior.
+    <section id="corregir" className="bg-slate-800/30 border border-amber-600/30 rounded-2xl p-5 scroll-mt-20">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-white">Corregir captura</h2>

@@ -9,6 +9,7 @@ import {
   catalogosJuridicos,
   ESTADOS,
   DIAS_AVISO,
+  RAROS_VALIDOS,
 } from '@/lib/juridico';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import Filtros from './Filtros';
@@ -66,6 +67,11 @@ export default function Juridico({ searchParams }) {
     zona: searchParams?.zona || '',
     asesor: searchParams?.asesor || '',
     pdf: ['con', 'sin'].includes(searchParams?.pdf) ? searchParams.pdf : '',
+    // El mes de la agenda y el tipo de contradicción. Se validan igual que los
+    // demás —un valor inventado en la URL no filtra nada en lugar de vaciar la
+    // pantalla— porque los dos llegan desde un enlace y un enlace se edita.
+    vence: /^\d{4}-\d{2}$/.test(searchParams?.vence || '') ? searchParams.vence : '',
+    raro: RAROS_VALIDOS.includes(searchParams?.raro) ? searchParams.raro : '',
     q: searchParams?.q || '',
   };
 
@@ -151,11 +157,14 @@ export default function Juridico({ searchParams }) {
         </span>
       </div>
 
-      <Agenda agenda={agenda} />
+      <Agenda agenda={agenda} mesActivo={filtros.vence} />
 
-      {raras.total > 0 && <Inconsistencias datos={raras} puedeEditar={puedeEditar} />}
+      {raras.total > 0 && <Inconsistencias datos={raras} puedeEditar={puedeEditar} activo={filtros.raro} />}
 
-      <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 overflow-hidden">
+      {/* El ancla es a donde llegan los enlaces de la agenda y del panel de
+          contradicciones. Sin ella, dar clic en una barra dejaba la pantalla
+          arriba y había que bajar a buscar la tabla que acababa de filtrarse. */}
+      <div id="cartera" className="scroll-mt-20 rounded-2xl border border-slate-700/50 bg-slate-800/30 overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-700/50 flex flex-wrap items-baseline justify-between gap-2">
           <div>
             <h2 className="text-base font-semibold text-white">Cartera de contratos</h2>

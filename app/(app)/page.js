@@ -38,7 +38,7 @@ const delta = (n) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${formatNumber(Math.abs
  * —servicios, guardias, facturación— y en ámbar o rojo las que piden ir a
  * hacer algo. Pintar de colores las seis es como subrayar un texto entero.
  */
-function Kpi({ titulo, valor, sub, tono = 'slate' }) {
+function Kpi({ titulo, valor, sub, tono = 'slate', href }) {
   const tonos = {
     slate: 'text-white',
     emerald: 'text-emerald-400',
@@ -46,16 +46,52 @@ function Kpi({ titulo, valor, sub, tono = 'slate' }) {
     red: 'text-red-400',
     cyan: 'text-cyan-400',
   };
-  return (
-    <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-slate-400 text-xs font-medium">{titulo}</p>
-          <p className={`text-2xl font-bold mt-1 ${tonos[tono]}`}>{valor}</p>
-          {sub && <p className="text-slate-500 text-xs mt-1">{sub}</p>}
-        </div>
+
+  /**
+   * El recuadro es enlace cuando señala un problema, y no lo es cuando solo
+   * informa.
+   *
+   * Un número que pide ir a hacer algo y no dice a dónde obliga a reconstruir
+   * el camino: «20 servicios sin contrato» → Jurídico → acordarse de que hay un
+   * filtro de estado → elegir «sin contrato». Tres pasos que la plataforma ya
+   * sabe hacer. Los tres informativos —servicios, guardias, facturación— siguen
+   * sin enlace a propósito: no hay nada que ir a arreglar, y volverlos enlace
+   * también haría que los seis pesaran igual, que es justo lo que el color
+   * evita.
+   */
+  const cuerpo = (
+    <div className="flex items-start justify-between">
+      <div>
+        <p className="text-slate-400 text-xs font-medium">{titulo}</p>
+        <p className={`text-2xl font-bold mt-1 ${tonos[tono]}`}>{valor}</p>
+        {sub && <p className="text-slate-500 text-xs mt-1">{sub}</p>}
       </div>
     </div>
+  );
+
+  const clase = 'block bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4';
+  return href ? (
+    <Link href={href} className={`${clase} hover:border-slate-500 transition-colors`}>
+      {cuerpo}
+    </Link>
+  ) : (
+    <div className={clase}>{cuerpo}</div>
+  );
+}
+
+/**
+ * «Ver los N», debajo de una lista recortada.
+ *
+ * Solo cuando de verdad hay más de lo que se enseña. Poner el enlace siempre
+ * —«ver los 3» debajo de una lista de tres— enseña a ignorarlo, que es lo
+ * contrario de lo que se busca.
+ */
+function Enlace({ href, n, tope = 5 }) {
+  if (n <= tope) return null;
+  return (
+    <Link href={href} className="block text-xs text-cyan-400 hover:underline mt-2">
+      Ver los {formatNumber(n)} →
+    </Link>
   );
 }
 
@@ -140,12 +176,14 @@ export default function Tablero() {
           valor={formatNumber(k.sinContrato)}
           sub={`${formatNumber(k.guardiasSinContrato)} guardias · ${formatNumber(k.conContrato)} con contrato`}
           tono={k.sinContrato ? 'amber' : 'slate'}
+          href="/juridico?estado=SIN_CONTRATO"
         />
         <Kpi
           titulo="Servicios sin facturar"
           valor={formatNumber(k.sinFacturar)}
           sub={`${formatNumber(k.guardiasSinFacturar)} guardias · ${formatNumber(k.facturados)} facturados`}
           tono={k.sinFacturar ? 'amber' : 'slate'}
+          href="/estado-fuerza?facturado=no"
         />
         {/* Vencido y por vencer van separados a propósito: los dos son dinero
             sin cobrar, pero solo el primero es adeudo. Al segundo todavía le
@@ -155,6 +193,11 @@ export default function Tablero() {
           valor={formatCurrency(cobranza.vencido)}
           sub={`${formatCurrency(cobranza.porVencer)} por vencer`}
           tono={cobranza.vencido > 0 ? 'red' : 'slate'}
+          // Cobranza es la única de las tres pantallas de destino que no la ve
+          // todo el mundo: pide `editar_finanzas`. Enlazar ahí a quien no puede
+          // entrar lo mandaría a un «sin permiso», que es peor que no ofrecer
+          // nada. Jurídico, estado de fuerza y las fichas sí son de todos.
+          href={puede(usuario.rol, 'editar_finanzas') ? '/cobranza' : undefined}
         />
       </div>
 
@@ -287,16 +330,23 @@ export default function Tablero() {
           {vencen.vencidos.length === 0 ? (
             <p className="text-slate-500 text-xs mt-1">Ninguno.</p>
           ) : (
-            <ul className="space-y-1.5 mt-1.5">
-              {vencen.vencidos.slice(0, 5).map((s) => (
-                <li key={s.id} className="flex items-center justify-between gap-2">
-                  <Link href={`/estado-fuerza/${s.id}`} className="text-sm text-slate-300 hover:text-cyan-400 truncate">
-                    {s.servicio}
-                  </Link>
-                  <span className="text-xs text-red-400 shrink-0">{s.fecha_vencimiento_contrato}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="space-y-1.5 mt-1.5">
+                {vencen.vencidos.slice(0, 5).map((s) => (
+                  <li key={s.id} className="flex items-center justify-between gap-2">
+                    <Link href={`/estado-fuerza/${s.id}`} className="text-sm text-slate-300 hover:text-cyan-400 truncate">
+                      {s.servicio}
+                    </Link>
+                    <span className="text-xs text-red-400 shrink-0">{s.fecha_vencimiento_contrato}</span>
+                  </li>
+                ))}
+              </ul>
+              {/* La lista enseña cinco y el encabezado dice 58. Sin esta salida,
+                  los otros 53 son un número que no lleva a ninguna parte: hay
+                  que acordarse de que existe la pantalla de Jurídico y de que
+                  tiene un filtro por estado. */}
+              <Enlace href="/juridico?estado=VENCIDO" n={vencen.vencidos.length} />
+            </>
           )}
 
           <div className="flex items-baseline justify-between mt-4 pt-3 border-t border-slate-700/60">
@@ -306,16 +356,19 @@ export default function Tablero() {
           {vencen.porVencer.length === 0 ? (
             <p className="text-slate-500 text-xs mt-1">Ninguno en los próximos 90 días.</p>
           ) : (
-            <ul className="space-y-1.5 mt-1.5">
-              {vencen.porVencer.slice(0, 5).map((s) => (
-                <li key={s.id} className="flex items-center justify-between gap-2">
-                  <Link href={`/estado-fuerza/${s.id}`} className="text-sm text-slate-300 hover:text-cyan-400 truncate">
-                    {s.servicio}
-                  </Link>
-                  <span className="text-xs text-amber-400 shrink-0">{s.fecha_vencimiento_contrato}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="space-y-1.5 mt-1.5">
+                {vencen.porVencer.slice(0, 5).map((s) => (
+                  <li key={s.id} className="flex items-center justify-between gap-2">
+                    <Link href={`/estado-fuerza/${s.id}`} className="text-sm text-slate-300 hover:text-cyan-400 truncate">
+                      {s.servicio}
+                    </Link>
+                    <span className="text-xs text-amber-400 shrink-0">{s.fecha_vencimiento_contrato}</span>
+                  </li>
+                ))}
+              </ul>
+              <Enlace href="/juridico?estado=POR_VENCER" n={vencen.porVencer.length} />
+            </>
           )}
         </div>
       </div>
@@ -348,7 +401,22 @@ export default function Tablero() {
                       {m.tipo}
                     </span>
                   </td>
-                  <td className="py-1.5 text-slate-300">{m.servicio}</td>
+                  {/* El nombre lleva a la ficha cuando el movimiento tiene
+                      servicio: es la pregunta que nace al leer el renglón —«¿y
+                      cómo está ese servicio ahora?»—. El que no lo tiene se
+                      queda como texto, y eso también informa: una apertura sin
+                      servicio es una de las que nunca se aplicaron, y una
+                      cancelación sin servicio es una de las del archivo que no
+                      se pudo amarrar. Inventar un enlace a la nada sería peor. */}
+                  <td className="py-1.5 text-slate-300">
+                    {m.servicio_id ? (
+                      <Link href={`/estado-fuerza/${m.servicio_id}`} className="hover:text-cyan-400">
+                        {m.servicio}
+                      </Link>
+                    ) : (
+                      m.servicio
+                    )}
+                  </td>
                   <td className={`py-1.5 text-right ${m.clase === 'APERTURA' ? 'text-emerald-400' : 'text-red-400'}`}>
                     {m.clase === 'APERTURA' ? '+' : '-'}
                     {m.guardias}

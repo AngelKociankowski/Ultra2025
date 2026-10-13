@@ -9,6 +9,21 @@ import { ESTADOS } from '@/lib/contratos';
 const clase =
   'bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-500';
 
+/**
+ * Cómo se lee cada contradicción cuando su filtro está puesto.
+ *
+ * Es uno de los dos filtros que no tienen control propio en esta caja —el otro
+ * es el mes de la agenda—: llegan de un clic en el panel de arriba o en una
+ * barra, no de aquí, y ponerles un desplegable de dieciocho meses sería llenar
+ * la fila con algo que nadie va a abrir. Pero tienen que verse puestos y poder
+ * quitarse: un filtro invisible es de donde salen las llamadas de «me faltan
+ * servicios en la lista».
+ */
+const RARO = {
+  sin_marca: 'dicen «sin contrato» y traen fechas',
+  sin_respaldo: 'dicen «con contrato» y no hay nada',
+};
+
 export default function Filtros({ valores, catalogos }) {
   const router = useRouter();
   const [f, setF] = useState(valores);
@@ -28,8 +43,13 @@ export default function Filtros({ valores, catalogos }) {
     if (k !== 'q') aplicar(siguiente);
   }
 
-  const limpio = { estado: '', zona: '', asesor: '', pdf: '', q: '' };
+  const limpio = { estado: '', zona: '', asesor: '', pdf: '', vence: '', raro: '', q: '' };
   const hayFiltro = Object.values(f).some(Boolean);
+
+  const venidos = [
+    ['vence', f.vence, `vencen en ${f.vence}`],
+    ['raro', f.raro, RARO[f.raro]],
+  ].filter(([, v]) => v);
 
   return (
     <form
@@ -39,6 +59,22 @@ export default function Filtros({ valores, catalogos }) {
       }}
       className="flex flex-wrap gap-2 items-center"
     >
+      {venidos.map(([clave, , etiqueta]) => (
+        <button
+          key={clave}
+          type="button"
+          onClick={() => {
+            const siguiente = { ...f, [clave]: '' };
+            setF(siguiente);
+            aplicar(siguiente);
+          }}
+          title="Quitar este filtro"
+          className="text-sm rounded-lg px-2.5 py-1.5 border border-cyan-500/70 bg-cyan-500/10 text-cyan-200"
+        >
+          {etiqueta} ✕
+        </button>
+      ))}
+
       <input
         value={f.q}
         onChange={(e) => cambiar('q', e.target.value)}

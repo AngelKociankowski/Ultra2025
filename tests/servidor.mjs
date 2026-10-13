@@ -96,12 +96,24 @@ async function esperar(url, proc, intentos = 180) {
   throw new Error(`El servidor no respondió en ${url}`);
 }
 
-export async function arrancar() {
+/**
+ * @param {object} [opciones]
+ * @param {(rutaDeLaBase: string) => void|Promise<void>} [opciones.prepararBase]
+ *   Se llama con la ruta del archivo de la base DESPUÉS de sembrarla y ANTES de
+ *   levantar Next. Es la única forma de probar una migración de verdad: se
+ *   siembra con el esquema de hoy, se deja la base como la tenía el cliente
+ *   —quitándole la columna nueva—, y se arranca la aplicación para ver si la
+ *   pone. Parámetro opcional: las pruebas que ya existen no cambian ni una
+ *   línea.
+ */
+export async function arrancar({ prepararBase } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ultra-test-'));
   const dbPath = path.join(dir, 'prueba.db');
   const envBase = { DATABASE_PATH: dbPath, NODE_ENV: 'production' };
 
   await ejecutar('node', ['scripts/seed.mjs', '--reset'], envBase);
+
+  if (prepararBase) await prepararBase(dbPath);
 
   if (!fs.existsSync(path.join(RAIZ, '.next', 'BUILD_ID'))) {
     throw new Error('Falta compilar. Corre `npm run build` antes de las pruebas.');

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { usuarioActual } from '@/lib/auth';
 import { listarServicios, catalogos, porArrancarResumen } from '@/lib/servicios';
+import { loQueFalta } from '@/lib/alta';
 import {
   periodosDisponibles,
   periodoVigente,
@@ -10,7 +11,7 @@ import {
   comparativoCorte,
 } from '@/lib/queries';
 import { formatCurrency, formatNumber } from '@/lib/utils';
-import { gruposEditables } from '@/lib/rbac';
+import { gruposEditables, puede } from '@/lib/rbac';
 import { conteoComentarios } from '@/lib/comentarios';
 import { facturasDelPeriodoPorServicio, numerosDelCorte, idsPorNombre } from '@/lib/facturacion';
 import {
@@ -27,9 +28,19 @@ import Filtros from './Filtros';
 import RepartoTurnos from '@/components/RepartoTurnos';
 import CeldaFactura from '@/components/CeldaFactura';
 import CeldaContrato from '@/components/CeldaContrato';
+import Paginador, { paginar } from '@/components/Paginador';
 import Icono from '@/components/Icono';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Cuántos renglones por página.
+ *
+ * Cincuenta caben en dos o tres pantallas y dejan ver un bloque de la operación
+ * de una vez; con los 217 de un tirón había que recorrer veinte pantallas para
+ * llegar a la última letra del alfabeto.
+ */
+const POR_PAGINA = 50;
 
 const MESES = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const nombreMes = (p) => {
@@ -64,12 +75,35 @@ const textoDia = (d) => {
  * el campo existiera y no lo trae. Pintar «falta» en ámbar en cada renglón de
  * cada mes viejo acusaría de una omisión que nadie cometió.
  */
-function Repse({ valor, esCorte }) {
+function Repse({ valor, esCorte, arreglo }) {
   if (esCorte) return <span className="text-slate-600" title="El corte de ese mes no guarda este dato">—</span>;
   if (valor === 'SÍ') return <span className="text-slate-200 font-medium">Sí</span>;
   if (valor === 'NO') return <span className="text-slate-500">No</span>;
   if (valor) return <span className="text-amber-300/70" title="Valor que no es sí ni no">«{valor}»</span>;
-  return <span className="text-amber-300/70 text-[11px] whitespace-nowrap">Dato faltante</span>;
+  // Señalar un hueco sin ofrecer dónde llenarlo es lo que tenía al REPSE vacío
+  // en los 217 servicios: la columna lleva meses diciendo «Dato faltante» y
+  // llegar a donde se captura eran tres clics y saber de antemano en qué bloque
+  // de la ficha vivía. Un aviso sin el arreglo al lado no es un aviso.
+  return <Marca href={arreglo} titulo="Capturar si el cliente pide REPSE">Dato faltante</Marca>;
+}
+
+/**
+ * Una marca de dato faltante: enlace cuando hay a dónde ir, texto cuando no.
+ *
+ * Los cortes cerrados y las vistas por día no se editan —un corte es el
+ * respaldo de lo que se facturó ese mes—, así que ahí la misma marca se queda
+ * como texto. Ofrecer un arreglo que al llegar está deshabilitado sería peor que
+ * no ofrecerlo.
+ */
+function Marca({ href, titulo, children }) {
+  const clase = 'text-amber-300/70 text-[11px] whitespace-nowrap';
+  return href ? (
+    <Link href={href} title={titulo} className={`${clase} underline decoration-dotted hover:text-amber-200`}>
+      {children}
+    </Link>
+  ) : (
+    <span className={clase}>{children}</span>
+  );
 }
 
 export default function EstadoFuerza({ searchParams }) {
@@ -97,6 +131,18 @@ export default function EstadoFuerza({ searchParams }) {
   const dia = comoDia(searchParams?.dia);
   const esDia = Boolean(dia) && !esCorte;
 
+  /**
+   * Lo que se puede arreglar desde aquí.
+   *
+   * El mes en curso sí; un corte cerrado y una fecha del pasado, no. De esa
+   * distinción cuelgan tres cosas: el filtro de «le falta capturar», la etiqueta
+   * del renglón y los enlaces de las marcas de dato faltante. Un corte es el
+   * respaldo de lo que se facturó ese mes y no se edita ni con permisos de
+   * administrador; señalar huecos en él acusaría de una omisión que nadie
+   * cometió, porque esos campos nacieron después que el corte.
+   */
+  const editable = !esCorte && !esDia;
+
   const filtros = {
     estatus: searchParams?.estatus ?? 'ACTIVO',
     zona: searchParams?.zona || '',
@@ -105,6 +151,7 @@ export default function EstadoFuerza({ searchParams }) {
     contrato: searchParams?.contrato || '',
     facturado: searchParams?.facturado || '',
     modalidad: searchParams?.modalidad || '',
+    falta: editable && searchParams?.falta === '1' ? '1' : '',
     q: searchParams?.q || '',
     periodo: esCorte ? pedido : '',
   };
@@ -140,6 +187,10 @@ export default function EstadoFuerza({ searchParams }) {
   // Un solo GROUP BY para toda la tabla, no una consulta por renglón.
   const notas = esCorte ? new Map() : conteoComentarios();
   const grupos = gruposEditables(usuario.rol);
+  // El desglose por jornada se arregla en `CorreccionServicio`, que la ficha
+  // solo monta para quien puede corregir. Sin esta condición, ventas, finanzas,
+  // jurídico y el espectador veían un enlace a un ancla que su ficha no trae.
+  const puedeCorregir = puede(usuario.rol, 'corregir');
 
   // El número de factura y el contrato se resuelven de una vez para toda la
   // tabla: una consulta agrupada, no una por renglón.
@@ -156,6 +207,16 @@ export default function EstadoFuerza({ searchParams }) {
 
   const totalGuardias = servicios.reduce((a, s) => a + (s.total_guardias || 0), 0);
   const totalFactura = servicios.reduce((a, s) => a + (s.importe_factura || 0), 0);
+
+  /**
+   * El recorte se hace aquí, después de los totales y del reparto por turno.
+   *
+   * Los dos números de arriba y el panel de turnos salen de `servicios`, que es
+   * la lista completa filtrada; la tabla pinta `hoja.filas`. Si se hubiera
+   * paginado en la consulta, el encabezado diría «50 servicios · 212 guardias»
+   * y las dos cifras serían de la página, no de la operación.
+   */
+  const hoja = paginar(servicios, searchParams?.pagina, POR_PAGINA);
 
   /**
    * Los cortes de 2023 y algunos de 2024 no traen la facturación capturada por
@@ -344,7 +405,45 @@ export default function EstadoFuerza({ searchParams }) {
               </tr>
             </thead>
             <tbody>
-              {servicios.map((s) => (
+              {hoja.filas.map((s) => {
+                /**
+                 * Lo que le falta a este servicio, y a dónde lleva su arreglo.
+                 *
+                 * Mientras le falte algo del alta, las marcas de dato faltante
+                 * llevan al panel «Falta por capturar», que es donde ventas y
+                 * operaciones las pueden llenar. Cuando ya no falta nada del
+                 * alta, el hueco que quede —la nómina del mes, por ejemplo— se
+                 * llena en el editor de la ficha, y por eso el ancla cambia: si
+                 * las dos marcas apuntaran al mismo sitio, una de las dos
+                 * mandaría a un bloque que no está en la pantalla.
+                 */
+                const falta = editable ? loQueFalta(s) : null;
+
+                /**
+                 * Y una marca sin destino se queda como texto.
+                 *
+                 * El enlace se ofrecía mirando solo si la vista es editable, no
+                 * si la ficha de ESE servicio y de ESE rol monta de verdad el
+                 * bloque. En un servicio dado de baja o suspendido no se monta
+                 * ni «Falta por capturar» ni el editor —los dos piden ACTIVO—,
+                 * y el editor tampoco existe para quien no edita ningún grupo
+                 * de campos: el espectador acababa con un enlace a `#editar`
+                 * que lo dejaba arriba de la ficha, sin arreglo y sin
+                 * explicación. Lo mismo con `#corregir`, que solo se monta para
+                 * quien tiene permiso de corregir.
+                 *
+                 * Es exactamente lo que el componente `Marca` ya hace bien en
+                 * los cortes cerrados: señalar el hueco sin prometer un arreglo
+                 * que al llegar no está.
+                 */
+                const activo = s.estatus === 'ACTIVO';
+                const captura =
+                  editable && activo && (falta.total > 0 || grupos.length > 0)
+                    ? `/estado-fuerza/${s.id}#${falta.total > 0 ? 'completar' : 'editar'}`
+                    : null;
+                const corregir = editable && puedeCorregir ? `/estado-fuerza/${s.id}#corregir` : null;
+
+                return (
                 <tr key={s.id} className="group hover:bg-slate-800/40 [&>td]:border-t [&>td]:border-slate-800/70">
                   <td className="px-4 py-2 max-w-[280px] sticky left-0 z-[1] bg-[var(--tarjeta)] group-hover:bg-[var(--tarjeta-señalada)] shadow-[1px_0_0_0_rgb(var(--s-700)/0.5)]">
                     <div className="flex items-baseline gap-1.5">
@@ -365,6 +464,42 @@ export default function EstadoFuerza({ searchParams }) {
                           arranca {s.fecha_alta}
                         </span>
                       )}
+                      {/* En ámbar tenue y como etiqueta del renglón, nunca como
+                          caja de alarma ni como contador del tablero. A los 217
+                          servicios de la carga inicial les falta algo, así que
+                          un aviso agregado nacería en 217 y no habría forma de
+                          llevarlo a cero: es el mismo error que el aviso
+                          permanente de aperturas sin aplicar, que enseñó a la
+                          operación a pasar por encima de los avisos ámbar. */}
+                      {falta?.total > 0 &&
+                        (() => {
+                          const titulo = `Faltan por capturar: ${[...falta.operar, ...falta.cobrar]
+                            .map((c) => c.etiqueta)
+                            .join(', ')}`;
+                          const clase =
+                            'text-[10px] bg-amber-500/10 text-amber-300/80 border border-amber-500/25 rounded px-1.5 shrink-0 whitespace-nowrap';
+                          /*
+                           * Sin destino —un servicio que ya no está activo— la
+                           * etiqueta sigue diciendo lo que falta, pero no
+                           * promete un arreglo que la ficha no va a tener.
+                           *
+                           * El texto va interpolado en las dos ramas y no
+                           * guardado en una variable, aunque se repita: con una
+                           * sola cadena, «faltan 11 datos» aparece completa en
+                           * los datos que React deja al final del documento, y
+                           * las pruebas que cuentan etiquetas sobre el HTML
+                           * encontraban el doble de las que se dibujaron.
+                           */
+                          return captura ? (
+                            <Link href={captura} title={titulo} className={`${clase} hover:text-amber-200`}>
+                              faltan {falta.total} dato{falta.total === 1 ? '' : 's'}
+                            </Link>
+                          ) : (
+                            <span title={titulo} className={clase}>
+                              faltan {falta.total} dato{falta.total === 1 ? '' : 's'}
+                            </span>
+                          );
+                        })()}
                       {!esCorte && notas.get(s.id) > 0 && (
                         <Link
                           href={`/estado-fuerza/${s.id}#comentarios`}
@@ -396,7 +531,7 @@ export default function EstadoFuerza({ searchParams }) {
                       porque nunca hubo dónde ponerlo a la vista: una columna que
                       no se ve es una columna que nadie llena. */}
                   <td className="px-3 py-2 text-center whitespace-nowrap">
-                    <Repse valor={s.tipo_repse} esCorte={esCorte} />
+                    <Repse valor={s.tipo_repse} esCorte={esCorte} arreglo={captura} />
                   </td>
                   <td className="px-3 py-2 text-slate-400 max-w-[170px]">
                     <span className="block truncate" title={s.asesor || ''}>{s.asesor || '—'}</span>
@@ -422,7 +557,15 @@ export default function EstadoFuerza({ searchParams }) {
                         ))}
                       </span>
                     ) : (
-                      <span className="block text-[11px] text-amber-300/70">sin desglose</span>
+                      // El desglose no se «completa»: se corrige. Es la
+                      // plantilla del servicio —lo que describe el estado de
+                      // fuerza— y por eso vive detrás de un motivo escrito, no
+                      // en el panel de huecos del alta.
+                      <span className="block">
+                        <Marca href={corregir} titulo="Capturar el desglose por jornada">
+                          sin desglose
+                        </Marca>
+                      </span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
@@ -441,7 +584,7 @@ export default function EstadoFuerza({ searchParams }) {
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     <span className="text-slate-300 tabular-nums">
                       {s.nomina_total ? formatCurrency(s.nomina_total) : (
-                        <span className="text-amber-300/60 text-xs">falta</span>
+                        <Marca href={captura} titulo="Capturar la nómina del servicio">falta</Marca>
                       )}
                     </span>
                     {/* Una utilidad sin nómina detrás no es una utilidad. En 25
@@ -513,7 +656,8 @@ export default function EstadoFuerza({ searchParams }) {
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {servicios.length === 0 && (
                 <tr>
                   <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
@@ -524,6 +668,25 @@ export default function EstadoFuerza({ searchParams }) {
             </tbody>
           </table>
         </div>
+
+        <Paginador
+          ruta="/estado-fuerza"
+          /**
+           * Los filtros que la pantalla de verdad respeta, no los que vengan en
+           * la URL.
+           *
+           * Con `searchParams` crudo, paginar arrastraba parámetros que esta
+           * pantalla había descartado —`falta=1` dentro de un corte cerrado, por
+           * ejemplo, donde no se etiqueta ni se filtra— y un parámetro repetido
+           * (`?zona=A&zona=B`) llegaba como el arreglo `['A','B']` y se pegaba
+           * en el enlace como `zona=A,B`, que no es ninguna zona. Lo que se
+           * conserva al cambiar de página es el filtro que está puesto.
+           */
+          parametros={{ ...filtros, dia: esDia ? dia : '' }}
+          pagina={hoja.pagina}
+          porPagina={POR_PAGINA}
+          total={hoja.total}
+        />
       </div>
     </div>
   );

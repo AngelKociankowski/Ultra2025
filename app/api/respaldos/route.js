@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { conPermiso, leerJson } from '@/lib/api';
+import { conPermiso, leerObjeto } from '@/lib/api';
 import { crear, listar, estado, borrar, restaurar } from '@/lib/respaldos';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +31,7 @@ export const POST = conPermiso('respaldos', async (request, { usuario }) => {
     return NextResponse.json(restaurar(datos, usuario, { confirmacion: form.get('confirmacion') }));
   }
 
-  const { motivo } = await leerJson(request).catch(() => ({}));
+  const { motivo } = await leerObjeto(request).catch(() => ({}));
   return NextResponse.json(crear({ motivo: motivo === 'automatico' ? 'automatico' : 'manual', usuario }), {
     status: 201,
   });

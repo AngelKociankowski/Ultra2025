@@ -22,7 +22,10 @@ export const POST = conPermiso('usuarios', async (request, { usuario }) => {
   if (!email || !nombre || !rol || !password) {
     throw new ValidacionError('Correo, nombre, rol y contraseña son obligatorios.');
   }
-  if (!ROLES[rol]) throw new ValidacionError('Rol no válido.');
+  // Por pertenencia real: `!ROLES[rol]` daba por válido un rol llamado
+  // `__proto__` o `toString`, y el usuario quedaba dado de alta con un rol que
+  // el RBAC no conoce, o sea sin permisos y sin explicación.
+  if (!Object.hasOwn(ROLES, rol)) throw new ValidacionError('Rol no válido.');
   if (String(password).length < 8) throw new ValidacionError('La contraseña debe tener al menos 8 caracteres.');
 
   const db = getDb();
@@ -62,7 +65,7 @@ export const PATCH = conPermiso('usuarios', async (request, { usuario }) => {
   const args = [];
   const detalle = [];
   if (rol !== undefined) {
-    if (!ROLES[rol]) throw new ValidacionError('Rol no válido.');
+    if (!Object.hasOwn(ROLES, rol)) throw new ValidacionError('Rol no válido.');
     sets.push('rol = ?'); args.push(rol); detalle.push(`rol → ${rol}`);
   }
   if (activo !== undefined) {

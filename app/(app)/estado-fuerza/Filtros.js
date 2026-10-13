@@ -54,7 +54,10 @@ export default function Filtros({
    */
   function irAlDia(v) {
     const params = new URLSearchParams();
-    for (const [k, x] of Object.entries(f)) if (x && k !== 'periodo') params.set(k, x);
+    // `falta` se queda fuera: una fecha del pasado no se edita, así que ahí no
+    // se ofrece ni la etiqueta de «le falta capturar» ni su filtro. Arrastrarlo
+    // en la URL dejaría un filtro puesto que la pantalla no aplica.
+    for (const [k, x] of Object.entries(f)) if (x && k !== 'periodo' && k !== 'falta') params.set(k, x);
     if (v) params.set('dia', v);
     router.push(`/estado-fuerza${params.toString() ? `?${params}` : ''}`);
   }
@@ -66,6 +69,9 @@ export default function Filtros({
     if (k === 'periodo') {
       siguiente.zona = '';
       siguiente.asesor = '';
+      // Y el de captura pendiente, que en un corte cerrado no se aplica: los
+      // campos que hoy se piden nacieron después que esos cortes.
+      if (v) siguiente.falta = '';
     }
     // Elegir un mes saca del día: son dos formas de mirar lo mismo y solo una
     // puede estar puesta.
@@ -93,6 +99,7 @@ export default function Filtros({
     ['turno', f.turno, f.turno],
     ['contrato', f.contrato, f.contrato === 'si' ? 'con contrato' : 'sin contrato'],
     ['facturado', f.facturado, f.facturado === 'si' ? 'facturados' : 'sin facturar'],
+    ['falta', f.falta, 'les falta capturar algo'],
   ].filter(([, v]) => v);
 
   return (
@@ -247,6 +254,21 @@ export default function Filtros({
         <option value="si">Facturados</option>
         <option value="no">Sin facturar</option>
       </select>
+
+      {/* A quién le falta terminar de capturar el alta. Es un filtro y no un
+          contador en el tablero a propósito: a los 217 servicios de la carga
+          inicial les falta algo, así que un número agregado nacería en 217 y
+          nunca bajaría a cero. Como filtro sí sirve —se usa para ponerse a
+          cerrar huecos un rato— y mientras no se pide, no estorba.
+
+          No se ofrece en los cortes cerrados ni en las vistas por día: ahí no
+          hay nada que arreglar. */}
+      {!enCorte && !dia && (
+        <select value={f.falta} onChange={(e) => cambiar('falta', e.target.value)} className={activo(f.falta)}>
+          <option value="">Captura: toda</option>
+          <option value="1">Les falta capturar algo</option>
+        </select>
+      )}
 
       <button type="submit" className="bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg px-3 py-1.5">
         Buscar

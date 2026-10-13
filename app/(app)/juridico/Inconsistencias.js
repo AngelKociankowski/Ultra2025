@@ -14,8 +14,15 @@ import { comoFecha } from './formato';
  * los que traen fecha— y la pantalla se vería limpia. Sería inventar un dato:
  * lo único que sabemos con certeza es que alguien capturó dos cosas que no
  * pueden ser ciertas al mismo tiempo.
+ *
+ * El texto y el destino tienen que decir lo mismo. Este panel decía «da clic en
+ * cualquiera para arreglarlo en la lista de abajo» y cada nombre enlazaba a la
+ * ficha del servicio, en otra pantalla: se prometía la lista de abajo y se
+ * entregaba un viaje. Ahora los enlaces filtran la cartera de aquí mismo, que
+ * es donde el renglón se abre con su editor de contrato, y por eso cada bloque
+ * tiene un enlace de grupo además de los nombres sueltos.
  */
-export default function Inconsistencias({ datos, puedeEditar }) {
+export default function Inconsistencias({ datos, puedeEditar, activo = '' }) {
   return (
     <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
       <h2 className="text-base font-semibold text-amber-300">
@@ -32,6 +39,8 @@ export default function Inconsistencias({ datos, puedeEditar }) {
           titulo="Dicen «sin contrato» pero traen fechas"
           explicacion="O el contrato existe y falta marcarlo, o las fechas son de uno que ya venció."
           filas={datos.dicenQueNo}
+          raro="sin_marca"
+          activo={activo}
           detalle={(s) =>
             s.fecha_vencimiento_contrato ? `vencía ${comoFecha(s.fecha_vencimiento_contrato)}` : `firmado ${comoFecha(s.fecha_contrato)}`
           }
@@ -40,6 +49,8 @@ export default function Inconsistencias({ datos, puedeEditar }) {
           titulo="Dicen «con contrato» y no hay nada"
           explicacion="Sin fecha de firma, sin vigencia y sin PDF. La palomita no está respaldada por ningún dato."
           filas={datos.dicenQueSi}
+          raro="sin_respaldo"
+          activo={activo}
           detalle={() => 'sin fecha ni PDF'}
         />
       </div>
@@ -47,8 +58,9 @@ export default function Inconsistencias({ datos, puedeEditar }) {
   );
 }
 
-function Bloque({ titulo, explicacion, filas, detalle }) {
+function Bloque({ titulo, explicacion, filas, detalle, raro, activo }) {
   if (filas.length === 0) return null;
+  const destino = `/juridico?raro=${raro}#cartera`;
   return (
     <div>
       <p className="text-sm text-white font-medium">
@@ -58,13 +70,22 @@ function Bloque({ titulo, explicacion, filas, detalle }) {
       <ul className="space-y-0.5 max-h-52 overflow-y-auto pr-1">
         {filas.map((s) => (
           <li key={s.id} className="text-xs flex justify-between gap-3">
-            <Link href={`/estado-fuerza/${s.id}#contrato`} className="text-slate-300 hover:text-white hover:underline truncate">
+            {/* El nombre también lleva a la cartera filtrada y no a la ficha:
+                todos los enlaces del panel van al mismo sitio, que es lo que
+                hace que el rótulo de arriba sea cierto. */}
+            <Link href={destino} className="text-slate-300 hover:text-white hover:underline truncate">
               {s.servicio}
             </Link>
             <span className="text-slate-500 whitespace-nowrap">{detalle(s)}</span>
           </li>
         ))}
       </ul>
+      <Link
+        href={activo === raro ? '/juridico#cartera' : destino}
+        className="inline-block text-xs text-cyan-400 hover:underline mt-2"
+      >
+        {activo === raro ? 'Quitar el filtro' : `Verlos en la cartera de abajo →`}
+      </Link>
     </div>
   );
 }
