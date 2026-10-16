@@ -1135,12 +1135,16 @@ describe('T7 · la derivación de las reglas, atacada por su fuente', () => {
      * archivo— un campo con un tipo que `CLASE_POR_TIPO` no conoce.
      */
     const { register } = await import('node:module');
-    const { pathToFileURL } = await import('node:url');
     const resolver = new URL('./_resolver-sin-extension.mjs', import.meta.url);
     register(resolver);
 
     const { CAMPOS } = await import('../lib/campos.js');
-    const { exigirDato } = await import(pathToFileURL('/home/user/Ultra2025/lib/captura.js').href);
+    // La ruta se deriva de la de este archivo. Venía escrita absoluta, con el
+    // directorio de la máquina donde se escribió la prueba, y eso pasaba aquí y
+    // reventaba en el CI, que coloca el repositorio en otro sitio: el módulo no
+    // se encontraba y la suite quedaba roja sin que la causa se viera desde
+    // fuera del corredor.
+    const { exigirDato } = await import(new URL('../lib/captura.js', import.meta.url).href);
 
     CAMPOS.hora_del_servicio = { etiqueta: 'Hora del servicio', tipo: 'time' };
     let resultado;
