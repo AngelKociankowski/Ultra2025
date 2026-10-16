@@ -23,4 +23,21 @@ jobs:
 
       # Las pruebas levantan la app contra una base desechable, así que
       # necesitan el build hecho arriba.
-      - run: npm test
+      #
+      # DIAGNÓSTICO TEMPORAL. El log completo de Actions vive en un almacén que
+      # no todas las herramientas alcanzan, así que cuando la suite falla se
+      # publican las pruebas rojas como anotación del trabajo, que sí se lee por
+      # API. Se quita en cuanto esté localizado el fallo que no se reproduce
+      # fuera del corredor.
+      - run: |
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/pruebas.txt || {
+            resumen=$(grep -E '^# (tests|pass|fail)' /tmp/pruebas.txt | tr '\n' ' ')
+            echo "::error::RESUMEN $resumen"
+            grep -E '^not ok' /tmp/pruebas.txt | head -8 | while IFS= read -r linea; do
+              echo "::error::$linea"
+            done
+            grep -E 'Error|error:' /tmp/pruebas.txt | grep -v cancelledByParent | head -4 |
+              while IFS= read -r linea; do echo "::error::CAUSA $linea"; done
+            exit 1
+          }
