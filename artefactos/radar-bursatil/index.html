@@ -191,7 +191,7 @@ td.n{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-
 .precio-num{display:block;color:var(--ink);}
 .var-mini{display:block;font-size:var(--fs-xs);}
 .precio-movil{display:none;}
-.viejo,.var-mini.viejo,.pm-var.viejo{color:var(--ink-3);} /* más de 3 ciclos sin precio nuevo con el mercado abierto */
+.viejo,.var-mini.viejo,.pm-var.viejo{color:var(--ink-3);} /* más de RANK_STALE_FACTOR ciclos sin precio nuevo con el mercado abierto */
 .tags{display:flex;flex-wrap:wrap;gap:4px;max-width:22rem;}
 .tag{font-size:11px;padding:1px 6px;border-radius:var(--r-1);background:var(--surface-2);color:var(--ink-2);white-space:nowrap;}
 .tag.pos::before{content:"▲ ";color:var(--up);} .tag.neg::before{content:"▼ ";color:var(--down);}
@@ -588,8 +588,11 @@ HIST_DAYS: 400, SPX_DAYS: 800, TREASURY_DAYS: 35,
 LIVE_FLOOR_MIN_FREE: 30,
 REST_TTL_MIN_FREE: 180,
 BREADTH_TTL_MIN_FREE: 120,
-PAID_LIVE_MS: 60000, PAID_OFFHOURS_MS: 300000, PAID_BREADTH_MS: 300000,
-RANK_POLL_STALE_MS: 45000, RANK_POLL_CONC: 3, RANK_POLL_SLACK_MS: 2000, RANK_STALE_FACTOR: 3, RANK_CLOSE_GRACE_MS: 120000, // v5.5: sondeo de precios de la tabla (planes de pago)
+PAID_LIVE_MS: 300000, PAID_OFFHOURS_MS: 300000, PAID_BREADTH_MS: 300000, // v5.5 (C0): franja y tabla cada 5 min en planes de pago
+// la caché del shell (stale) debe vencer antes que el ciclo; "sin actualizar" a los RANK_STALE_FACTOR ciclos
+RANK_POLL_STALE_MS: 240000, RANK_POLL_CONC: 3, RANK_POLL_SLACK_MS: 2000, RANK_STALE_FACTOR: 2, RANK_CLOSE_GRACE_MS: 120000, // v5.5: sondeo de precios de la tabla (planes de pago)
+// 00e: hora de cotización imposible (E10-M2), salto sin explicación (E10-M3) y proporción de filas al día para decir "en vivo" (E10-M4)
+RANK_TS_SKEW_MS: 300000, RANK_JUMP_MAX: 0.5, RANK_JUMP_TOL: 0.02, RANK_FRESH_MIN: 0.8,
 ERP: 0.05, RF_DEFAULT: 0.04, IDX_DIV_YIELD: 0.013, H: 0.25,
 CACHE_DAY: { staleTime: 300000, gcTime: 86400000 },
 });
@@ -1733,13 +1736,24 @@ return Math.max(CONFIG.LIVE_FLOOR_MIN_FREE, Math.ceil(market.minutesLeft / ticks
 function canAuto({ remaining, reserve = CONFIG.RESERVE_CALLS, runPending, runCost }, cost) {
 return remaining - reserve - (runPending ? runCost : 0) >= cost;
 }
-// v5.5: cotización de `quote` o `batch-quote-short` → precio, variación y hora del dato
+// v5.5: cotización de `quote` o `batch-quote-short` → precio, variación y hora del dato. E10-M2: `timestamp` en segundos o en
+// milisegundos; una hora más de RANK_TS_SKEW_MS en el futuro es imposible y la cotización no vale (null)
 function quotePx(q, nowMs) {
 if (!q || typeof q !== "object" || typeof q.symbol !== "string" || !isNum(q.price) || !(q.price > 0)) return null;
 const changePct = isNum(q.changePercentage) ? q.changePercentage : isNum(q.change) && q.price - q.change > 0 ? (q.change / (q.price - q.change)) * 100 : null;
-return { symbol: q.symbol, price: q.price, changePct, ts: isNum(q.timestamp) && q.timestamp > 0 ? q.timestamp * 1000 : nowMs };
+const raw = isNum(q.timestamp) && q.timestamp > 0 ? q.timestamp : null, ts = raw === null ? nowMs : raw < 1e11 ? raw * 1000 : raw;
+return ts > nowMs + CONFIG.RANK_TS_SKEW_MS ? null : { symbol: q.symbol, price: q.price, changePct, ts };
 }
-// v5.5: qué símbolos de la tabla vencen ahora y cuándo el siguiente (cadencia de la franja; tras el cierre, una consulta única a lastCloseMs + gracia)
+// E10-M3: ¿salto absurdo? Precio a más de RANK_JUMP_MAX de `ref` (lo último aceptado o el precio del análisis) que la propia
+// cotización no explica: precio ≈ cierre previo × (1 + cambio del día) dentro de RANK_JUMP_TOL. Sin cierre previo en la
+// cotización (batch-quote-short) se usa `prevRef`, el cierre previo que implica el análisis.
+function quoteJump(q, ref, prevRef) {
+if (!q || !isNum(q.price) || !isNum(ref) || !(ref > 0) || Math.abs(q.price / ref - 1) <= CONFIG.RANK_JUMP_MAX) return false;
+const pc = isNum(q.previousClose) && q.previousClose > 0 ? q.previousClose : isNum(prevRef) && prevRef > 0 ? prevRef : null;
+const day = isNum(q.changePercentage) ? q.changePercentage / 100 : pc !== null && isNum(q.change) ? q.change / pc : null;
+return pc === null || day === null || Math.abs(q.price / (pc * (1 + day)) - 1) > CONFIG.RANK_JUMP_TOL;
+}
+// v5.5: qué símbolos de la tabla vencen ahora y cuándo el siguiente (cadencia de la franja; tras el cierre, una consulta única desde lastCloseMs + gracia)
 function rankPollPlan({ plan, market, nowMs, baseMs, rows, live, skip }) {
 const out = { due: [], nextMs: null };
 if (!["STARTER", "PREMIUM", "ULTIMATE"].includes(plan)) return out;
@@ -1751,7 +1765,9 @@ const cls = String(r.cls || ""), group = cls.startsWith("crypto") ? "crypto" : c
 const last = Math.max(lv && isNum(lv.tried) ? lv.tried : 0, baseMs), iv = liveIntervalMs({ plan, market, group });
 let dueAt;
 if (iv !== null) dueAt = last + iv;
-else if (market.phase === "post" && last < market.lastCloseMs + CONFIG.RANK_CLOSE_GRACE_MS) dueAt = market.lastCloseMs + CONFIG.RANK_CLOSE_GRACE_MS;
+// E10-L1: la consulta única tras el cierre tampoco sale antes de un ciclo desde la anterior (si no, la caché del shell,
+// RANK_POLL_STALE_MS, devolvería el precio de antes del cierre); la que arrancó dentro del margen ya cuenta como hecha
+else if (market.phase === "post" && last < market.lastCloseMs + CONFIG.RANK_CLOSE_GRACE_MS - CONFIG.RANK_POLL_SLACK_MS) dueAt = Math.max(market.lastCloseMs + CONFIG.RANK_CLOSE_GRACE_MS, last + CONFIG.PAID_LIVE_MS);
 else continue;
 if (nowMs >= dueAt - CONFIG.RANK_POLL_SLACK_MS) out.due.push(r.symbol);
 else out.nextMs = out.nextMs === null ? dueAt : Math.min(out.nextMs, dueAt);
@@ -2117,7 +2133,7 @@ etParts, etWallToMs, isTradingDay, prevTradingDay, nextTradingDay, lastTradingDa
 makeError, classifyText, asArray, normalizeEod, riskSeries, filterFloatUniverse, filterQuotes, isJunkListing,
 stage1Select, regimeFrom, stockFeatures, infoFeatures, stockScore, stockCaps, stockPrediction,
 nonStockScore, displayPct, signalFromProb, stockUpProb, retStats, cleanZeros, extractRows, splitDay, joinDay, bytesOf, explainStock, explainNonStock, technicals, fundamentalsOf, analyze,
-planRun, liveIntervalMs, canAuto, quotePx, rankPollPlan, fmt, detailPhrases, runAlive,
+planRun, liveIntervalMs, canAuto, quotePx, quoteJump, rankPollPlan, fmt, detailPhrases, runAlive,
 PORT, PORT_MAP, parseMXN, parseRate, fxRate, muTotOf, instrumentsFrom, mxnUniverse, allocate, finalizeShares, portfolioStats, buildPortfolio, minAmountStable,
 };
 root.RadarCore = Object.freeze(RadarCore);
@@ -2816,7 +2832,7 @@ async function call(key, args = {}, o = {}) {
 const ep = ENDPOINTS[key];
 if (!ep) throw C.makeError("bad_request", "bug", { raw: "endpoint desconocido: " + key, section: o.section });
 const input = ep.build(args), id = ep.tool + "|" + stable(input), cat = o.cat || "manual";
-const cache = o.cache === false ? false : o.refresh ? Object.assign({}, DAY, { refresh: true }) : isNum(o.staleMs) ? Object.assign({}, DAY, { staleTime: o.staleMs }) : Object.assign({}, DAY); // staleMs: el sondeo de la tabla pide datos de < 60 s
+const cache = o.cache === false ? false : o.refresh ? Object.assign({}, DAY, { refresh: true }) : isNum(o.staleMs) ? Object.assign({}, DAY, { staleTime: o.staleMs }) : Object.assign({}, DAY); // staleMs: el sondeo de la tabla pide datos más nuevos que su ciclo
 // freno por minuto: la corrida decide con `o.onThrottle` (false = no reintentar); fuera de ella, un solo reintento tras la pausa
 let thr = 0;
 const again = e => e.kind === "throttled" && (++thr, o.onThrottle ? o.onThrottle(e) !== false : thr <= 1);
@@ -3077,14 +3093,21 @@ await verb(() => r.set({ kind: "corrida", v: 1, dateET: dayET, plan, state: "run
 return { ok: true, runId };
 } catch (e) { fail(e); return { ok: false, reason: "error" }; }
 }
-async function finishRun({ runId, state, reason }) {
-if (!st.active || !runId) return;
-try { const cur = await read("corrida"); if (cur && cur.runId === runId) await verb(() => ref("corrida").update({ state, finishedAt: now(), reason: reason || null })); } catch (e) { fail(e); }
+// E10-A1: cierre y latido de `corrida` van en fila (leer y escribir) y un latido nunca escribe tras el cierre de su corrida;
+// si no, un latido que leyó antes del cierre devolvía el documento a "running" (corrida fantasma)
+let runQ = Promise.resolve();
+const ended = new Set(), inOrder = f => (runQ = runQ.then(f, f));
+function finishRun({ runId, state, reason }) {
+if (!st.active || !runId) return Promise.resolve();
+if (state !== "interrumpida") ended.add(runId); // "interrumpida" no es final: la pestaña que vuelve sigue latiendo
+return inOrder(async () => { try { const cur = await read("corrida"); if (cur && cur.runId === runId) await verb(() => ref("corrida").update({ state, finishedAt: now(), reason: reason || null })); } catch (e) { fail(e); } });
 }
 // latido de la corrida en curso (cada BEAT_MS): sin él durante BEAT_STALE_MS, los demás la dan por interrumpida
-async function beat(runId) {
-if (!st.active || !runId) return false;
-try { const cur = await read("corrida"); if (!cur || cur.runId !== runId) return false; await verb(() => ref("corrida").update({ beatAt: now(), state: "running" })); return true; } catch (e) { fail(e); return false; }
+function beat(runId) {
+if (!st.active || !runId || ended.has(runId)) return Promise.resolve(false);
+return inOrder(async () => {
+try { const cur = await read("corrida"); if (!cur || cur.runId !== runId || ended.has(runId)) return false; await verb(() => ref("corrida").update({ beatAt: now(), state: "running" })); return true; } catch (e) { fail(e); return false; }
+});
 }
 async function saveDay(output, dayET, runId) {
 if (!st.active || !dayWrites) return false;
@@ -3706,7 +3729,7 @@ function tickClock(schedule) {
 const s = App.state, now = App.now();
 const prev = s.clock.market && s.clock.market.phase;
 s.clock.nowMs = now; s.clock.et = C.etParts(now); s.clock.market = C.marketState(now, s.clock.holidays);
-renderPulse(); renderStrip(); renderRankingSub(); rankPollKick(); // vigilancia cada 60 s del sondeo de la tabla
+renderPulse(); renderStrip(); paintRankPrices(); rankPollKick(); // el reloj late cada 60 s: vigila el sondeo de la tabla (su ciclo es PAID_LIVE_MS) y repinta «sin actualizar» sin esperar al ciclo
 if (prev && prev !== s.clock.market.phase) evaluateLive();
 if (schedule) { clearTimeout(clockT); clockT = App.timer(() => tickClock(true), 60000); }
 }
@@ -4048,7 +4071,7 @@ if (s.stopped) kids.push(h("span", null, "En pausa: " + ((s.page.banner && s.pag
 else if (b.limitHit) kids.push(h("span", null, "En pausa: límite diario agotado."));
 else if (s.live.intervalMs) {
 const mins = Math.round(s.live.intervalMs / 60000);
-const every = tier === "FREE" ? `Automático cada ${mins} min (plan Free)` : `Automático cada ${s.live.intervalMs >= 60000 && s.live.intervalMs < 120000 ? "60 s" : mins + " min"} (plan ${PLAN_NAME[tier]}, no verificado)`;
+const every = `Automático cada ${mins} min (plan ${PLAN_NAME[tier]}${tier === "FREE" || tier === "STARTER" ? "" : ", no verificado"})`;
 kids.push(h("span", null, every + (isNum(s.live.nextTickMs) ? ` · próxima ${F.timeET(s.live.nextTickMs)}` : "")));
 } else if (!m.open) kids.push(h("span", null, "Mercado cerrado: sin actualización automática de índices."));
 else kids.push(h("span", null, "En pausa: actualización automática en pausa para cuidar tu límite diario."));
@@ -4374,6 +4397,7 @@ const lk = await lockClaim();
 if (!lk.ok && lk.noSpace) { back(); renderRanking(); return; } // sin espacio para el candado: no arranca (el motivo sale de runGuard)
 if (!lk.ok) { back(); s.localOther = { state: "tab" }; watchLock(); renderRanking(); return; }
 s.run.lockOwned = lockMine(lockGet()); // con candado escrito: si deja de ser de esta pestaña, la corrida se retira (W2)
+{ const f = flightOf(); if (f && f.settled) store.remove("runflight." + TAB); } // E10-A2: esa marca (de otra pestaña al abrir) era de la corrida anterior
 takeover = lk.takeover || !!(opts && opts.takeover);
 if (Sync.active) {
 const cl = await Sync.claimRun({ dayET, plan: App.client.plan(), auto, resume: resume || takeover, takeover });
@@ -4439,6 +4463,7 @@ renderAll();
 const e = D.classifyError(raw);
 if (s.run.handoff) { retire(); return; }
 if (s.run.outage) { outageRun(); return; }
+if (e.kind === "cancelled" && s.run.cut === "detenida") { if (live) RC.hold(); finishRun("blocked", STOP_EMPTY); syncFinish("aborted"); return; } // E10-M1: "Detener" antes del cribado (universo)
 finishRun("error", errText(e));
 if (e.kind !== "cancelled") handleError("ranking", e);
 syncFinish("error", e.kind);
@@ -4557,6 +4582,9 @@ return v;
 fly(tok, false);
 const e = D.classifyError(raw);
 if (e.kind === "cancelled") throw e;
+// E10-B1: reconexión, sin conector… cortan la corrida en cualquier etapa con su banner (antes dependía de que la franja
+// lo viera, y con la franja cada 5 min un cribado podía terminar "done" sin acciones); el límite diario sigue su camino
+if (e.kind !== "limit_reached" && PAGE_KINDS.has(e.kind)) { pageError(e); throw e; }
 tally.calls++;
 const down = OUTAGE_CODES.has(e.code), failed = e.code === "tool_error" && e.kind === "tool_failed", rejected = failed && !okKeys.has(key);
 if (failed || e.kind === "unexpected_shape") { tally.rejected++; suspicious(seq); } else answered(seq); // otro error: FMP respondió
@@ -4747,7 +4775,7 @@ const st = C.stage1Select({ quotes: fq.pass, K: pr.K }); st.excluded = fq.exclud
 return deepSteps(rc, { pr, st, quotes, finOf: sym => ({ isFinancial: sectorOf[sym] === "Financial Services", sector: sectorOf[sym] || null }),
 notes: tier === "STARTER" ? [] : ["Plan " + PLAN_NAME[tier] + ": rama no verificada con datos reales"], meta: { universe: screen.length, eligible: universe.length, quoted: quotes.length } });
 }
-// ---- v5.5: precios de la tabla cada 60 s (planes de pago). Capa `s.rank.live` por símbolo sobre `s.result` (que no se muta): gana la hora más nueva
+// ---- v5.5: precios de la tabla cada PAID_LIVE_MS (planes de pago). Capa `s.rank.live` por símbolo sobre `s.result` (que no se muta): gana la hora más nueva
 function rankInit() { return { live: {}, timer: null, busy: false, stop: false, holdUntil: 0, blocked: null, cycleN: 0, startedAt: null, endedAt: null, cycleAt: null, pause: null, ver: 0, paintedVer: 0, lastOk: 0, lastFail: 0 }; }
 const varTxt = v => (isNum(v) ? `${arrow(v)} ${F.pctFmp(v)}` : "—");
 const todayResult = () => hasTodayRun() && C.etParts(App.state.result.nowMs).date === todayET();
@@ -4778,7 +4806,8 @@ clearTimeout(rk.timer); rk.timer = null;
 const on = rankPollOn(), now = App.now();
 if (on.why === "throttle") rk.timer = App.timer(rankPollKick, Math.max(App.client.pausedUntil(), rk.holdUntil) - now + 1000);
 else if (on.ok && !rk.busy) {
-const plan = C.rankPollPlan({ plan: App.client.plan(), market: s.clock.market, nowMs: now, baseMs: s.result.nowMs, rows: s.result.rows, live: rk.live, skip: STRIP_SET });
+// E10-L1: el mercado de este instante (s.clock.market se recalcula cada 60 s y tras las 16:00 todavía puede decir "abierto")
+const plan = C.rankPollPlan({ plan: App.client.plan(), market: C.marketState(now, s.clock.holidays), nowMs: now, baseMs: s.result.nowMs, rows: s.result.rows, live: rk.live, skip: STRIP_SET });
 if (plan.due.length) rankPollCycle(plan.due);
 else if (isNum(plan.nextMs)) rk.timer = App.timer(rankPollKick, plan.nextMs - now + 50);
 }
@@ -4793,7 +4822,9 @@ const clsOf = Object.fromEntries(s.result.rows.map(r => [r.symbol, r.cls]));
 const entry = sym => rk.live[sym] || (rk.live[sym] = {});
 const opt = { section: "ranking", cat: "tabla", staleMs: CFG.RANK_POLL_STALE_MS, noRetry: true, onThrottle: () => false, signal: pageSig() };
 // `tried` al arrancar la tarea: un ciclo cancelado no retrasa a los símbolos que no se pidieron
-const job = (syms, endpoint, args) => ({ syms, run: () => { syms.forEach(sym => { entry(sym).tried = t0; }); return cl.call(endpoint, args, opt).then(rows => { streak = 0; return rows; }); } });
+// E10-L1: un ciclo que cruza el cierre no consulta acciones ni ETF después de él: esperan su consulta única (cierre + gracia)
+const mk = C.marketState(t0, s.clock.holidays), closeAt = mk.open ? mk.closeMs : Infinity, shut = syms => App.now() >= closeAt && syms.some(sym => groupOf(String(clsOf[sym] || "")) === "equity");
+const job = (syms, endpoint, args) => ({ syms, run: () => { if (shut(syms)) return Promise.reject(C.makeError("cancelled", "cancelled")); syms.forEach(sym => { entry(sym).tried = t0; }); return cl.call(endpoint, args, opt).then(rows => { streak = 0; return rows; }); } });
 const jobs = [];
 const eq = cl.plan() === "STARTER" ? [] : due.filter(sym => clsOf[sym] === "stock" || clsOf[sym] === "etf"); // Premium/Ultimate: acciones y ETF en lotes
 due.filter(sym => !eq.includes(sym)).forEach(sym => jobs.push(job([sym], "quote", { symbol: sym })));
@@ -4801,7 +4832,7 @@ for (let i = 0; i < eq.length; i += CFG.BATCH_CHUNK) { const syms = eq.slice(i, 
 // qué errores cortan el ciclo (10 §4.A)
 const corta = e => {
 if (e.kind === "throttled") return true;
-if (e.code === "rate_limited") { rk.holdUntil = App.now() + 60000; return true; }
+if (e.code === "rate_limited") { rk.holdUntil = App.now() + CFG.THROTTLE_PAUSE_MS; return true; }
 if (e.kind === "approval" || e.kind === "denied_scope") { rk.blocked = e.kind; return true; }
 if (PAGE_KINDS.has(e.kind)) { handleIfPage(e); return true; }
 return e.kind === "transient" && ++streak >= 3;
@@ -4828,6 +4859,7 @@ if (!px) return false;
 const row = s.result && s.result.rows.find(r => r.symbol === px.symbol), o = rk.live[px.symbol] || (rk.live[px.symbol] = {});
 if (isNum(o.ts) && px.ts < o.ts) return false;
 const shown = () => (row ? livePx(row) : { price: o.price, changePct: o.changePct }), before = shown();
+if (row && C.quoteJump(q, before.price, isNum(row.changePct) && row.changePct > -100 ? row.price / (1 + row.changePct / 100) : null)) return false; // E10-M3: cuenta como falla
 Object.assign(o, px, { at: App.now(), src, fails: 0 });
 const after = shown();
 if (after.price === before.price && after.changePct === before.changePct) return true; // lo que se ve no cambió
@@ -4835,10 +4867,10 @@ rk.ver++;
 if (isNum(before.price) && after.price !== before.price) o.flash = after.price > before.price ? "up" : "down";
 return true;
 }
-// lo que se muestra de una fila: la capa si es igual o más nueva que la corrida
+// lo que se muestra de una fila: la capa si llegó después del análisis y su dato no es más viejo que el de la corrida (E10-M2)
 function livePx(r) {
-const o = App.state.rank.live[r.symbol];
-if (o && isNum(o.price) && o.ts >= (r.priceTime || 0)) return { price: o.price, changePct: isNum(o.changePct) ? o.changePct : r.changePct, ts: o.ts, at: o.at, live: true };
+const o = App.state.rank.live[r.symbol], res = App.state.result;
+if (o && isNum(o.price) && res && o.at >= res.nowMs && o.ts >= Math.min(r.priceTime || 0, res.nowMs)) return { price: o.price, changePct: isNum(o.changePct) ? o.changePct : r.changePct, ts: o.ts, at: o.at, live: true };
 return { price: r.price, changePct: r.changePct, ts: r.priceTime, at: null, live: false };
 }
 // precios vivos (USD) para el portafolio; null en Free, ejemplo, gancho apagado o sin análisis de hoy
@@ -4849,11 +4881,9 @@ const map = {}; let at = 0;
 for (const r of s.result.rows) { const p = livePx(r); if (p.live) { map[r.symbol] = p.price; at = Math.max(at, p.at || 0); } }
 return Object.keys(map).length ? { map, at } : null;
 }
-// > 3 ciclos sin precio nuevo con el mercado abierto: se pinta apagado
-function rankOld(r) {
-const s = App.state, o = s.rank.live[r.symbol];
-return rankLiveOn() && s.clock.market.open && App.now() - Math.max(o && isNum(o.at) ? o.at : 0, s.result ? s.result.nowMs : 0) > CFG.RANK_STALE_FACTOR * CFG.PAID_LIVE_MS;
-}
+// > RANK_STALE_FACTOR ciclos sin precio nuevo con el mercado abierto: se pinta apagado
+const rowStale = r => { const s = App.state, o = s.rank.live[r.symbol]; return App.now() - Math.max(o && isNum(o.at) ? o.at : 0, s.result ? s.result.nowMs : 0) > CFG.RANK_STALE_FACTOR * CFG.PAID_LIVE_MS; };
+const rankOld = r => rankLiveOn() && App.state.clock.market.open && rowStale(r);
 const priceTitle = (r, px, old) => (px.live || r.priceSource !== "history" ? `Precio de las ${F.timeET(px.ts)}${old ? " · sin actualizar" : ""}` : "Precio del último cierre disponible");
 function flash(el, dir) { if (!el || !dir) return; el.classList.remove("flash-up", "flash-down"); void el.offsetWidth; el.classList.add("flash-" + dir); }
 // repintado en el lugar (sin renderTable ni renderRowDetail): foco, scroll, gráfica y <details> abiertos no se tocan
@@ -4938,8 +4968,10 @@ if (why === "other_run") return `${base} · precios en pausa: otro dispositivo e
 if (why === "throttle") return `${base} · precios en pausa: FMP pidió esperar un minuto`;
 if (!isNum(rk.cycleAt) || rk.cycleAt < r.nowMs) return null;
 const nv = cl.plan() === "STARTER" ? "" : " (no verificado)";
-return now - rk.cycleAt > CFG.RANK_STALE_FACTOR * CFG.PAID_LIVE_MS || ["stopped", "paused", "blocked"].includes(why)
-? `${base} · precios en vivo de las ${F.timeET(rk.cycleAt)} (sin actualizar)${nv}` : `${base} · precios en vivo ${F.timeET(rk.cycleAt)}${nv}`;
+if (now - rk.cycleAt > CFG.RANK_STALE_FACTOR * CFG.PAID_LIVE_MS || ["stopped", "paused", "blocked"].includes(why)) return `${base} · precios en vivo de las ${F.timeET(rk.cycleAt)} (sin actualizar)${nv}`;
+// E10-M4: "en vivo" solo si al menos RANK_FRESH_MIN de las filas sondeadas se actualizó en los últimos RANK_STALE_FACTOR ciclos
+const polled = r.rows.filter(x => !STRIP_SET.has(x.symbol)), old = polled.filter(rowStale).length; // una negada tampoco se actualiza
+return old > polled.length * (1 - CFG.RANK_FRESH_MIN) ? `${base} · precios de las ${F.timeET(rk.cycleAt)} · ${old} sin actualizar${nv}` : `${base} · precios en vivo ${F.timeET(rk.cycleAt)}${nv}`;
 }
 function renderRankingSub() {
 const s = App.state, el = $("#ranking-sub"), r = s.result;
@@ -5660,7 +5692,7 @@ h("div", "acciones", h("button", { class: "btn", id: "btn-reset-contador", oncli
 const m = s.clock.market;
 const policy = ex ? "Sin actualización automática en el modo ejemplo." : tier === "FREE"
 ? (s.live.intervalMs ? `Franja: núcleo cada ${Math.round(s.live.intervalMs / 60000)} min con el mercado abierto; el resto, manual. Mercado completo: manual.` : m.open ? "Franja en pausa para cuidar tu límite; actualiza a mano." : "Mercado cerrado: sin actualización automática.")
-: "Franja y precios de la tabla cada 60 s con el mercado abierto (cripto y divisas cada 5 min fuera de horario). Probabilidades, señales y orden: solo con cada análisis.";
+: `Franja y precios de la tabla cada ${CFG.PAID_LIVE_MS / 60000} min con el mercado abierto (cripto y divisas también cada ${CFG.PAID_OFFHOURS_MS / 60000} min fuera de horario). Probabilidades, señales y orden: solo con cada análisis.`;
 const run = s.run;
 const lastRun = s.result
 ? `${s.resultSource === "example" ? "Ejemplo" : s.resultSource === "cache-old" ? "Del " + F.dateES(s.result.asOf) : "Hoy"} a las ${F.timeET(s.result.nowMs)} · ${s.result.rows.length} activos en el ranking${s.result.partial ? " · parcial" : ""}`
