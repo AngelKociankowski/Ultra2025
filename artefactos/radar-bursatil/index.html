@@ -594,6 +594,8 @@ RANK_POLL_STALE_MS: 240000, RANK_POLL_CONC: 3, RANK_POLL_SLACK_MS: 2000, RANK_ST
 // 00e: hora de cotización imposible (E10-M2), salto sin explicación (E10-M3) y proporción de filas al día para decir "en vivo" (E10-M4).
 // 00g §2: imposible = más de 1 día adelante de FMP; con el reloj del dispositivo hasta 1 h desfasado eso es más de 23 h adelante de él
 RANK_TS_SKEW_MS: 82800000, RANK_JUMP_MAX: 0.5, RANK_JUMP_TOL: 0.02, RANK_FRESH_MIN: 0.8,
+// 00h §1: rango de una cotización de la franja sin referencia. §4: adelanto máximo de un piso del orden (1 h − 1 min de latencia)
+QUOTE_SANE: { "^VIX": [5, 150], USDMXN: [5, 60] }, RANK_AHEAD_MS: 3540000,
 ERP: 0.05, RF_DEFAULT: 0.04, IDX_DIV_YIELD: 0.013, H: 0.25,
 CACHE_DAY: { staleTime: 300000, gcTime: 86400000 },
 });
@@ -1153,7 +1155,7 @@ return { rows: out, finalists: [...chosen], excluded: [] };
 
 // Régimen
 const REGIME_LABEL = { FAVORABLE: "Favorable", NEUTRAL: "Neutral", RIESGO: "Riesgo", PANICO: "Pánico" };
-function regimeFrom({ spxDesc, vixQuote, treasuryDesc, asOf }) {
+function regimeFrom({ spxDesc, vixQuote, treasuryDesc, asOf, vixBad }) {
 const spx = normalizeEod(spxDesc, { asOf });
 const c = spx.map(o => o.close);
 // Tasas
@@ -1170,12 +1172,12 @@ const vixLive = vixQuote && isNum(vixQuote.price) && vixQuote.price > 0 ? vixQuo
 const vixEstimated = vixLive === null;
 const vix = vixLive !== null ? vixLive : isNum(volFc) ? 115 * volFc : 17;
 const base = { rf, rfAssumed, spreadPP, pRec, inverted: isNum(spreadPP) && spreadPP < 0, vix, vixEstimated };
-if (c.length < 200) {
+if (c.length < 200 || vixBad) {
 const w = P.weightsByRegime.NEUTRAL.slice();
 return Object.assign(base, {
 state: "NEUTRAL", label: "Neutral", trendUp: false, last: c.length ? c[c.length - 1] : null, sma200: null, r12: null, r24: null,
 volM: null, dd: null, weights: w, momScale: 1, sigM: Math.sqrt(0.5 * (vix / 100) ** 2 + 0.5 * (isNum(volFc) ? volFc : vix / 100) ** 2),
-explain: "Sin historial suficiente del S&P 500; se usa el régimen neutral.",
+explain: vixBad ? "El VIX que llegó de FMP no es válido; se usa el régimen neutral." : "Sin historial suficiente del S&P 500; se usa el régimen neutral.",
 });
 }
 const last = c[c.length - 1];
@@ -1522,7 +1524,7 @@ const { plan, nowMs, asOf, marketOpen, example } = input;
 const erp = isNum(input.erp) ? input.erp : CONFIG.ERP;
 const spx = normalizeEod(input.spxDesc, { asOf, dropDate: marketOpen ? asOf : null });
 const spxReg = marketOpen && Array.isArray(input.spxDesc) ? input.spxDesc.filter(r => !(r && typeof r.date === "string" && r.date.slice(0, 10) === asOf)) : input.spxDesc;
-const reg = regimeFrom({ spxDesc: spxReg, vixQuote: input.vixQuote, treasuryDesc: input.treasuryDesc, asOf });
+const reg = regimeFrom({ spxDesc: spxReg, vixQuote: input.vixQuote, treasuryDesc: input.treasuryDesc, asOf, vixBad: input.vixBad });
 const rf = reg.rf;
 const rows = [], rest = [], excluded = (input.stage1?.excluded || []).slice(), notes = (input.notes || []).slice();
 const finalSet = new Set();
@@ -1754,6 +1756,10 @@ if (!q || !isNum(q.price) || !isNum(ref) || !(ref > 0) || Math.abs(q.price / ref
 const pc = isNum(q.previousClose) && q.previousClose > 0 ? q.previousClose : isNum(prevRef) && prevRef > 0 ? prevRef : null;
 const day = isNum(q.changePercentage) ? q.changePercentage / 100 : pc !== null && isNum(q.change) ? q.change / pc : null;
 return pc === null || day === null || Math.abs(q.price / (pc * (1 + day)) - 1) > CONFIG.RANK_JUMP_TOL;
+}
+// 00h §1: con referencia, el salto de quoteJump; sin ella, fuera de `range`
+function quoteBad(q, ref, prevRef, range) {
+return isNum(ref) && ref > 0 ? quoteJump(q, ref, prevRef) : !!range && !(q.price >= range[0] && q.price <= range[1]);
 }
 // v5.5: qué símbolos de la tabla vencen ahora y cuándo el siguiente (cadencia de la franja; tras el cierre, una consulta única desde lastCloseMs + gracia)
 function rankPollPlan({ plan, market, nowMs, baseMs, rows, live, skip }) {
@@ -2135,7 +2141,7 @@ etParts, etWallToMs, isTradingDay, prevTradingDay, nextTradingDay, lastTradingDa
 makeError, classifyText, asArray, normalizeEod, riskSeries, filterFloatUniverse, filterQuotes, isJunkListing,
 stage1Select, regimeFrom, stockFeatures, infoFeatures, stockScore, stockCaps, stockPrediction,
 nonStockScore, displayPct, signalFromProb, stockUpProb, retStats, cleanZeros, extractRows, splitDay, joinDay, bytesOf, explainStock, explainNonStock, technicals, fundamentalsOf, analyze,
-planRun, liveIntervalMs, canAuto, quotePx, quoteJump, rankPollPlan, fmt, detailPhrases, runAlive,
+planRun, liveIntervalMs, canAuto, quotePx, quoteJump, quoteBad, rankPollPlan, fmt, detailPhrases, runAlive,
 PORT, PORT_MAP, parseMXN, parseRate, fxRate, muTotOf, instrumentsFrom, mxnUniverse, allocate, finalizeShares, portfolioStats, buildPortfolio, minAmountStable,
 };
 root.RadarCore = Object.freeze(RadarCore);
@@ -3410,6 +3416,7 @@ const PARTIAL_TXT = {
 "detenida": "Análisis parcial: detenido por ti. Solo incluye lo que se alcanzó a analizar.",
 "muchas consultas rechazadas": "Análisis parcial: FMP rechazó muchas consultas (fallas). Las filas con menos datos tienen confianza menor.",
 "cobertura baja": "Análisis parcial: llegaron datos de muy pocos activos; puede que FMP haya agotado tu límite sin avisar.",
+"pocas cotizaciones": "Análisis parcial: FMP dio pocas cotizaciones válidas en el cribado; el ranking tiene menos acciones de las previstas.",
 presupuesto: "Análisis parcial: se pausó para no pasar de las llamadas previstas; se puede reanudar.",
 "sin espacio": "Análisis parcial: se pausó porque no hay espacio en este navegador para llevar la cuenta; libera espacio o usa otro navegador.",
 "por minuto": "Análisis parcial: FMP limitó las consultas por minuto; se puede reanudar.", // 09 P0 (planes sin tope diario)
@@ -3437,6 +3444,9 @@ const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "
 const PLAN_NAME = { FREE: "Free", STARTER: "Starter", PREMIUM: "Premium", ULTIMATE: "Ultimate", EXAMPLE: "Ejemplo" };
 const CAT_NAME = { sonda: "Detección de plan", arranque: "Arranque", franja: "Franja en vivo", tabla: "Precios de la tabla", mercado: "Mercado completo", macro: "Régimen macro", corrida: "Corrida de análisis", detalle: "Detalle", manual: "Manual" };
 const TRANSIENT_FINAL = "FMP no respondió; se reintentará en el próximo refresco.";
+const NO_PASS = n => `FMP devolvió ${n} cotizaciones, pero ninguna pasó el filtro de acciones (volumen, fecha, precio o bolsa); no se guardó nada.`;
+const USER_CUT = "La corrida se detuvo porque cambió la cuenta de claude.ai en esta página; no se guardó nada. Recarga la página.";
+const VIX_BAD = "El VIX que llegó de FMP no es válido: este análisis usa el régimen neutral.";
 const OUTAGE_TEXT = {
 down: "FMP falló 3 veces seguidas (servicio no disponible). Se detuvo la corrida para no gastar tu límite y no se guardó nada; vuelve a correrla cuando FMP responda.",
 rejected: "FMP rechazó las primeras consultas de la corrida (3 seguidas, ninguna salió bien); se detuvo sin gastar más y no se guardó nada.",
@@ -3802,7 +3812,7 @@ const t = $("#banda-causa"); if (t) t.textContent = "No permitiste que esta pág
 }
 
 // errores
-function errText(e) { return e.kind === "transient" && e.code !== "rate_limited" ? TRANSIENT_FINAL : e.userText; }
+function errText(e) { return e.kind === "transient" && e.code !== "rate_limited" ? TRANSIENT_FINAL : e.kind === "user_changed" && paidLive() ? USER_CUT : e.userText; } // 00h §6
 function handleError(sec, raw, ctx) {
 const e = D.classifyError(raw), s = App.state;
 if (e.kind === "cancelled") return;
@@ -3987,12 +3997,14 @@ next = next === null ? due : Math.min(next, due);
 s.live.intervalMs = ivShown; s.live.nextTickMs = next;
 renderStripFooter();
 }
-// 00g §1 (V55-1, F-2): la cotización de la franja pasa el control de E10-M3 antes de llegar al portafolio (USDMXN), al régimen
-// (^VIX, ^GSPC) y a la pantalla. Referencia: lo último aceptado en la franja o, si no hay, el precio de la corrida
-function stripJump(sym, q, last) {
-const r = App.state.result && App.state.result.rows.find(x => x.symbol === sym);
+// 00g §1: la cotización de la franja pasa el control de E10-M3 antes del portafolio (USDMXN), el régimen (^VIX, ^GSPC) y la pantalla.
+// 00h §1: referencia, en orden: lo último aceptado, lo de la corrida guardada (fila o VIX), el último cierre del historial; sin
+// ninguna, QUOTE_SANE (no en el ejemplo, que es sintético)
+function stripJump(sym, q, last, hist) {
+const s = App.state, res = s.result, r = res && res.rows.find(x => x.symbol === sym), g = res && res.regime, b = C.normalizeEod(hist || sym === "^GSPC" && s.macro.spxDesc).pop();
+const ref = last && isNum(last.price) ? last.price : r ? r.price : sym === "^VIX" && g && !g.vixEstimated ? g.vix : b ? b.close : null;
 const prev = r && isNum(r.changePct) && r.changePct > -100 ? r.price / (1 + r.changePct / 100) : null;
-return C.quoteJump(q, last && isNum(last.price) ? last.price : r ? r.price : null, prev);
+return C.quoteBad(q, ref, prev, s.mode === "live" && CFG.QUOTE_SANE[sym]);
 }
 function onQuote(sym, ev) {
 const s = App.state, q = s.live.quotes[sym];
@@ -4000,6 +4012,7 @@ if (ev.type !== "data") { handleError("strip", ev.error, { symbol: sym }); retur
 const row = ev.rows.find(r => r && r.symbol === sym) || ev.rows[0];
 if (!row || !isNum(row.price)) { handleError("strip", C.makeError("tool_error", "unexpected_shape"), { symbol: sym }); return; }
 if (stripJump(sym, row, q.q)) { // rechazada: la franja conserva el último bueno (su hora y su antigüedad siguen a la vista)
+q.rej = 1; // para la corrida (00h §1)
 if (!q.q) { q.status = "error"; refreshSectionState("strip"); renderStrip(); }
 return;
 }
@@ -4529,7 +4542,7 @@ function syncFinish(state, reason) { const s = App.state; if (s.mode === "live" 
 function outageRun() {
 const s = App.state, o = s.run.outage, fatal = isObj(o);
 const e = fatal ? o : C.makeError(o === "down" ? "server_unavailable" : "tool_error", "outage", { userText: OUTAGE_TEXT[o] });
-finishRun("error", fatal && App.client.plan() !== "FREE" ? CUT_EMPTY : errText(e));
+finishRun("error", fatal && App.client.plan() !== "FREE" && e.kind !== "user_changed" ? CUT_EMPTY : errText(e));
 handleError("ranking", e);
 syncFinish("error", fatal ? e.kind : "fallas");
 }
@@ -4696,7 +4709,7 @@ return deepSteps(rc, { pr, st, quotes, finOf: sym => ({ isFinancial: C.FIN_FREE.
 meta: { universe: floatRows.length, eligible: uni.stocks.length, quoted: quotes.length } });
 }
 // R5–R7 (todos los planes): no acciones (+ETF), finalistas y cálculo
-async function deepSteps(rc, { pr, st, quotes, finOf, notes, meta }) {
+async function deepSteps(rc, { few, pr, st, quotes, finOf, notes, meta }) {
 const { s, cl, sig, from, today } = rc;
 rc.stage("nonstock", "3/4 · Materias primas, cripto, divisas e índices");
 const nsDefs = RANKED.filter(d => d.symbol === "^GSPC" || pr.nonStockHist.includes(d.symbol));
@@ -4707,7 +4720,11 @@ const res = rc.live() ? await cl.runQueue(tasks, { signal: sig, stopOn: rc.stopO
 if (s.run.outage) return null;
 const val = r => (r && r.ok ? r.value : null);
 const histOf = Object.fromEntries(nsFetch.map((d, i) => [d.symbol, val(res[i])]));
-const nonStocks = nsDefs.map(d => ({ def: d, quote: d.strip ? s.live.quotes[d.symbol].q : null, eodDesc: d.symbol === "^GSPC" ? s.macro.spxDesc : histOf[d.symbol] }));
+// 00h §1: la corrida valida con la misma regla lo que toma de la franja
+const ok = (sym, hist) => { const q = s.live.quotes[sym].q; return q && !stripJump(sym, q, null, hist) ? q : null; };
+const nonStocks = nsDefs.map(d => { const eodDesc = d.symbol === "^GSPC" ? s.macro.spxDesc : histOf[d.symbol]; return { def: d, quote: d.strip ? ok(d.symbol, eodDesc) : null, eodDesc }; });
+const vq = s.live.quotes["^VIX"], vixQuote = ok("^VIX"), vixBad = !vixQuote && !!(vq.q || vq.rej);
+if (vixBad) notes = notes.concat([VIX_BAD]);
 const etfs = pr.etfs.map((e, i) => ({ symbol: e, quote: (val(res[nsFetch.length + 2 * i]) || [])[0] || null, eodDesc: val(res[nsFetch.length + 2 * i + 1]) }));
 rc.stage("stage2", `4/4 · Análisis profundo de ${st.finalists.length} finalistas`);
 const finals = rc.live() ? await fetchFinalists(st.finalists, DEEP_KEYS.slice(0, pr.perFinalist), rc) : { list: [] };
@@ -4715,7 +4732,8 @@ if (s.run.outage) return null;
 // parcial: corte (§E3), muchos rechazos (§E5) o cobertura baja (MEDIO E4)
 const withHist = finals.list.filter(f => Array.isArray(f.eodDesc) && f.eodDesc.length).length + nonStocks.filter(n => Array.isArray(n.eodDesc) && n.eodDesc.length).length;
 const planned = st.finalists.length + nonStocks.length, lowCover = planned > 0 && withHist < CFG.COVERAGE_MIN * planned;
-const t = rc.tally, why = s.run.cut || (t.rejected >= CFG.SUSPECT_MIN && t.rejected / Math.max(1, t.calls) >= CFG.SUSPECT_RATIO ? "muchas consultas rechazadas" : lowCover ? "cobertura baja" : null);
+const t = rc.tally, why = s.run.cut || (t.rejected >= CFG.SUSPECT_MIN && t.rejected / Math.max(1, t.calls) >= CFG.SUSPECT_RATIO ? "muchas consultas rechazadas" : few ? "pocas cotizaciones" : lowCover ? "cobertura baja" : null);
+if (few) notes = notes.concat([few]);
 if (why) notes = notes.concat([why === "presupuesto" ? PAUSED(s.run.techo) : why === "por minuto" ? PARTIAL_TXT[why] : `Análisis parcial: ${why}`]);
 if (why === "cobertura baja") notes = notes.concat([`Llegaron datos de ${withHist} de ${planned} activos planeados.`]);
 rc.stage("scoring", "Calculando…");
@@ -4723,7 +4741,7 @@ await nextFrame();
 const quoteOf = Object.fromEntries(quotes.map(q => [q.symbol, q]));
 const out = C.analyze({
 plan: cl.plan(), nowMs: App.now(), asOf: asOfNow(), marketOpen: s.clock.market.open, example: s.mode === "example",
-spxDesc: s.macro.spxDesc, vixQuote: s.live.quotes["^VIX"].q, treasuryDesc: s.macro.treasuryDesc, stage1: st,
+spxDesc: s.macro.spxDesc, vixQuote, vixBad, treasuryDesc: s.macro.treasuryDesc, stage1: st,
 finalists: finals.list.filter(f => Array.isArray(f.eodDesc) && f.eodDesc.length).map(f => Object.assign(f, { quote: quoteOf[f.symbol] }, finOf(f.symbol))),
 nonStocks, etfs, partial: !!why, partialReason: why, notes, meta,
 });
@@ -4798,8 +4816,11 @@ if (sig.aborted) return null;
 // F-1 (00g §5): un cribado sin ninguna cotización no termina "done" sin acciones y sin aviso (en Free ya era así)
 if (syms.length && !quotes.length && rc.live()) throw screenErr || C.makeError("tool_error", "tool_failed");
 const fq = C.filterQuotes(quotes, { nowMs: App.now(), holidays: s.clock.holidays, mode: "core" });
+// 00h §3 y §5
+if (syms.length && !fq.pass.length && rc.live()) throw C.makeError("tool_error", "tool_failed", { userText: NO_PASS(quotes.length) });
 const st = C.stage1Select({ quotes: fq.pass, K: pr.K }); st.excluded = fq.excluded;
-return deepSteps(rc, { pr, st, quotes, finOf: sym => ({ isFinancial: sectorOf[sym] === "Financial Services", sector: sectorOf[sym] || null }),
+const few = syms.length && fq.pass.length < pr.K && rc.live() ? `Pocas cotizaciones válidas (${fq.pass.length} de ${syms.length}).` : null;
+return deepSteps(rc, { few, pr, st, quotes, finOf: sym => ({ isFinancial: sectorOf[sym] === "Financial Services", sector: sectorOf[sym] || null }),
 notes: tier === "STARTER" ? [] : ["Plan " + PLAN_NAME[tier] + ": rama no verificada con datos reales"], meta: { universe: screen.length, eligible: universe.length, quoted: quotes.length } });
 }
 // ---- v5.5: precios de la tabla cada PAID_LIVE_MS (planes de pago). Capa `s.rank.live` por símbolo sobre `s.result` (que no se muta): gana la hora más nueva
@@ -4883,8 +4904,9 @@ paintRankPrices(); rankPollKick();
 function applyRankQuote(q, src) {
 const s = App.state, rk = s.rank, px = C.quotePx(q, App.now());
 if (!px) return false;
+px.local = !(isNum(q.timestamp) && q.timestamp > 0); // 00h §2: sin hora de FMP (batch-quote-short), la del dispositivo
 const row = s.result && s.result.rows.find(r => r.symbol === px.symbol), o = rk.live[px.symbol] || (rk.live[px.symbol] = {});
-if (isNum(o.ts) && px.ts < o.ts) return false;
+if (isNum(o.ts) && !px.local && !o.local && o.ts - o.at <= CFG.RANK_AHEAD_MS && px.ts < o.ts) return false; // 00h §2 y §4
 const shown = () => (row ? livePx(row) : { price: o.price, changePct: o.changePct }), before = shown();
 if (row && C.quoteJump(q, before.price, isNum(row.changePct) && row.changePct > -100 ? row.price / (1 + row.changePct / 100) : null)) return false; // E10-M3: cuenta como falla
 Object.assign(o, px, { at: App.now(), src, fails: 0 });
@@ -4905,10 +4927,10 @@ return runFmp.get(res);
 }
 // lo que se muestra de una fila: la capa si llegó después del análisis y su dato no es más viejo que el de la corrida (E10-M2).
 // "Más viejo" en horas de FMP (00g §2): el tope es la hora del análisis en ese reloj, no en el del dispositivo (una fila con
-// precio de historial lleva las 16:00 ET de su día, que puede ser futura)
+// precio de historial lleva las 16:00 ET de su día, que puede ser futura). Una capa sin hora de FMP: reloj local en los dos lados (00h §2)
 function livePx(r) {
 const o = App.state.rank.live[r.symbol], res = App.state.result;
-if (o && isNum(o.price) && res && o.at >= res.nowMs && o.ts >= Math.min(r.priceTime || 0, runFmpTs(res))) return { price: o.price, changePct: isNum(o.changePct) ? o.changePct : r.changePct, ts: o.ts, at: o.at, live: true };
+if (o && isNum(o.price) && res && o.at >= res.nowMs && (o.local || o.ts >= Math.min(r.priceTime || 0, runFmpTs(res)))) return { price: o.price, changePct: isNum(o.changePct) ? o.changePct : r.changePct, ts: o.ts, at: o.at, live: true };
 return { price: r.price, changePct: r.changePct, ts: r.priceTime, at: null, live: false };
 }
 // precios vivos (USD) para el portafolio; null en Free, ejemplo, gancho apagado o sin análisis de hoy
