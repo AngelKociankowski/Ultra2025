@@ -591,8 +591,9 @@ BREADTH_TTL_MIN_FREE: 120,
 PAID_LIVE_MS: 300000, PAID_OFFHOURS_MS: 300000, PAID_BREADTH_MS: 300000, // v5.5 (C0): franja y tabla cada 5 min en planes de pago
 // la caché del shell (stale) debe vencer antes que el ciclo; "sin actualizar" a los RANK_STALE_FACTOR ciclos
 RANK_POLL_STALE_MS: 240000, RANK_POLL_CONC: 3, RANK_POLL_SLACK_MS: 2000, RANK_STALE_FACTOR: 2, RANK_CLOSE_GRACE_MS: 120000, // v5.5: sondeo de precios de la tabla (planes de pago)
-// 00e: hora de cotización imposible (E10-M2), salto sin explicación (E10-M3) y proporción de filas al día para decir "en vivo" (E10-M4)
-RANK_TS_SKEW_MS: 300000, RANK_JUMP_MAX: 0.5, RANK_JUMP_TOL: 0.02, RANK_FRESH_MIN: 0.8,
+// 00e: hora de cotización imposible (E10-M2), salto sin explicación (E10-M3) y proporción de filas al día para decir "en vivo" (E10-M4).
+// 00g §2: imposible = más de 1 día adelante de FMP; con el reloj del dispositivo hasta 1 h desfasado eso es más de 23 h adelante de él
+RANK_TS_SKEW_MS: 82800000, RANK_JUMP_MAX: 0.5, RANK_JUMP_TOL: 0.02, RANK_FRESH_MIN: 0.8,
 ERP: 0.05, RF_DEFAULT: 0.04, IDX_DIV_YIELD: 0.013, H: 0.25,
 CACHE_DAY: { staleTime: 300000, gcTime: 86400000 },
 });
@@ -1737,7 +1738,8 @@ function canAuto({ remaining, reserve = CONFIG.RESERVE_CALLS, runPending, runCos
 return remaining - reserve - (runPending ? runCost : 0) >= cost;
 }
 // v5.5: cotización de `quote` o `batch-quote-short` → precio, variación y hora del dato. E10-M2: `timestamp` en segundos o en
-// milisegundos; una hora más de RANK_TS_SKEW_MS en el futuro es imposible y la cotización no vale (null)
+// milisegundos; una hora más de RANK_TS_SKEW_MS en el futuro es imposible y la cotización no vale (null). Un reloj desfasado
+// menos que eso no descarta nada: el orden entre cotizaciones lo da la hora de FMP (00g §2)
 function quotePx(q, nowMs) {
 if (!q || typeof q !== "object" || typeof q.symbol !== "string" || !isNum(q.price) || !(q.price > 0)) return null;
 const changePct = isNum(q.changePercentage) ? q.changePercentage : isNum(q.change) && q.price - q.change > 0 ? (q.change / (q.price - q.change)) * 100 : null;
@@ -3985,11 +3987,22 @@ next = next === null ? due : Math.min(next, due);
 s.live.intervalMs = ivShown; s.live.nextTickMs = next;
 renderStripFooter();
 }
+// 00g §1 (V55-1, F-2): la cotización de la franja pasa el control de E10-M3 antes de llegar al portafolio (USDMXN), al régimen
+// (^VIX, ^GSPC) y a la pantalla. Referencia: lo último aceptado en la franja o, si no hay, el precio de la corrida
+function stripJump(sym, q, last) {
+const r = App.state.result && App.state.result.rows.find(x => x.symbol === sym);
+const prev = r && isNum(r.changePct) && r.changePct > -100 ? r.price / (1 + r.changePct / 100) : null;
+return C.quoteJump(q, last && isNum(last.price) ? last.price : r ? r.price : null, prev);
+}
 function onQuote(sym, ev) {
 const s = App.state, q = s.live.quotes[sym];
 if (ev.type !== "data") { handleError("strip", ev.error, { symbol: sym }); return; }
 const row = ev.rows.find(r => r && r.symbol === sym) || ev.rows[0];
 if (!row || !isNum(row.price)) { handleError("strip", C.makeError("tool_error", "unexpected_shape"), { symbol: sym }); return; }
+if (stripJump(sym, row, q.q)) { // rechazada: la franja conserva el último bueno (su hora y su antigüedad siguen a la vista)
+if (!q.q) { q.status = "error"; refreshSectionState("strip"); renderStrip(); }
+return;
+}
 if (q.q && row.price !== q.q.price) q.flash = row.price > q.q.price ? "up" : "down";
 Object.assign(q, { q: row, storedAt: ev.storedAt, status: "ok", err: null, deliveredAt: App.now(), retracted: false, adopted: false });
 if (STRIP.every(d => !s.live.quotes[d.symbol].err) && s.sections.strip.err) s.sections.strip.err = null;
@@ -4511,13 +4524,14 @@ const l = lockGet(); if (!l || lockMine(l)) return;
 lockT = setTimeout(() => { if (App.state.localOther) { App.state.localOther = null; maybeAutoRun(); } }, Math.max(1000, l.beatAt + STALE - Date.now() + 500));
 }
 function syncFinish(state, reason) { const s = App.state; if (s.mode === "live" && s.run.runId) { Sync.finishRun({ runId: s.run.runId, state, reason: reason || null }); Sync.flush(); } }
-// Corte por fallas (ronda 2): no se guarda nada parcial.
+// Corte por fallas (ronda 2) o por un error que corta la corrida (E10-B1, F-1: `outage` es ese error): no se guarda nada parcial.
+// Primero se cierra la corrida y después sale el aviso (banner o mensaje de la sección), como en v5.4; en pago el texto es el de A0
 function outageRun() {
-const s = App.state;
-const e = C.makeError(s.run.outage === "down" ? "server_unavailable" : "tool_error", "outage", { userText: OUTAGE_TEXT[s.run.outage] });
-finishRun("error", e.userText);
+const s = App.state, o = s.run.outage, fatal = isObj(o);
+const e = fatal ? o : C.makeError(o === "down" ? "server_unavailable" : "tool_error", "outage", { userText: OUTAGE_TEXT[o] });
+finishRun("error", fatal && App.client.plan() !== "FREE" ? CUT_EMPTY : errText(e));
 handleError("ranking", e);
-syncFinish("error", "fallas");
+syncFinish("error", fatal ? e.kind : "fallas");
 }
 function finishRun(status, message) {
 const s = App.state;
@@ -4533,6 +4547,11 @@ const nextFrame = () => new Promise(r => setTimeout(r, 0));
 const DEEP_KEYS = ["eodLight", "keyMetrics", "scores", "ratios", "earnings", "ptSummary", "grades", "ptConsensus"];
 // Corte por fallas (ronda 2, D-R2-2): 3 seguidas de errores reintentables o tool_error de un endpoint sin éxito previo
 const OUTAGE_CODES = new Set(["server_unavailable", "upstream_error"]);
+// F-1 (00g §5): en el cribado cortan la corrida aprobación, permiso, código desconocido, error interno y cambio de usuario.
+// Siguen su camino los transitorios y caídas (racha de OUTAGE_CODES), el freno por minuto, las respuestas de FMP sobre una
+// consulta (tool_error, forma, plan o símbolo negado), el límite diario y bad_request (en pago, "modo Free por compatibilidad")
+const FATAL_SCREEN = new Set(["approval", "denied_scope", "unknown", "bug", "user_changed"]);
+const fatalErr = e => e.kind !== "limit_reached" && (PAGE_KINDS.has(e.kind) || (App.state.run.stage === "stage1" && FATAL_SCREEN.has(e.kind) && !OUTAGE_CODES.has(e.code) && e.code !== "bad_request"));
 function runCtx(ac) {
 const s = App.state, today = todayET(), cl = App.client;
 // 09 P0: freno por minuto (plan sin tope diario). La cola espera la pausa y sigue; más de THROTTLE_MAX en la corrida → parcial reanudable
@@ -4583,8 +4602,14 @@ fly(tok, false);
 const e = D.classifyError(raw);
 if (e.kind === "cancelled") throw e;
 // E10-B1: reconexión, sin conector… cortan la corrida en cualquier etapa con su banner (antes dependía de que la franja
-// lo viera, y con la franja cada 5 min un cribado podía terminar "done" sin acciones); el límite diario sigue su camino
-if (e.kind !== "limit_reached" && PAGE_KINDS.has(e.kind)) { pageError(e); throw e; }
+// lo viera, y con la franja cada 5 min un cribado podía terminar "done" sin acciones); el límite diario sigue su camino.
+// F-1 (00g §5): en el cribado también lo que no es transitorio, freno por minuto ni respuesta de FMP sobre esa consulta.
+// El error queda en `outage` y su aviso sale al cerrar (outageRun), en el orden de v5.4 (V55-4: panel de estado igual en Free)
+if (fatalErr(e)) {
+if (!s.run.outage && !s.run.cut) { s.run.outage = e; ac.abort(); }
+else if (!isObj(s.run.outage) && PAGE_KINDS.has(e.kind)) pageError(e); // ya cortada por otra causa: el banner sale ya
+throw e;
+}
 tally.calls++;
 const down = OUTAGE_CODES.has(e.code), failed = e.code === "tool_error" && e.kind === "tool_failed", rejected = failed && !okKeys.has(key);
 if (failed || e.kind === "unexpected_shape") { tally.rejected++; suspicious(seq); } else answered(seq); // otro error: FMP respondió
@@ -4750,11 +4775,11 @@ s.run.plan = pr; s.run.total = s.run.done + pr.cost;
 if (!s.macro.spxDesc || !s.macro.treasuryDesc) await loadMacro(true);
 rc.stage("stage1", `2/4 · Cribando ${universe.length} acciones`);
 const syms = universe.map(r => r.symbol);
-let quotes = [];
+let quotes = [], screenErr = null;
 if (tier === "STARTER") {
 const res = await cl.runQueue(syms.map(sym => () => rc.call("quote", { symbol: sym })), { signal: sig, stopOn: rc.stopOn, onProgress: rc.tick });
 if (res.some(r => !r.ok && incompatible(r.error)) && !res.some(r => r.ok)) return fallback();
-res.forEach(r => { if (r.ok && r.value[0]) quotes.push(r.value[0]); });
+res.forEach(r => { if (r.ok && r.value[0]) quotes.push(r.value[0]); else if (!r.ok && !screenErr && r.error.kind !== "cancelled") screenErr = r.error; });
 } else {
 for (let i = 0; i < syms.length; i += CFG.BATCH_CHUNK) {
 const chunk = syms.slice(i, i + CFG.BATCH_CHUNK);
@@ -4763,13 +4788,15 @@ catch (e) {
 if (incompatible(e)) return fallback();
 const half = Math.ceil(chunk.length / 2); // si falla, mitad de lote una vez
 for (const part of [chunk.slice(0, half), chunk.slice(half)]) {
-try { quotes = quotes.concat(await rc.call("batchQuote", { symbols: part })); } catch (e2) { if (incompatible(e2)) return fallback(); }
+try { quotes = quotes.concat(await rc.call("batchQuote", { symbols: part })); } catch (e2) { if (incompatible(e2)) return fallback(); if (e2.kind !== "cancelled") screenErr = screenErr || e2; }
 rc.tick();
 }
 }
 }
 }
 if (sig.aborted) return null;
+// F-1 (00g §5): un cribado sin ninguna cotización no termina "done" sin acciones y sin aviso (en Free ya era así)
+if (syms.length && !quotes.length && rc.live()) throw screenErr || C.makeError("tool_error", "tool_failed");
 const fq = C.filterQuotes(quotes, { nowMs: App.now(), holidays: s.clock.holidays, mode: "core" });
 const st = C.stage1Select({ quotes: fq.pass, K: pr.K }); st.excluded = fq.excluded;
 return deepSteps(rc, { pr, st, quotes, finOf: sym => ({ isFinancial: sectorOf[sym] === "Financial Services", sector: sectorOf[sym] || null }),
@@ -4867,10 +4894,21 @@ rk.ver++;
 if (isNum(before.price) && after.price !== before.price) o.flash = after.price > before.price ? "up" : "down";
 return true;
 }
-// lo que se muestra de una fila: la capa si llegó después del análisis y su dato no es más viejo que el de la corrida (E10-M2)
+// hora del análisis en el reloj de FMP (00g §2): la mediana de las horas posibles de sus cotizaciones; sin ninguna, la hora local
+const runFmp = new WeakMap();
+function runFmpTs(res) {
+if (!runFmp.has(res)) {
+const ts = res.rows.filter(r => r.priceSource === "quote" && r.priceTime <= res.nowMs + CFG.RANK_TS_SKEW_MS).map(r => r.priceTime).sort((a, b) => a - b);
+runFmp.set(res, ts.length ? ts[ts.length >> 1] : res.nowMs);
+}
+return runFmp.get(res);
+}
+// lo que se muestra de una fila: la capa si llegó después del análisis y su dato no es más viejo que el de la corrida (E10-M2).
+// "Más viejo" en horas de FMP (00g §2): el tope es la hora del análisis en ese reloj, no en el del dispositivo (una fila con
+// precio de historial lleva las 16:00 ET de su día, que puede ser futura)
 function livePx(r) {
 const o = App.state.rank.live[r.symbol], res = App.state.result;
-if (o && isNum(o.price) && res && o.at >= res.nowMs && o.ts >= Math.min(r.priceTime || 0, res.nowMs)) return { price: o.price, changePct: isNum(o.changePct) ? o.changePct : r.changePct, ts: o.ts, at: o.at, live: true };
+if (o && isNum(o.price) && res && o.at >= res.nowMs && o.ts >= Math.min(r.priceTime || 0, runFmpTs(res))) return { price: o.price, changePct: isNum(o.changePct) ? o.changePct : r.changePct, ts: o.ts, at: o.at, live: true };
 return { price: r.price, changePct: r.changePct, ts: r.priceTime, at: null, live: false };
 }
 // precios vivos (USD) para el portafolio; null en Free, ejemplo, gancho apagado o sin análisis de hoy
@@ -4969,9 +5007,10 @@ if (why === "throttle") return `${base} · precios en pausa: FMP pidió esperar 
 if (!isNum(rk.cycleAt) || rk.cycleAt < r.nowMs) return null;
 const nv = cl.plan() === "STARTER" ? "" : " (no verificado)";
 if (now - rk.cycleAt > CFG.RANK_STALE_FACTOR * CFG.PAID_LIVE_MS || ["stopped", "paused", "blocked"].includes(why)) return `${base} · precios en vivo de las ${F.timeET(rk.cycleAt)} (sin actualizar)${nv}`;
-// E10-M4: "en vivo" solo si al menos RANK_FRESH_MIN de las filas sondeadas se actualizó en los últimos RANK_STALE_FACTOR ciclos
+// E10-M4: "en vivo" solo si al menos RANK_FRESH_MIN de las filas sondeadas se actualizó en los últimos RANK_STALE_FACTOR ciclos.
+// En enteros (00g §3: al día × 100 ≥ sondeadas × 80): en coma flotante el 80 % exacto caía del lado equivocado
 const polled = r.rows.filter(x => !STRIP_SET.has(x.symbol)), old = polled.filter(rowStale).length; // una negada tampoco se actualiza
-return old > polled.length * (1 - CFG.RANK_FRESH_MIN) ? `${base} · precios de las ${F.timeET(rk.cycleAt)} · ${old} sin actualizar${nv}` : `${base} · precios en vivo ${F.timeET(rk.cycleAt)}${nv}`;
+return (polled.length - old) * 100 < polled.length * Math.round(CFG.RANK_FRESH_MIN * 100) ? `${base} · precios de las ${F.timeET(rk.cycleAt)} · ${old} sin actualizar${nv}` : `${base} · precios en vivo ${F.timeET(rk.cycleAt)}${nv}`;
 }
 function renderRankingSub() {
 const s = App.state, el = $("#ranking-sub"), r = s.result;
@@ -5868,7 +5907,7 @@ let any = false;
 if (!v) return false;
 for (const d of STRIP) {
 const r = v.quotes[d.symbol], q = s.live.quotes[d.symbol];
-if (r && newer(r.storedAt, q.storedAt)) { Object.assign(q, { q: r.q, storedAt: r.storedAt, status: "ok", err: null, adopted: true, retracted: false }); any = true; }
+if (r && newer(r.storedAt, q.storedAt) && !stripJump(d.symbol, r.q, q.q)) { Object.assign(q, { q: r.q, storedAt: r.storedAt, status: "ok", err: null, adopted: true, retracted: false }); any = true; } // 00g §1: la del otro dispositivo, con el mismo control
 }
 const b = v.breadth;
 for (const k of ["gainers", "losers", "active"]) if (b[k] && newer(b[k].storedAt, s.breadth[k].storedAt)) { Object.assign(s.breadth[k], { rows: b[k].rows, storedAt: b[k].storedAt, status: "ok", err: null }); any = true; }
