@@ -594,8 +594,9 @@ RANK_POLL_STALE_MS: 240000, RANK_POLL_CONC: 3, RANK_POLL_SLACK_MS: 2000, RANK_ST
 // 00e: hora de cotización imposible (E10-M2), salto sin explicación (E10-M3) y proporción de filas al día para decir "en vivo" (E10-M4).
 // 00g §2: imposible = más de 1 día adelante de FMP; con el reloj del dispositivo hasta 1 h desfasado eso es más de 23 h adelante de él
 RANK_TS_SKEW_MS: 82800000, RANK_JUMP_MAX: 0.5, RANK_JUMP_TOL: 0.02, RANK_FRESH_MIN: 0.8,
-// 00h §1: rango de una cotización de la franja sin referencia. §4: adelanto máximo de un piso del orden (1 h − 1 min de latencia)
-QUOTE_SANE: { "^VIX": [5, 150], USDMXN: [5, 60] }, RANK_AHEAD_MS: 3540000,
+// 00h §1: rango de una cotización de la franja sin referencia. §4: adelanto máximo de un piso del orden (sobre los 55 min de desfase
+// tolerado; la latencia resta, y "+1 h" que llega tarde sigue sin ser piso)
+QUOTE_SANE: { "^VIX": [5, 150], USDMXN: [5, 60] }, RANK_AHEAD_MS: 3360000,
 ERP: 0.05, RF_DEFAULT: 0.04, IDX_DIV_YIELD: 0.013, H: 0.25,
 CACHE_DAY: { staleTime: 300000, gcTime: 86400000 },
 });
