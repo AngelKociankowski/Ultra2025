@@ -122,14 +122,22 @@ const renglones = (id, accion) =>
       .map((r) => ({ ...r, cambios: JSON.parse(r.cambios || 'null') }))
   );
 
-/** Mueve el llenado de un campo a otra hora de la oficina. */
+/**
+ * Mueve a otra hora de la oficina todo lo que da autoría sobre un campo.
+ *
+ * `apertura` entró a la lista cuando el alta pasó a dar autoría. Antes bastaba
+ * con mover el llenado para que un campo quedara «de ayer»; desde entonces el
+ * renglón del alta se quedaba fechado hoy y sostenía la ventana él solo, así
+ * que el andamio dejaba de construir el estado que la prueba pretende montar.
+ */
 function fecharLlenado(id, marca) {
   const movidas = conLaBase(
     (db) =>
       db
         .prepare(
           `UPDATE bitacora SET creado_en = ?
-            WHERE entidad = 'servicio' AND entidad_id = ? AND accion IN ('alta_completada','alta_corregida')`
+            WHERE entidad = 'servicio' AND entidad_id = ?
+              AND accion IN ('apertura','alta_completada','alta_corregida')`
         )
         .run(marca, Number(id)).changes
   );
@@ -363,14 +371,40 @@ describe('solo el dato propio', () => {
     assert.equal((await ficha(viejo.id)).razon_social, viejo.razon_social);
   });
 
-  test('ni lo que nació con la apertura, que tampoco pasó por el panel', async () => {
-    // La zona la escribió la apertura, no un llenado de hueco: cambiarla es una
-    // edición. Es el mismo caso que el dato de la importación.
+  test('y también lo que se tecleó en la pantalla de alta, que es donde se teclea casi todo', async () => {
+    /**
+     * Esta prueba decía lo contrario, y su comentario decía por qué: «la zona la
+     * escribió la apertura, no un llenado de hueco: es el mismo caso que el dato
+     * de la importación». Esa frase era la suposición equivocada —que capturar y
+     * completar pasan en pantallas distintas, cuando en la práctica son la
+     * misma—, y el director la revirtió: la regla es el dato propio, el mismo
+     * día, con nombre y fecha, y deja de importar en qué pantalla se escribió.
+     *
+     * Lo que NO cambia, y se sigue comprobando en la prueba de arriba: el dato
+     * que vino de la importación inicial no lo escribió nadie aquí y sigue
+     * intocable por esta vía.
+     */
     const id = await abrirMinimo('CORREGIR ZONA DE APERTURA');
     const r = await corregir(operaciones, id, { zona: opciones.zonas[1] });
-    assert.equal(r.status, 400, r.texto);
-    assert.match(r.json.error, /ya venía cargado/);
-    assert.equal((await ficha(id)).zona, opciones.zonas[0]);
+    assert.equal(r.status, 200, r.texto);
+    assert.equal((await ficha(id)).zona, opciones.zonas[1]);
+
+    // Y lo escrito por otra persona en su alta sigue sin tocarse.
+    const deVentas = await ventas.pedir('/api/aperturas', {
+      method: 'POST',
+      body: JSON.stringify({
+        tipo: 'APERTURA',
+        servicio: 'ZONA DE OTRO',
+        zona: opciones.zonas[0],
+        asesor: opciones.asesores[0],
+        turnos: { '24 HRS': 2 },
+      }),
+    });
+    assert.equal(deVentas.status, 201, deVentas.texto);
+    const ajeno = deVentas.json.servicioId;
+    const negado = await corregir(operaciones, ajeno, { zona: opciones.zonas[1] });
+    assert.equal(negado.status, 400, negado.texto);
+    assert.equal((await ficha(ajeno)).zona, opciones.zonas[0]);
   });
 });
 
@@ -643,12 +677,29 @@ describe('el camino se ve solo si de verdad lo tiene', () => {
     await completar(operaciones, id, { precio_guardia: 7777 });
     const html = await panel(operaciones, id);
     const i = html.indexOf(BLOQUE);
-    const bloque = html.slice(i, i + 2500);
+    // Se recorta hasta el final del formulario y no a una cuenta fija de
+    // caracteres: cuando la zona y el asesor entraron al bloque, sus listas de
+    // opciones empujaron el botón de guardar más allá de los 2 500 de antes y
+    // la prueba fallaba por el tamaño de la ventana, no por lo que mira.
+    const fin = html.indexOf('</form>', i);
+    const bloque = html.slice(i, fin === -1 ? i + 2500 : fin);
     assert.match(bloque, /id="corregir-precio_guardia"/, 'el campo corregible está dibujado');
     assert.match(bloque, /ahora dice «7777»/);
     assert.match(bloque, /Guardar la corrección/);
-    // Y no se cuela un campo que no es suyo ni uno que sigue vacío.
-    assert.doesNotMatch(bloque, /id="corregir-zona"/, 'la zona la escribió la apertura');
+
+    /**
+     * La zona también está, y con lo que dice hoy.
+     *
+     * Aquí se exigía que NO estuviera, «porque la escribió la apertura». Esa
+     * era la suposición que el director revirtió: la misma persona la tecleó
+     * hoy, así que es suya y la corrige. Se comprueba al derecho —que esté y
+     * que traiga su valor— en vez de borrar la línea.
+     */
+    assert.match(bloque, /id="corregir-zona"/, 'la zona la tecleó hoy quien está mirando');
+    assert.match(bloque, /ahora dice «ALPURA»/, 'y se enseña con el valor que tiene');
+
+    // Lo que sigue sin colarse: un campo que todavía está vacío no se corrige,
+    // se llena. Eso no lo cambió nada.
     assert.doesNotMatch(bloque, /id="corregir-razon_social"/, 'la razón social sigue vacía');
   });
 
