@@ -73,6 +73,28 @@ describe('el módulo, por sí solo', () => {
     assert.ok(herramientas.length > 0);
   });
 
+  test('el prefijo nombra la pestaña del asistente, y sigue sin traer su enlace', () => {
+    /**
+     * La lista de pestañas se arma sin la del asistente, y tiene que seguir
+     * siendo así: si dependiera de si el asistente está configurado, el prefijo
+     * cambiaría entre despliegues y la caché se caería sin que nada avisara. Pero
+     * entonces a la lista le faltaba justo la pantalla desde la que la persona
+     * está preguntando, y a un «¿qué pestañas tengo?» el asistente contestaba una
+     * lista incompleta. Se nombra en texto fijo, sin enlace, y los dos criterios
+     * se cumplen a la vez.
+     */
+    for (const rol of ['admin', 'finanzas', 'ventas', 'operaciones', 'juridico']) {
+      const texto = prefijoEstable(rol)
+        .sistema.map((b) => b.text)
+        .join('\n');
+      assert.match(texto, /pestaña «Asistente»/, `al prefijo de «${rol}» le falta la pestaña en la que está`);
+      assert.ok(
+        !texto.includes('/asistente'),
+        `el prefijo de «${rol}» trae el enlace del asistente: la lista de pestañas dejaría de ser estable`
+      );
+    }
+  });
+
   test('hay exactamente un punto de caché y está al final del bloque de sistema', () => {
     for (const rol of ['admin', 'finanzas', 'ventas', 'operaciones', 'juridico', 'espectador']) {
       const { sistema } = prefijoEstable(rol);

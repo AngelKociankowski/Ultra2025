@@ -240,6 +240,50 @@ describe('la ficha la pone el servidor, no el modelo', () => {
     }
   });
 
+  test('una cifra sin consulta también deja ficha, y la ficha dice que no hubo consulta', async () => {
+    /**
+     * El hueco que quedaba: el bloque «De dónde salió esto» solo existía si se
+     * había ejecutado una consulta. Si el servicio externo contesta una cifra SIN
+     * pedir ninguna, el canal llevaba el texto y cero fichas, y la pantalla
+     * pintaba el párrafo a secas — una cifra inventada, bien escrita, con nada
+     * debajo que la desmienta. La defensa que no depende de que el modelo se
+     * porte bien no se activaba justo cuando más falta hacía.
+     */
+    doble.olvidar();
+    doble.guionar([{ texto: `Ahora mismo hay ${INVENTADO} guardias activos.` }]);
+    const r = await preguntar(admin, '¿cuántos guardias hay?');
+    assert.equal(r.status, 200, r.texto.slice(0, 300));
+
+    const canal = eventos(r.texto);
+    assert.equal(doble.peticiones().length, 1, 'no tenía que haber consultado nada');
+    assert.deepEqual(canal.filter((e) => e.tipo === 'consultando'), [], 'no se consultó ninguna pantalla');
+
+    const fichas = canal.filter((e) => e.tipo === 'ficha');
+    assert.equal(fichas.length, 1, 'una respuesta con cifras llegó sin su bloque «De dónde salió esto»');
+    const f = fichas[0].ficha;
+    assert.ok(!String(f.valor).includes(String(INVENTADO)), 'la ficha repitió la cifra inventada');
+    // Sin enlace: no hay pantalla de dónde venga, y un enlace diría lo contrario
+    // de lo que la ficha dice.
+    assert.equal(f.enlace, null, `la ficha de «sin consulta» trae enlace: ${f.enlace}`);
+    assert.match(f.dato, /[áéíóúñ]|pantalla/i, `el aviso no está en español: ${f.dato}`);
+    assert.equal(canal.at(-1).tipo, 'fin', 'la ficha se colocó después del cierre del canal');
+  });
+
+  test('una respuesta sin cifras y sin consulta no estrena recuadro: el aviso no se gasta', async () => {
+    // El recuadro es la prueba de que un número es real. Ponerlo debajo de una
+    // respuesta que no trae ningún número lo convierte en adorno, y un adorno que
+    // sale siempre se deja de leer: es como se pierde la única defensa que hay.
+    doble.olvidar();
+    doble.guionar([{ texto: 'Eso lo tienen el administrador y finanzas.' }]);
+    const r = await preguntar(admin, '¿quién lleva la cobranza?');
+    assert.equal(r.status, 200, r.texto.slice(0, 300));
+    assert.deepEqual(
+      eventos(r.texto).filter((e) => e.tipo === 'ficha'),
+      [],
+      'una respuesta sin una sola cifra llegó con recuadro de procedencia'
+    );
+  });
+
   test('cada ficha trae enlace a una pantalla de la plataforma, armado por el servidor', async () => {
     doble.olvidar();
     doble.guionar([

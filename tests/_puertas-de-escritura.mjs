@@ -123,8 +123,16 @@ function valoresCapturados(cuerpoCodigo) {
   );
 }
 
-/** El código sin comentarios ni contenido de cadenas, para contar llaves. */
-function soloCodigo(texto) {
+/**
+ * El código sin comentarios ni contenido de cadenas, para contar llaves.
+ *
+ * Se exporta porque el guardián de las listas que salen hacia el modelo
+ * (`_listas-al-modelo.mjs`) necesita leer el código con los mismos ojos: un
+ * recorte a mano nombrado dentro de un comentario que lo explica no es un recorte
+ * a mano, y una lista de dos lectores distintos del mismo código es donde se
+ * esconde la diferencia que nadie miró.
+ */
+export function soloCodigo(texto) {
   let out = '';
   let i = 0;
   const n = texto.length;

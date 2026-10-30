@@ -3,7 +3,7 @@ import { conPermiso, leerObjeto } from '@/lib/api';
 import { PERMISO_ASISTENTE } from '@/lib/rbac';
 import { chatDisponible, SinLlave } from '@/lib/chat-modelo';
 import { conversar, usoEnCeros } from '@/lib/chat-conversacion';
-import { hayCupo, anotarConsumo } from '@/lib/chat-tope';
+import { hayCupo, apartarPregunta, anotarGasto } from '@/lib/chat-tope';
 
 export const dynamic = 'force-dynamic';
 
@@ -110,8 +110,34 @@ export const POST = conPermiso(PERMISO_ASISTENTE, async (request, { usuario }) =
     previas.push({ quien: turno.quien, texto: turno.texto });
   }
 
-  // El cupo se mira ANTES de llamar al servicio externo.
-  const cupo = hayCupo(usuario.id);
+  /**
+   * El cupo se APARTA antes de llamar al servicio externo, no se mira y luego se
+   * anota: en una sola transacción se comprueba y se suma la pregunta. Mirar
+   * primero y anotar al final dejaba que todas las peticiones que llegaran en
+   * medio leyeran el mismo número viejo y pasaran — medido: veinticinco preguntas
+   * a la vez con el tope en dos dejaban pasar seis.
+   *
+   * Y si el contador no se puede escribir, la pregunta NO se contesta. Antes el
+   * fallo de esa escritura se registraba y se seguía, y eso es un tope que se
+   * apaga en silencio: una racha de fallos de escritura dejaría al asistente
+   * contestando sin que nada lo cuente y sin que nadie se enterara. Que falle
+   * ruidosamente cuesta una pregunta sin contestar; lo otro cuesta la factura.
+   */
+  let cupo;
+  try {
+    cupo = apartarPregunta(usuario.id);
+  } catch (error) {
+    console.error('[chat] no se pudo apartar la pregunta del cupo', error);
+    return NextResponse.json(
+      {
+        error:
+          'El asistente no pudo anotar tu pregunta, así que no la contesta: sin cuenta no hay tope, y ' +
+          'sin tope no hay asistente. Vuelve a intentarlo en un momento; mientras tanto, lo que ' +
+          'necesites se ve en las pantallas de siempre.',
+      },
+      { status: 503 }
+    );
+  }
   if (!cupo.cupo) {
     return NextResponse.json({ error: cupo.motivo }, { status: 429 });
   }
@@ -125,15 +151,24 @@ export const POST = conPermiso(PERMISO_ASISTENTE, async (request, { usuario }) =
       const mandar = (obj) => controlador.enqueue(texto.encode(renglon(obj)));
       let anotado = false;
 
-      // Se anota una sola vez, pase lo que pase: la pregunta consumió un turno
-      // del día aunque la respuesta se haya cortado a media frase.
+      /**
+       * Se anota una sola vez, pase lo que pase: lo gastado se gastó aunque la
+       * respuesta se haya cortado a media frase.
+       *
+       * Lo que esta escritura puede perder si falla, dicho con precisión porque
+       * antes no se decía: la PREGUNTA ya está contada —se apartó antes de llamar—
+       * y el gasto ya tiene apartado su piso de un centavo, así que lo que se
+       * pierde es el detalle de tokens y los centavos por encima del piso. Por eso
+       * aquí sí se registra y se sigue: la respuesta ya salió, y tirarla por no
+       * poder anotar el detalle sería cambiar un número por una respuesta.
+       */
       const anotar = () => {
         if (anotado) return null;
         anotado = true;
         try {
-          return anotarConsumo(usuario.id, uso);
+          return anotarGasto(usuario.id, uso);
         } catch (error) {
-          console.error('[chat] no se pudo anotar el consumo', error);
+          console.error('[chat] no se pudo anotar el gasto de la pregunta', error);
           return null;
         }
       };

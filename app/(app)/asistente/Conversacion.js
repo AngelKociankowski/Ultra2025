@@ -169,9 +169,16 @@ export default function Conversacion({ restantes, tope, consultas }) {
                   <ul className="mt-1 space-y-1">
                     {turno.fichas.map((f, j) => (
                       <li key={j} className="text-[11px] text-slate-400">
-                        <Link href={f.enlace} className="text-slate-200 hover:underline">
-                          {f.pantalla}
-                        </Link>
+                        {/* Sin enlace cuando no hubo pantalla de dónde venir: es la
+                            ficha de una respuesta que no consultó nada, y un enlace
+                            ahí sería justo lo contrario de lo que dice. */}
+                        {f.enlace ? (
+                          <Link href={f.enlace} className="text-slate-200 hover:underline">
+                            {f.pantalla}
+                          </Link>
+                        ) : (
+                          <span className="text-amber-300/90">{f.pantalla}</span>
+                        )}
                         {' · '}
                         {f.dato}: <strong className="text-white">{f.valor}</strong>
                         {' · '}consultado {f.consultado}
