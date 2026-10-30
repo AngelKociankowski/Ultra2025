@@ -132,7 +132,13 @@ const cadenaDe = (id, campo) =>
     .map((r) => ({ accion: r.accion, usuario: r.usuario, ...r.cambios[campo] }));
 
 /** Mueve a otra hora los renglones de llenado y/o corrección de un servicio. */
-function fechar(id, marca, acciones = ['alta_completada', 'alta_corregida']) {
+/**
+ * `apertura` entró a la lista cuando el alta pasó a dar autoría: antes bastaba
+ * con mover el llenado para dejar un campo «de ayer», y desde entonces el
+ * renglón del alta se quedaba fechado hoy y sostenía la ventana él solo. El
+ * andamio dejaba de construir el estado que la prueba pretendía montar.
+ */
+function fechar(id, marca, acciones = ['apertura', 'alta_completada', 'alta_corregida']) {
   const marcas = acciones.map(() => '?').join(',');
   const movidas = conLaBase(
     (db) =>
@@ -354,19 +360,35 @@ describe('Z3 · la importación y la apertura', () => {
     assert.equal(s.supervisor, viejo.supervisor);
   });
 
-  test('Z3.2 ni la zona ni el asesor que escribió la apertura', async () => {
+  test('Z3.2 la zona y el asesor que uno mismo escribió en el alta sí se corrigen hoy', async () => {
+    /**
+     * Esta prueba exigía 400 y el mensaje «ya venía cargado» para la zona y el
+     * asesor tecleados en la pantalla de alta. Era la suposición que el director
+     * revirtió —capturar y completar resultaron ser la misma pantalla— y además
+     * ese mensaje era falso: se lo decía a quien acababa de teclear el dato.
+     *
+     * Lo que vigila ahora: se corrige lo propio del día, y el mensaje de
+     * rechazo, cuando toca, dice la verdad. La importación sigue intocable en
+     * `Z3.1`.
+     */
     const id = await abrirMinimo('Z3 APERTURA');
     for (const [campo, valor] of [
       ['zona', opciones.zonas[1]],
       ['asesor', opciones.asesores[1]],
     ]) {
       const r = await corregir(operaciones, id, { [campo]: valor });
-      assert.equal(r.status, 400, `${campo} → ${r.status}`);
-      assert.match(r.json.error, /ya venía cargado/);
+      assert.equal(r.status, 200, `${campo} → ${r.status} ${r.texto.slice(0, 160)}`);
     }
     const s = await ficha(id);
-    assert.equal(s.zona, opciones.zonas[0]);
-    assert.equal(s.asesor, opciones.asesores[0]);
+    assert.equal(s.zona, opciones.zonas[1]);
+    assert.equal(s.asesor, opciones.asesores[1]);
+
+    // Y el mensaje ya no acusa a la importación de un dato recién tecleado:
+    // cuando niega, niega por el motivo verdadero.
+    const deOtro = await abrir(ventas, 'Z3 APERTURA DE VENTAS');
+    const negado = await corregir(operaciones, deOtro, { zona: opciones.zonas[1] });
+    assert.equal(negado.status, 400, negado.texto);
+    assert.doesNotMatch(negado.json.error, /ya venía cargado/, 'lo tecleó ventas hoy, no la importación');
   });
 });
 
@@ -1028,9 +1050,24 @@ describe('Z11 · una regla de permisos apoyada en un registro histórico', () =>
     const r = await corregir(operaciones, id, { precio_guardia: 1100 });
     assert.equal(r.status, 400, `renglón ilegible → ${r.status} ${r.texto.slice(0, 160)}`);
     assert.equal((await ficha(id)).precio_guardia, 1000);
-    // Y la ficha sigue dibujándose, sin bloque.
+
+    /**
+     * La ficha sigue dibujándose y no ofrece ESTE campo.
+     *
+     * Antes se exigía que el bloque entero no apareciera, que era un atajo
+     * válido mientras lo tecleado en el alta no se podía corregir: ese servicio
+     * no tenía ningún otro campo corregible. Desde que el alta da autoría, la
+     * zona y el asesor que esa misma persona escribió hoy sí lo son, así que el
+     * bloque aparece legítimamente por ellos y el atajo dejó de medir lo que
+     * decía medir.
+     *
+     * Lo que importa es lo de siempre y se exige directo: ante un renglón que
+     * no se puede leer, el campo se niega en vez de suponerse, y no se cae hacia
+     * un renglón anterior.
+     */
     const html = comoSeLee((await operaciones.pedir(`/estado-fuerza/${id}`)).texto);
-    assert.doesNotMatch(html, /Corregir lo que capturaste hoy/);
+    assert.doesNotMatch(html, /id="corregir-precio_guardia"/, 'el campo del renglón ilegible no se ofrece');
+    assert.match(html, /Z11 JSON ROTO/, 'y la ficha sigue dibujándose');
   });
 
   test('Z11.2 un {antes, despues} vacío tampoco: sin valor que comparar, se niega', async () => {

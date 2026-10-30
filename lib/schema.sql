@@ -642,3 +642,44 @@ CREATE TABLE IF NOT EXISTS partidas_precio (
   actualizado_en  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_partidas_servicio ON partidas_precio(servicio_id, orden, id);
+
+-- ------------------------------------------------------- consumo del asistente
+-- Cuántas preguntas le hizo cada cuenta al asistente hoy y cuánto costaron.
+--
+-- No es una tabla de datos capturados y por eso NO entra en el censo de las
+-- puertas de escritura (`tests/_puertas-de-escritura.mjs`): aquí no hay nada que
+-- nadie teclee. Lo escribe el servidor con lo que el propio servicio externo
+-- reporta de cada respuesta, y su único trabajo es que el tope pueda existir.
+--
+-- Hace falta que esté en la base y no en memoria: un contador en memoria se
+-- pierde en cada despliegue y no sirve con dos procesos, o sea sería un tope
+-- que no topa.
+--
+-- El día es el día natural de la oficina, con la misma zona horaria que usa el
+-- resto de la plataforma (`lib/fechas.js`). Dos relojes distintos para el mismo
+-- día es como se llega a que el tope se reinicie a media tarde.
+CREATE TABLE IF NOT EXISTS chat_consumo (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  usuario_id        INTEGER NOT NULL REFERENCES usuarios(id),
+  dia               TEXT    NOT NULL,
+  preguntas         INTEGER NOT NULL DEFAULT 0,
+  tokens_entrada    INTEGER NOT NULL DEFAULT 0,
+  tokens_salida     INTEGER NOT NULL DEFAULT 0,
+  tokens_cache_lee  INTEGER NOT NULL DEFAULT 0,
+  tokens_cache_pone INTEGER NOT NULL DEFAULT 0,
+  -- El acumulador de verdad del gasto, en MILÉSIMAS de centavo.
+  --
+  -- No es precisión por gusto: una pregunta cuesta una fracción de centavo, y
+  -- sumar centavos enteros pregunta por pregunta cobraba un centavo por cada
+  -- una. Con el tope de la empresa en 60 centavos eso cerraba el día a las 60
+  -- preguntas cuando el presupuesto da para el triple. Aquí se acumula exacto y
+  -- se redondea al final, una sola vez, al comparar contra el tope.
+  milesimas         INTEGER NOT NULL DEFAULT 0,
+  -- Lo mismo en centavos enteros y hacia arriba, derivado de `milesimas` en la
+  -- misma escritura. Es la cifra que lee una persona en la pantalla; no es una
+  -- segunda fuente de verdad.
+  centavos          INTEGER NOT NULL DEFAULT 0,
+  actualizado_en    TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (usuario_id, dia)
+);
+CREATE INDEX IF NOT EXISTS idx_chat_consumo_dia ON chat_consumo(dia);

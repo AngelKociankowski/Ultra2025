@@ -144,9 +144,17 @@ export default function Completar({ servicioId, falta, corregibles = [], opcione
             data.yaTenian.length === 1 ? '' : 'aron'
           }: eso se cambia desde «Editar».`
         : '';
+      // Y lo que el servidor dice que NO reconoció se dice también, igual que en
+      // `corregir()`. La asimetría se arregló ahí y se quedó aquí: el llenado
+      // contestaba «0 datos capturados» a una petición que el servidor había
+      // rechazado campo por campo, que es el mismo fallo silencioso con otra
+      // etiqueta.
+      const rechazados = data.rechazados?.length
+        ? ` No se reconoc${data.rechazados.length === 1 ? 'ió' : 'ieron'}: ${data.rechazados.join(', ')}.`
+        : '';
       setEstado({
-        tipo: n > 0 ? 'ok' : 'info',
-        mensaje: `${n} dato${n === 1 ? '' : 's'} capturado${n === 1 ? '' : 's'}.${yaTenian}`,
+        tipo: n > 0 ? 'ok' : rechazados ? 'error' : 'info',
+        mensaje: `${n} dato${n === 1 ? '' : 's'} capturado${n === 1 ? '' : 's'}.${yaTenian}${rechazados}`,
       });
       setValores({});
       router.refresh();

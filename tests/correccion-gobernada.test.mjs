@@ -185,6 +185,27 @@ describe('A1 · un campo con régimen propio pasa por su control, no se lo salta
     for (const c of afectados) {
       assert.ok((AREA_DEL_CAMPO[c] || []).length > 0, `«${c}» está gobernado y no tiene área a la que avisar`);
     }
+    /**
+     * La tercera intersección, que es la que no se vigilaba.
+     *
+     * Un campo que se completa y que la edición corriente tiene BLOQUEADO pero
+     * que no está en `CAMPOS_CORREGIBLES` no cae en ninguno de los dos carriles:
+     * el panel del alta lo cambiaría por el carril propio —sin renglón en
+     * `correcciones` y sin aviso al área— y la corrección formal no podría
+     * arreglarlo nunca. Hoy no hay ninguno y por eso no se ve; el día que alguien
+     * bloquee un campo completable sin hacerlo corregible, esta línea lo dice.
+     */
+    const huerfanos = completables.filter(
+      (c) => CAMPOS_BLOQUEADOS.includes(c) && !CAMPOS_CORREGIBLES.includes(c)
+    );
+    assert.deepEqual(
+      huerfanos,
+      [],
+      `estos campos se completan y están bloqueados, pero no son corregibles: ${huerfanos.join(', ')}. ` +
+        'Se cambiarían por el carril propio sin renglón en «correcciones» ni aviso al área, y la ' +
+        'corrección formal no los alcanzaría: o se les da área y se hacen corregibles, o se sacan de ' +
+        'los completables.'
+    );
   });
 
   test('A1.2 ventas corrige la razón social que capturó, y el control deja su rastro entero', async () => {

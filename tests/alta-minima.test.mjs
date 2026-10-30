@@ -143,7 +143,22 @@ describe('qué le falta a un servicio', () => {
 
     const html = comoSeLee((await admin.pedir(`/estado-fuerza/${id}`)).texto);
     assert.equal(panel(html), null, 'no le falta nada: el panel no se monta');
-    assert.doesNotMatch(html, /id="completar"/);
+    /**
+     * El ancla sí existe, y no es un descuido.
+     *
+     * Esta línea exigía que NO existiera, y llevaba tiempo contradiciendo a
+     * `correccion-propia.test.mjs`, que exige lo contrario mirando lo mismo.
+     * Convivían porque a este servicio no le quedaba nada corregible: todo se
+     * tecleó en el alta, y lo del alta no se podía corregir. Desde que sí se
+     * puede, el ancla lleva al bloque de corrección y la contradicción se
+     * resuelve del lado de la regla que rige en esta plataforma —una marca que
+     * no lleva a ninguna parte se queda como texto, y una que lleva es un
+     * enlace—.
+     *
+     * Lo que esta prueba vino a defender sigue defendido por la línea de
+     * arriba: no le falta nada, así que el panel de faltantes no se monta.
+     */
+    assert.doesNotMatch(html, /Falta por capturar/, 'y no se le pide nada que ya tenga');
   });
 
   test('el contrato, la factura y la nómina no cuentan como captura del alta', async () => {

@@ -3,7 +3,12 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AUTORIZACIONES_CANCELACION } from '@/lib/campos';
-import { hoyLocal } from '@/lib/utils';
+import { hoyLocal, formatCurrency } from '@/lib/utils';
+// La pregunta del importe, sus tres respuestas y el proporcional de referencia
+// salen del mismo sitio que las usa el servidor, para que la pantalla y el motor
+// no puedan decir cosas distintas. El porqué de que el proporcional sea solo una
+// referencia —y de que no haya un botón que la copie— está en su cabecera.
+import { RESPUESTAS_IMPORTE, proporcionalDeReferencia } from '@/lib/importe-del-movimiento';
 import DesgloseTurnos from '@/components/DesgloseTurnos';
 
 const input =
@@ -80,6 +85,15 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
   const [agregados, setAgregados] = useState([]);
   const [cantidadPlana, setCantidadPlana] = useState('');
   const [aut, setAut] = useState({});
+  /**
+   * Qué pasa con el importe mensual. Nace VACÍO a propósito, y es la mitad del
+   * requisito: sin respuesta elegida el formulario no se envía, así que la
+   * estimación de la plataforma no puede guardarse sin que alguien la mire.
+   * Preseleccionar «no cambia» —que es el caso más común— sería más cómodo y
+   * sería volver al defecto por la puerta de la comodidad.
+   */
+  const [respuestaImporte, setRespuestaImporte] = useState('');
+  const [importeNuevo, setImporteNuevo] = useState('');
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -108,11 +122,42 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
   const total = conDesglose ? totalDesglose : Number(cantidadPlana) || 0;
   const totalEfectivo = esCancelacion ? servicio?.total_guardias || 0 : total;
 
+  /**
+   * Cuándo hay que preguntar por el importe mensual.
+   *
+   * Solo cuando el servicio sigue vivo después del movimiento —ampliación o
+   * disminución— y tiene un importe capturado que se iba a quedar mintiendo. Una
+   * cancelación total lo deja en BAJA y su importe deja de ser algo por cobrar;
+   * un servicio sin importe capturado no tiene número viejo que corregir. Las
+   * dos exclusiones están medidas y explicadas en `registrarCancelacion()`.
+   */
+  const importeActual = Number(servicio?.importe_factura) || 0;
+  const preguntaImporte = !esCancelacion && !!servicio && importeActual > 0;
+  const guardiasDespues = esAmpliacion
+    ? (servicio?.total_guardias || 0) + total
+    : (servicio?.total_guardias || 0) - total;
+  const referencia =
+    preguntaImporte && total > 0
+      ? proporcionalDeReferencia({
+          importe: importeActual,
+          guardiasAntes: servicio.total_guardias,
+          guardiasDespues,
+        })
+      : null;
+
+  function olvidarRespuestaImporte() {
+    setRespuestaImporte('');
+    setImporteNuevo('');
+  }
+
   function cambiarModo(m) {
     setModo(m);
     setTurnos({});
     setAgregados([]);
     setCantidadPlana('');
+    // La respuesta se olvida al cambiar de modo: «no cambia» contestado para una
+    // ampliación no es la misma respuesta para una disminución.
+    olvidarRespuestaImporte();
     setError('');
     setOk('');
   }
@@ -151,8 +196,25 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
         `Una disminución no puede retirar los ${servicio.total_guardias} guardias del servicio. Usa la cancelación total.`
       );
     }
+    // El importe no se puede dejar sin contestar. Lo mismo lo exige el servidor:
+    // esto es para no hacer ir y volver a quien está capturando.
+    if (preguntaImporte && !respuestaImporte) {
+      return setError(
+        `Falta decir qué pasa con el importe mensual de ${formatCurrency(importeActual)}. ` +
+          'Si no lo sabes ahora, dilo: el movimiento se registra igual.'
+      );
+    }
+    if (preguntaImporte && respuestaImporte === 'NUEVO' && !String(importeNuevo).trim()) {
+      return setError('Escribe el importe mensual nuevo, o contesta que no lo sabes ahora.');
+    }
 
     setEnviando(true);
+    // Lo que se contestó sobre el importe. Va igual por los dos caminos: la
+    // ampliación y la disminución tienen el mismo defecto con el signo cambiado.
+    // Nunca se manda la estimación: se manda lo que la persona escribió.
+    const respuesta = preguntaImporte
+      ? { importe: respuestaImporte, ...(respuestaImporte === 'NUEVO' ? { importe_factura: importeNuevo } : {}) }
+      : {};
     try {
       const res = esAmpliacion
         ? await fetch('/api/aperturas', {
@@ -167,6 +229,7 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
               guardias: total,
               comentarios: [motivo, motivoDetalle.trim()].filter(Boolean).join(' · ') || null,
               aut,
+              ...respuesta,
             }),
           })
         : await fetch('/api/cancelaciones', {
@@ -183,6 +246,7 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
               turnos: esCancelacion ? {} : turnos,
               guardias: totalEfectivo,
               aut,
+              ...respuesta,
             }),
           });
 
@@ -239,6 +303,9 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
                 setTurnos({});
                 setAgregados([]);
                 setCantidadPlana('');
+                // Otro servicio es otro importe y otro contrato: la respuesta
+                // anterior no vale para él.
+                olvidarRespuestaImporte();
               }}
               className={input}
             >
@@ -431,6 +498,92 @@ export default function FormMovimiento({ serviciosActivos, opciones, preseleccio
               <p className="text-xs text-slate-500 mt-1.5">
                 Este servicio no tiene desglose por turno capturado, así que basta la cantidad.
               </p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/*
+        El importe mensual, preguntado aquí mismo.
+        Es el arreglo al lado: se resuelve en el momento en que la persona tiene
+        el contrato a la mano, en vez de dejar un número viejo que después nadie
+        revisa. Las tres respuestas y por qué son tres están en
+        `lib/importe-del-movimiento.js`.
+      */}
+      {preguntaImporte && (
+        <section className="bg-slate-800/30 border border-amber-500/30 rounded-2xl p-5 space-y-3">
+          <div>
+            <h2 className="text-base font-semibold text-white">¿Y el importe mensual?</h2>
+            <p className="text-sm text-slate-300 mt-1">
+              Hoy se le factura <strong className="text-white">{formatCurrency(importeActual)}</strong> al mes por sus{' '}
+              {servicio.total_guardias} guardias.{' '}
+              <strong className="text-amber-300">La plataforma no lo cambia sola</strong>, porque el precio no sigue a
+              la plantilla: hay contratos de precio fijo y hay cambios con otra escala. Por eso se pregunta aquí, que
+              es donde tienes el contrato a la mano.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(RESPUESTAS_IMPORTE).map(([clave, r]) => (
+              <button
+                key={clave}
+                type="button"
+                onClick={() => {
+                  setRespuestaImporte(clave);
+                  if (clave !== 'NUEVO') setImporteNuevo('');
+                  setError('');
+                }}
+                className={`text-sm px-3 py-1.5 rounded-lg border ${
+                  respuestaImporte === clave
+                    ? 'bg-cyan-600 border-cyan-500 text-ultra-blanco'
+                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                }`}
+              >
+                {r.boton}
+              </button>
+            ))}
+          </div>
+
+          {respuestaImporte ? (
+            <p className="text-xs text-slate-400">{RESPUESTAS_IMPORTE[respuestaImporte].ayuda}</p>
+          ) : (
+            <p className="text-xs text-amber-300/90">
+              Hay que contestar una de las tres. «No lo sé ahora» también es una respuesta y no frena el movimiento.
+            </p>
+          )}
+
+          {respuestaImporte === 'NUEVO' && (
+            <div className="max-w-xs">
+              <label className={label} htmlFor="importe-nuevo">
+                Importe mensual nuevo *
+              </label>
+              <input
+                id="importe-nuevo"
+                type="number"
+                step="any"
+                min="0"
+                value={importeNuevo}
+                onChange={(e) => setImporteNuevo(e.target.value)}
+                className={input}
+                placeholder="Lo que diga el contrato"
+              />
+              {/*
+                La estimación se enseña y no se escribe en el campo, ni hay botón
+                que la copie. Si aceptarla costara un clic igual que confirmar un
+                precio fijo, la respuesta equivocada saldría tan barata como la
+                correcta, y el histórico dice que acertaría una de cada diez veces.
+              */}
+              {referencia !== null && (
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  Referencia de la plataforma: <span className="text-slate-400">{formatCurrency(referencia)}</span>{' '}
+                  para {guardiasDespues} guardias.{' '}
+                  <span className="text-amber-300/80">
+                    Es una estimación proporcional, no un dato del contrato
+                  </span>
+                  : en el histórico de esta empresa la mayoría de los cambios de plantilla no movieron el importe en
+                  proporción. Compruébalo antes de escribirlo.
+                </p>
+              )}
             </div>
           )}
         </section>

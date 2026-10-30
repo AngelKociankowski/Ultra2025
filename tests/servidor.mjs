@@ -105,11 +105,18 @@ async function esperar(url, proc, intentos = 180) {
  *   —quitándole la columna nueva—, y se arranca la aplicación para ver si la
  *   pone. Parámetro opcional: las pruebas que ya existen no cambian ni una
  *   línea.
+ * @param {Record<string, string>} [opciones.env]
+ *   Variables de entorno extra para el proceso del servidor. Existe para poder
+ *   levantar la aplicación apuntando al doble del servicio externo del asistente
+ *   —con una llave de prueba y una dirección de prueba— y también para poder
+ *   levantarla SIN llave, que es el estado de producción hoy y el que hay que
+ *   comprobar. Vacío por omisión: los cincuenta archivos que llaman `arrancar()`
+ *   siguen igual.
  */
-export async function arrancar({ prepararBase } = {}) {
+export async function arrancar({ prepararBase, env: extra } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ultra-test-'));
   const dbPath = path.join(dir, 'prueba.db');
-  const envBase = { DATABASE_PATH: dbPath, NODE_ENV: 'production' };
+  const envBase = { DATABASE_PATH: dbPath, NODE_ENV: 'production', ...(extra || {}) };
 
   await ejecutar('node', ['scripts/seed.mjs', '--reset'], envBase);
 

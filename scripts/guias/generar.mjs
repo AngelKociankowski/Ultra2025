@@ -140,7 +140,14 @@ function documento(g) {
 </body></html>`;
 }
 
-const navegador = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+// El navegador se busca donde lo tenga quien corra esto. La ruta de abajo es la
+// del contenedor donde se escribió el script; escrita a secas, el script solo
+// funcionaba ahí. Con la variable, quien lo corra en su máquina apunta al suyo
+// y sin ella se usa el que Playwright encuentre.
+const DONDE_ESTA_EL_NAVEGADOR = process.env.CHROMIUM_PATH || process.env.PLAYWRIGHT_CHROMIUM_PATH;
+const navegador = await chromium.launch(
+  DONDE_ESTA_EL_NAVEGADOR ? { executablePath: DONDE_ESTA_EL_NAVEGADOR } : {}
+);
 const pagina = await navegador.newPage();
 fs.mkdirSync(SALIDA, { recursive: true });
 

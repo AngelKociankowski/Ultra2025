@@ -22,6 +22,12 @@ export default function AppLayout({ children }) {
    * pantallas a las que el guardia de arriba no va a dejar entrar, y así no hay
    * clic que termine en una vista vacía.
    */
+  /**
+   * La pestaña del asistente va en la barra siempre, configurado o no: sin llave
+   * esa pantalla sigue enseñando la guía del rol, y esconderla dejaba la mitad
+   * que ya funciona sin forma de llegar. Por eso este archivo ya no necesita
+   * preguntarle nada al módulo del chat: una pantalla menos que lo importa.
+   */
   const items = usuario.debe_cambiar_password ? [] : navegacion(usuario.rol);
 
   // El contador va en el layout y no dentro de la barra porque la barra corre
