@@ -26,6 +26,18 @@
  * Y la mitad que hace honesto al segundo camino: se exige que en la corrida haya
  * al menos una lista de verdad recortada. Sin eso, «todas las listas llevan su
  * total» sería verdad trivial el día que los datos de prueba quepan enteros.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────
+ * ANTES DE CORRER ESTO A MANO: `npm run build`.
+ *
+ * Las dos mitades no muerden al mismo tiempo. La que lee el código lo lee del
+ * disco y muerde al instante; la que corre las siete levanta la aplicación
+ * COMPILADA (`next start` contra `.next`), así que mide el código del último
+ * build. Un cambio en `lib/` sin recompilar deja esa mitad en verde sobre el
+ * código anterior: verde falso, y del peor tipo, porque el guardián parece estar
+ * vigilando. En el CI no pasa —el build va antes de las pruebas—; en tu máquina
+ * sí. Usa `npm run verify`, que es build y pruebas en ese orden.
+ * ────────────────────────────────────────────────────────────────────────────────
  */
 
 import { test, before, after, describe } from 'node:test';

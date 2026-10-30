@@ -102,10 +102,12 @@ function Seccion({ s }) {
  * Tiene tres estados y ninguno de los tres es un error:
  *
  *   1. Sin llave —que es el estado de producción HOY— se enseña la guía del rol
- *      tal cual. La mitad de lo que se pidió, los tutoriales, ya está escrita en
- *      el lenguaje de la casa y se puede contestar sin llamar a ningún servicio
- *      externo, sin costo y sin riesgo de que algo se invente. Así, el día que
- *      el servicio esté caído la pantalla sigue siendo útil.
+ *      tal cual, y se dice con esas palabras que ahora mismo esto es lo único
+ *      que la pantalla puede hacer. La mitad de lo que se pidió, los tutoriales,
+ *      ya está escrita en el lenguaje de la casa y se contesta sin llamar a
+ *      ningún servicio externo, sin costo y sin riesgo de que algo se invente.
+ *      Por eso la pestaña se dibuja igual, haya llave o no: esconderla dejaba
+ *      esta mitad construida y sin camino para llegar.
  *   2. Sin el permiso del asistente —el espectador— se enseña también su guía,
  *      con una línea que dice que el asistente es para quien trabaja en la
  *      plataforma. Ese rol tampoco ve la pestaña: aquí llega solo quien escriba
@@ -149,17 +151,32 @@ export default function Asistente() {
 
       {autorizado && !disponible ? (
         <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 px-4 py-3 max-w-3xl">
-          <p className="text-sm font-semibold text-white">El asistente todavía no está configurado</p>
+          <p className="text-sm font-semibold text-white">
+            El asistente todavía no está configurado: ahora mismo esta pantalla solo puede enseñarte las guías
+          </p>
           <p className="text-xs text-slate-400 mt-1">
             A este servidor le falta la llave del servicio que escribe las respuestas, así que de momento no
-            hay con quién conversar. No es una falla de la plataforma: todo lo demás funciona igual. Mientras
-            tanto, aquí abajo está tu guía completa, que es la misma hoja que se imprime.
+            hay con quién conversar sobre tus datos. No es una falla de la plataforma: todo lo demás funciona
+            igual, y lo que necesites se ve en las pantallas de siempre. Lo que esta pantalla sí hace hoy está
+            aquí abajo: tu guía completa, la misma hoja que se imprime.
           </p>
         </div>
       ) : null}
 
       {activo ? (
-        <Conversacion restantes={cupo.restantes} tope={TOPE_PREGUNTAS} consultas={consultas.length} />
+        <>
+          <Conversacion restantes={cupo.restantes} tope={TOPE_PREGUNTAS} consultas={consultas.length} />
+          {/*
+            Dicho aquí y no solo en el mensaje de error: el día que el servicio
+            se caiga o la llave caduque, la mitad útil de esta pantalla sigue en
+            pie y conviene que la persona ya sepa que está ahí, en vez de leer
+            «no pude contestar» y cerrar la pestaña.
+          */}
+          <p className="text-xs text-slate-500 max-w-3xl">
+            Si el asistente no contesta —el servicio se cayó, o la llave caducó— esta pantalla sigue
+            sirviendo: tu guía completa está aquí abajo y no depende de ningún servicio externo.
+          </p>
+        </>
       ) : null}
 
       {/*

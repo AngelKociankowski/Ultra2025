@@ -313,6 +313,17 @@ Pruebas:
 npm run verify      # build + 62 pruebas contra la app real
 ```
 
+> ⚠️ **Usa `npm run verify`, no `npm test` a secas.** Las pruebas levantan la
+> aplicación **compilada** (`next start` contra `.next`), así que un cambio en
+> `lib/` sin recompilar **da verde falso**: las pruebas que corren el servidor
+> siguen midiendo el código anterior. Pasa sobre todo con los guardianes que
+> tienen una mitad que lee el código y otra que corre la aplicación —el de las
+> listas al modelo y el del espejo del asistente—: la mitad que lee el código
+> muerde al instante y la mitad que corre la aplicación no muerde hasta el
+> siguiente `npm run build`. En GitHub Actions no ocurre porque el build va antes;
+> en tu máquina sí. Si una prueba de servidor no reacciona a lo que acabas de
+> cambiar, recompila antes de buscar el error en otro sitio.
+
 Levantan la aplicación contra una base desechable y comprueban el acceso y el
 alta de usuarios, la regla del negocio, los permisos campo por campo, los
 comentarios y el ciclo de vida completo de un servicio. Empiezan como empieza una instalación real:

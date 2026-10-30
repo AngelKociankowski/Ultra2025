@@ -64,16 +64,51 @@ after(async () => {
   await doble?.cerrar();
 });
 
-describe('la barra no ofrece lo que no hay', () => {
-  test('ningún rol ve la pestaña del asistente', async () => {
+describe('la barra ofrece lo que esta pantalla sí puede hacer hoy', () => {
+  /**
+   * Esta prueba decía lo contrario —«ningún rol ve la pestaña del asistente»— y
+   * estaba en verde. Lo que congelaba no era un requisito: era un defecto.
+   *
+   * El plan dice que sin llave la pantalla sigue siendo útil porque enseña la
+   * guía del rol, y así se construyó. Pero la pestaña se dibujaba solo si había
+   * llave, y este renglón del RBAC es la ÚNICA puerta a `/asistente` que existe
+   * en toda la plataforma: sin llave —el estado de producción— la mitad que ya
+   * funcionaba era inalcanzable salvo escribiendo la dirección a mano. Cada
+   * mitad se probaba por separado y las dos pasaban; nadie probaba la pregunta
+   * que las une, que es si una persona puede llegar.
+   *
+   * Lo que se afirma ahora es lo que el plan prometía: los cinco roles que
+   * trabajan en la plataforma ven la pestaña, haya llave o no, y el espectador
+   * sigue sin verla porque esa decisión del director no cambió.
+   */
+  test('los cinco roles que trabajan ven la pestaña, y el espectador no', async () => {
     for (const rol of Object.keys(sesiones)) {
       const r = await sesiones[rol].pedir('/');
       assert.equal(r.status, 200, `${rol} → ${r.status}`);
-      assert.ok(
-        !r.texto.includes('href="/asistente"'),
-        `al rol «${rol}» se le ofrece una pestaña que lleva a una pantalla que no puede contestar`
+      const ofrecida = r.texto.includes('href="/asistente"');
+      assert.equal(
+        ofrecida,
+        rol !== 'espectador',
+        rol === 'espectador'
+          ? 'el espectador no entra al asistente y no se le debe ofrecer la pestaña'
+          : `al rol «${rol}» no se le ofrece la pestaña del asistente, y es la única puerta que hay: ` +
+              'sin ella la guía de su rol queda construida y sin camino'
       );
     }
+  });
+
+  test('la palabra «Asistente» está en la barra, no solo el enlace', async () => {
+    // El criterio es que una persona la vea y pueda hacer clic, no que el HTML
+    // traiga una dirección escondida en un atributo.
+    const r = await sesiones.operaciones.pedir('/');
+    const html = comoSeLee(r.texto);
+    const donde = html.indexOf('href="/asistente"');
+    assert.ok(donde > -1, 'no hay enlace a la pantalla del asistente');
+    assert.match(
+      html.slice(donde, donde + 400),
+      /Asistente/,
+      'el enlace está pero sin la palabra que la persona lee'
+    );
   });
 
   test('las pestañas de siempre siguen ahí, y en el mismo orden', async () => {
@@ -164,6 +199,9 @@ describe('la pantalla del asistente enseña la guía, no un error', () => {
     const r = await sesiones.admin.pedir('/asistente');
     const html = comoSeLee(r.texto);
     assert.match(html, /todavía no está configurado/i);
+    // Y se dice qué sí puede hacer hoy, con esas palabras: una pantalla que solo
+    // dice lo que le falta se lee como una pantalla rota.
+    assert.match(html, /solo puede enseñar/i, 'no se dice qué sí puede hacer esta pantalla hoy');
     assert.match(html, /todo lo demás funciona igual/i, 'no se dice que la plataforma no está rota');
     // No hay caja de preguntar: ofrecerla sería prometer algo que no puede pasar.
     assert.ok(!/Preguntar<\/button>/.test(html), 'se pinta el botón de preguntar sin con quién conversar');

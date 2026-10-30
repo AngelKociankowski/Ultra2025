@@ -3,7 +3,6 @@ import { headers } from 'next/headers';
 import { usuarioActual } from '@/lib/auth';
 import { navegacion, ROLES } from '@/lib/rbac';
 import { sinLeer } from '@/lib/avisos';
-import { chatDisponible } from '@/lib/chat-modelo';
 import NavBar from '@/components/NavBar';
 
 export default function AppLayout({ children }) {
@@ -24,12 +23,12 @@ export default function AppLayout({ children }) {
    * clic que termine en una vista vacía.
    */
   /**
-   * La pestaña del asistente solo existe si está configurado en este servidor.
-   * Es una lectura de una variable de entorno, no de la base: no cuesta nada y
-   * no puede fallar, así que esta línea no puede poner lenta ni tumbar ninguna
-   * de las veinte pantallas que comparten este archivo.
+   * La pestaña del asistente va en la barra siempre, configurado o no: sin llave
+   * esa pantalla sigue enseñando la guía del rol, y esconderla dejaba la mitad
+   * que ya funciona sin forma de llegar. Por eso este archivo ya no necesita
+   * preguntarle nada al módulo del chat: una pantalla menos que lo importa.
    */
-  const items = usuario.debe_cambiar_password ? [] : navegacion(usuario.rol, chatDisponible());
+  const items = usuario.debe_cambiar_password ? [] : navegacion(usuario.rol);
 
   // El contador va en el layout y no dentro de la barra porque la barra corre
   // en el navegador y esto lee la base. Con la contraseña prestada va en cero:

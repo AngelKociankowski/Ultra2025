@@ -951,15 +951,32 @@ describe('Z4 · Que los datos sean datos y no instrucciones', () => {
 describe('Z5 · Que no estorbe', () => {
   const DIARIAS = ['/', '/estado-fuerza', '/aperturas', '/cancelaciones', '/juridico'];
 
-  test('Z5.1 sin llave: ninguna pestaña nueva, ninguna pantalla rota, y 503 en español', async () => {
+  test('Z5.1 sin llave: la pestaña lleva a la guía, ninguna pantalla rota, y 503 en español', async () => {
+    /**
+     * Esta prueba exigía que sin llave NO hubiera pestaña, y pasaba. Medía media
+     * verdad: que la pantalla no se ofreciera. La otra mitad —que la pantalla sin
+     * llave enseña la guía del rol— se medía aparte, también en verde, y nadie
+     * medía si se podía llegar de una a la otra. Ese enlace del RBAC es la única
+     * puerta a `/asistente` de toda la plataforma, así que sin llave la mitad que
+     * funcionaba no la alcanzaba nadie.
+     *
+     * Lo que se exige ahora es el camino completo: la pestaña está, lleva a la
+     * pantalla y la pantalla da algo útil. Lo que no cambia es lo que esta prueba
+     * de verdad vigilaba: que ninguna pantalla de todos los días se rompa ni
+     * cambie, y que la ruta del chat conteste 503 en español.
+     */
     const sinLlave = await arrancar();
     try {
       const admin = await sinLlave.entrarYAsentar(ROLES.admin);
       for (const ruta of DIARIAS) {
         const r = await admin.pedir(ruta);
         assert.equal(r.status, 200, `${ruta} contestó ${r.status} sin llave`);
-        assert.ok(!r.texto.includes('href="/asistente"'), `${ruta} ofrece la pestaña sin llave`);
       }
+      const barra = await admin.pedir('/');
+      assert.ok(
+        barra.texto.includes('href="/asistente"'),
+        'sin llave no se ofrece la pestaña, y es la única puerta: la guía del rol queda inalcanzable'
+      );
       const pantalla = await admin.pedir('/asistente');
       assert.equal(pantalla.status, 200);
       assert.match(pantalla.texto, /todavía no está configurado/i);

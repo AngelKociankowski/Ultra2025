@@ -107,14 +107,23 @@ test('las constantes que gobiernan el costo están puestas y son las acordadas',
   assert.equal(PENSAR.type, 'adaptive');
 
   /**
-   * Sesenta segundos y UN reintento.
+   * Media espera, y UN reintento.
    *
-   * Un chat que reintenta tres veces no es tolerante: tarda tres minutos en
-   * decir que no pudo, con la persona mirando la pantalla. Y el paquete los
-   * cuenta en milisegundos, no en segundos: poner 60 ahí es una espera de
-   * sesenta milésimas, que falla siempre y parece que el servicio está caído.
+   * Esto decía `assert.equal(ESPERA_MS, 60_000)` y clavaba el número. Lo que de
+   * verdad vigilaba son dos cosas y las dos siguen aquí: que la espera esté en
+   * MILISEGUNDOS —poner 60 ahí es una espera de sesenta milésimas, que falla
+   * siempre y parece que el servicio está caído— y que el reintento sea uno,
+   * porque un chat que reintenta tres veces no es tolerante: tarda tres minutos
+   * en decir que no pudo, con la persona mirando la pantalla.
+   *
+   * El número exacto se bajó a 30 000 porque con 60 000 la espera total medida
+   * eran 125 segundos y nadie espera dos minutos frente a una pantalla callada.
+   * En vez de clavar el número nuevo se afirma el intervalo que lo hace
+   * razonable: ni segundos disfrazados de milisegundos, ni más de medio minuto
+   * por intento.
    */
-  assert.equal(ESPERA_MS, 60_000, 'la espera va en milisegundos');
+  assert.ok(ESPERA_MS >= 5_000, `la espera son ${ESPERA_MS}: eso parecen segundos, y el paquete cuenta milisegundos`);
+  assert.ok(ESPERA_MS <= 30_000, `la espera son ${ESPERA_MS} ms, y con el reintento eso es más de un minuto callado`);
   assert.equal(REINTENTOS, 1);
 
   // Y el techo de vueltas del ciclo, sin el que una pregunta mal entendida

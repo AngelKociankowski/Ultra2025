@@ -667,8 +667,17 @@ CREATE TABLE IF NOT EXISTS chat_consumo (
   tokens_salida     INTEGER NOT NULL DEFAULT 0,
   tokens_cache_lee  INTEGER NOT NULL DEFAULT 0,
   tokens_cache_pone INTEGER NOT NULL DEFAULT 0,
-  -- Estimado, no facturado: las tarifas viven en lib/chat-tope.js y la pantalla
-  -- dice que es una estimación.
+  -- El acumulador de verdad del gasto, en MILÉSIMAS de centavo.
+  --
+  -- No es precisión por gusto: una pregunta cuesta una fracción de centavo, y
+  -- sumar centavos enteros pregunta por pregunta cobraba un centavo por cada
+  -- una. Con el tope de la empresa en 60 centavos eso cerraba el día a las 60
+  -- preguntas cuando el presupuesto da para el triple. Aquí se acumula exacto y
+  -- se redondea al final, una sola vez, al comparar contra el tope.
+  milesimas         INTEGER NOT NULL DEFAULT 0,
+  -- Lo mismo en centavos enteros y hacia arriba, derivado de `milesimas` en la
+  -- misma escritura. Es la cifra que lee una persona en la pantalla; no es una
+  -- segunda fuente de verdad.
   centavos          INTEGER NOT NULL DEFAULT 0,
   actualizado_en    TEXT    NOT NULL DEFAULT (datetime('now')),
   UNIQUE (usuario_id, dia)
