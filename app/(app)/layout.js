@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { usuarioActual } from '@/lib/auth';
 import { navegacion, ROLES } from '@/lib/rbac';
 import { sinLeer } from '@/lib/avisos';
+import { chatDisponible } from '@/lib/chat-modelo';
 import NavBar from '@/components/NavBar';
 
 export default function AppLayout({ children }) {
@@ -22,7 +23,13 @@ export default function AppLayout({ children }) {
    * pantallas a las que el guardia de arriba no va a dejar entrar, y así no hay
    * clic que termine en una vista vacía.
    */
-  const items = usuario.debe_cambiar_password ? [] : navegacion(usuario.rol);
+  /**
+   * La pestaña del asistente solo existe si está configurado en este servidor.
+   * Es una lectura de una variable de entorno, no de la base: no cuesta nada y
+   * no puede fallar, así que esta línea no puede poner lenta ni tumbar ninguna
+   * de las veinte pantallas que comparten este archivo.
+   */
+  const items = usuario.debe_cambiar_password ? [] : navegacion(usuario.rol, chatDisponible());
 
   // El contador va en el layout y no dentro de la barra porque la barra corre
   // en el navegador y esto lee la base. Con la contraseña prestada va en cero:

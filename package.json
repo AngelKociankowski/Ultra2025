@@ -15,6 +15,7 @@
     "simular": "node scripts/simulacion.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.3.0",
     "better-sqlite3": "^11.5.0",
     "next": "14.0.4",
     "react": "^18.2.0",
