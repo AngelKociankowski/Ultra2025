@@ -98,7 +98,8 @@ function cerrar({ dir, a, t, reg }) {
     // cierre de ejecuciones: las abiertas que 20-cartera concilió (F.5) y la de hoy de esta sesión
     for (const [f, d] of Object.entries(cartera.ejecuciones || {})) poner(`ejecucion-${f}`, d);
     // N8 (00o): el cierre va sin `lineas` (el detalle por línea queda en el diario y en ops-<f>)
-    if (ejecHoy && ejecP && ejecP.doc) poner(`ejecucion-${fecha}`, Object.assign({}, ejecP.doc, { lineas: [], res: ejecP.res, fin: ts(t) }));
+    // (`abierta` solo sirve para el lote del libro, que ya la tiene)
+    if (ejecHoy && ejecP && ejecP.doc) poner(`ejecucion-${fecha}`, Object.assign({}, ejecP.doc, { lineas: [], res: ejecP.res.map(({ abierta, ...r }) => r), fin: ts(t) }));
     // N11: abierta → queda sin fin, pero con lo que el diario sabe (qué salió, cuándo, con qué monto) para conciliarla mañana
     if (abierta) {
       const doc = leerTrabajo(dir, "ejecucion-doc.json");

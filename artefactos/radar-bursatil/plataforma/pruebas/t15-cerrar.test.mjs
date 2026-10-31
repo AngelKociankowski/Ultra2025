@@ -33,7 +33,8 @@ test("grupo final: orden exacto de §E.6, esquemas, topes, ifVersion solo en le�
   const est = docDe(e.dir, "rutina-estado");
   assert.deepEqual([est.estado, est.paso], ["hecha", "cerrar"]);
   assert.deepEqual(est.escritos, Object.fromEntries(grupo(e.dir).ops.slice(0, -1).map(o => [o.path.slice(DB_RUTA.length + 1), o.data.h])));
-  assert.deepEqual(leerTrabajo(e.dir, "verificar.json"), { lecturas: [lectura("rutina-estado", { obligatoria: true, dirAbs: path.resolve(e.dir) })] });
+  // N-5b (00o): tras escribir se releen rutina-estado y cartera-libro (sin envíos, ejecucion-<hoy> no)
+  assert.deepEqual(leerTrabajo(e.dir, "verificar.json"), { lecturas: ["rutina-estado", "cartera-libro"].map(id => lectura(id, { obligatoria: true, dirAbs: path.resolve(e.dir) })) });
   const ops = docDe(e.dir, "ops-2026-10-30").ops, hoy = docDe(e.dir, "ops-2026-11-02").ops;
   assert.ok(ops.every(o => o.est === "ejecutada"));
   assert.deepEqual(hoy.map(o => [o.id, o.est, o.sim]), [["2026-11-02-XLE-V1", "simulada", true]]);

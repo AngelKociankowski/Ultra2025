@@ -165,10 +165,12 @@ cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/40-
 cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/60-cerrar.mjs --dir .trabajo/hoy
 ```
 (o con `--degradado <paso>` cuando esta guía lo indique). Haz ESCRIBIR del grupo `final`. Después haz LEER con la lista de
-`D/trabajo/verificar.json` (es `rutina-estado`) y corre:
+`D/trabajo/verificar.json` (`rutina-estado`, `cartera-libro` y, si hubo envíos, `ejecucion-<hoy>`) y corre:
 ```
 cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/db.mjs verificar --dir .trabajo/hoy && node bin/db.mjs presupuesto --dir .trabajo/hoy
 ```
+Si `verificar` responde `accion: "marcar"` (lo releído no quedó como se preparó), haz ESCRIBIR del grupo `revision`: marca
+el día para que el siguiente no opere hasta que el director lo revise (`aviso.txt` ya trae la falla).
 
 ### 10. Avisar
 Lee `D/salida/aviso.txt`. Si `verificar` falló o una escritura no se pudo hacer, agrega al final una línea

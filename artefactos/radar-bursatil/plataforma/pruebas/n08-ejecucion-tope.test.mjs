@@ -1,5 +1,5 @@
-// N8 · x08 del tester B5 (17): tamaño de ejecucion-<f> en un día con maxOrdenesDia = 12 (6 ventas de 2 lotes + 6 compras =
-// 18 líneas). Con la forma de §E.5.10 el cierre no cabe en los 3 000 B de §E.5: DESVÍO N8 del reporte 16 (decide el director).
+// N8 · x08 del tester B5 (17) y 00o: tamaño de ejecucion-<f> en un día con maxOrdenesDia = 12 (6 ventas de 2 lotes + 6
+// compras = 18 líneas). El cierre va sin `lineas` (el detalle queda en el diario y en ops-<f>); tope 4 000 B.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bytes, conH } from "../lib/db.mjs";
@@ -20,8 +20,8 @@ test("x08 · el reclamo (armado) de 18 líneas cabe en el tope de ejecucion", ()
   assert.ok(bytes(conH(doc)) <= DOC_TOPES.ejecucion, `${bytes(conH(doc))} B`);
 });
 
-test("x08 · el cierre de 18 líneas cabe en el tope de ejecucion", { todo: "DESVÍO N8: con la forma de §E.5.10 el cierre de 18 líneas mide ≈ 6 200 B (tope 3 000)" }, t => {
-  const n = bytes(conH(Object.assign({}, doc, { res, fin: "2026-11-04T15:20:00Z" })));
-  t.diagnostic(`cierre con 18 líneas: ${n} B`);
+test("x08 · el cierre de 18 líneas (sin `lineas`, como lo arma 60-cerrar) cabe en el tope de ejecucion", t => {
+  const n = bytes(conH(Object.assign({}, doc, { lineas: [], res, fin: "2026-11-04T15:20:00Z" })));
+  t.diagnostic(`cierre con 18 líneas: ${n} B (tope ${DOC_TOPES.ejecucion})`);
   assert.ok(n <= DOC_TOPES.ejecucion, `${n} B`);
 });
