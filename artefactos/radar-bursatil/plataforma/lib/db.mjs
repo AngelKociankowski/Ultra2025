@@ -229,16 +229,39 @@ export function registrar({ dir, grupo, verificar = false, reintento = false }) 
 }
 
 // ---- verificar (tras releer rutina-estado al final del día) ----
+// N-5b (00o): además de rutina-estado se releen cartera-libro y, si hubo envíos, ejecucion-<hoy> (trabajo/verificar.json). Si
+// alguno no tiene el h que se preparó, se arma salida/revision/ (rutina-estado con `revisar`: el día siguiente no opera hasta
+// que el director lo revise) y se agrega la falla al aviso.
+export const TEXTO_REVISION = ids => `Falla: ${ids.join(", ")} no quedó en db como se preparó; no se opera hasta que el director lo revise.`;
 export function verificarEstado(dir) {
   importar(dir, { requeridos: [] });
-  const ver = leerVersiones(dir), meta = leerJson(path.join(rutas(dir).salida, "final", "_grupo.json"));
-  const esperado = meta && meta.ops.find(e => e.id === "rutina-estado");
-  const doc = leerJson(path.join(rutas(dir).entradaDb, "rutina-estado.json"));
-  const v = ver["rutina-estado"];
-  const hOkay = !!(v && v.estado === "ok" && esperado && v.h === esperado.h);
-  const ok = hOkay && !!doc && doc.estado !== "en_curso";
-  return { codigo: ok ? 0 : 3, accion: ok ? "listo" : "fallo", resumen: { ok, estado: doc ? doc.estado : null, h_ok: hOkay } };
+  const R = rutas(dir), ver = leerVersiones(dir), meta = leerJson(path.join(R.salida, "final", "_grupo.json"));
+  const esperado = id => (meta ? meta.ops.find(e => e.id === id) : null);
+  const doc = leerJson(path.join(R.entradaDb, "rutina-estado.json"));
+  const v = ver["rutina-estado"], e = esperado("rutina-estado");
+  const hOkay = !!(v && v.estado === "ok" && e && v.h === e.h);
+  let lista = ["rutina-estado"];
+  try { const j = leerJson(path.join(R.trabajo, "verificar.json")); if (j && Array.isArray(j.lecturas)) lista = j.lecturas.map(l => l.id); } catch (x) { lista = ["rutina-estado"]; }
+  const distintos = [], sinVerificar = [];
+  for (const id of lista.filter(x => x !== "rutina-estado")) {
+    const ex = esperado(id), x = ver[id];
+    if (!ex) continue;
+    if (!x || x.estado === "fallo" || x.estado === "sin_leer") sinVerificar.push(id);
+    else if (x.estado !== "ok" || x.h !== ex.h) distintos.push(id);
+  }
+  let escribir = null;
+  if (distintos.length && hOkay && doc) {
+    const marca = Object.assign({}, doc, { revisar: { f: doc.fecha, motivo: `no quedó en db como se preparó: ${distintos.join(", ")}`, ids: distintos } });
+    escribir = armarGrupo({ dir, grupo: "revision", docs: [{ id: "rutina-estado", data: marca }], modo: modoDeCarpeta(dir) }).escribir;
+    const rutaAviso = path.join(R.salida, "aviso.txt"), linea = TEXTO_REVISION(distintos);
+    let aviso = fs.existsSync(rutaAviso) ? fs.readFileSync(rutaAviso, "utf8") : "";
+    if (!aviso.includes(linea)) { aviso = aviso ? `${aviso}\n${linea}` : linea; if (aviso.length > 700) aviso = aviso.slice(0, 700 - linea.length - 2) + "…\n" + linea; fs.writeFileSync(rutaAviso, aviso); }
+  }
+  const ok = hOkay && !!doc && doc.estado !== "en_curso" && !distintos.length;
+  return { codigo: ok ? 0 : 3, accion: ok ? "listo" : distintos.length ? "marcar" : "fallo", escribir,
+    resumen: { ok, estado: doc ? doc.estado : null, h_ok: hOkay, distintos, sin_verificar: sinVerificar } };
 }
+const modoDeCarpeta = dir => { try { const l = leerJson(path.join(rutas(dir).trabajo, "lista.json")); return (l && l.modo) || "en_linea"; } catch (x) { return "en_linea"; } };
 
 // ---- presupuesto (§E.10) ----
 export function presupuesto(dir) {

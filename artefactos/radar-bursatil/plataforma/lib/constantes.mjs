@@ -19,10 +19,10 @@ export const COLECCION_ARCHIVO = "data/users/me";
 // Mientras sea null, el modo archivo está desactivado (00m §2).
 export const ACCION_REEMPLAZO = null;
 export const PRESUPUESTO_DIA = 40000;
-// Topes por kind en bytes compactos (12b §E.5; cartera-libro y ops-<f> según 00n, desvíos 3 y 4)
+// Topes por kind en bytes compactos (12b §E.5; cartera-libro y ops-<f> según 00n, desvíos 3 y 4; ejecucion según 00o, N8)
 export const DOC_TOPES = congelar({
   rutinaEstado: 1600, rutinaConfig: 600, carteraLibro: 3000, etoroMapa: 800, bitacoraMes: 1400, carteraPunto: 250,
-  radarResumen: 4000, bitacora: 6000, carteraOps: 5000, ejecucion: 3000,
+  radarResumen: 4000, bitacora: 6000, carteraOps: 5000, ejecucion: 4000,
 });
 // Decimales por magnitud (12b §E.3)
 export const PRECISION = congelar({ usd: 2, unidades: 6, precioMayor: 2, precioMenor: 4, fx: 4, peso: 4, rend: 6 });

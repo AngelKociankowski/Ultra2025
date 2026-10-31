@@ -106,7 +106,13 @@ export async function main(argv, { ahora = Date.now, raiz = RAIZ, pagina = null,
   // N5: los h de lo que escribió la última sesión se conservan hasta el próximo final (para compararlos al leer)
   const escritosPrevios = previo && previo.escritos && typeof previo.escritos === "object" ? previo.escritos : {};
   const estadoBase = extra => Object.assign({ kind: "rutinaEstado", v: 2, fecha, estado: "en_curso", paso: "preparar", sesion: prep.rutina.sesion, inicio: ts(t), latido: ts(t), fin: null,
-    commit: prep.commit, modo, ejecucionesAbiertas: abiertas, previo: previo ? previo.previo || null : null, escritos: escritosPrevios, motivo: null }, extra);
+    commit: prep.commit, modo, ejecucionesAbiertas: abiertas, previo: previo ? previo.previo || null : null, escritos: escritosPrevios, motivo: null },
+    previo && previo.revisar ? { revisar: previo.revisar } : {}, extra);
+  // N-5b (00o): un día marcado para revisión (lo releído tras escribir no cuadró) no deja operar hasta que el director lo quite
+  if (previo && previo.revisar && typeof previo.revisar === "object") {
+    prep.bloqueos.revision = `el día ${previo.revisar.f} quedó marcado para revisión del director (${String(previo.revisar.motivo || "").slice(0, 80)})`;
+    alertas.push(`No se opera: ${prep.bloqueos.revision}.`);
+  }
 
   // 1. integridad de los obligatorios
   const malos = Object.entries(docs).filter(([, d]) => d.estado === "corrupto" || d.estado === "fallo" || d.estado === "sin_leer");

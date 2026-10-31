@@ -4,6 +4,7 @@
 //   node bin/db.mjs verificar   --dir D
 //   node bin/db.mjs presupuesto --dir D
 //   node bin/db.mjs config      --dir D --operar true|false --activado <iso>|null   (solo el director, T20; 00n)
+//   node bin/db.mjs revisado    --dir D        (solo el director: quita la marca `revisar` de rutina-estado; 00o)
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { leerArgs, lineaPaso, correrCli, modoDe } from "../lib/archivos.mjs";
@@ -13,7 +14,7 @@ import { configEfectiva } from "../lib/reglas.mjs";
 import { crearRegistro } from "../lib/registro.mjs";
 
 const PASO = "db";
-const AYUDA = "Uso: node bin/db.mjs importar|registrar|verificar|presupuesto|config --dir <carpeta> [--grupo G] [--verificar] [--reintento] [--operar true|false --activado <iso>|null]";
+const AYUDA = "Uso: node bin/db.mjs importar|registrar|verificar|presupuesto|config|revisado --dir <carpeta> [--grupo G] [--verificar] [--reintento] [--operar true|false --activado <iso>|null]";
 
 // rutina-config con operar/activadoEl nuevos sobre la versión leída (salida/config/db_write.json con ifVersion y h)
 function armarConfig({ dir, modo, operar, activado, ahora }) {
@@ -32,11 +33,22 @@ function armarConfig({ dir, modo, operar, activado, ahora }) {
   return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "escribir", modo, resumen: { operar: doc.operar, activadoEl: doc.activadoEl, ifVersion: r.version }, escribir: g.escribir }) };
 }
 
+// N-5b: el director quita la marca `revisar` de rutina-estado después de revisar (salida/revisado/db_write.json con ifVersion)
+function armarRevisado({ dir, modo, ahora }) {
+  const r = leerDoc(dir, "rutina-estado");
+  if (r.estado !== "ok") return { codigo: 3, linea: lineaPaso({ paso: PASO, ok: false, accion: "sin_lectura", modo, resumen: { texto: `rutina-estado en estado ${r.estado}: léelo primero` } }) };
+  if (!r.doc.revisar) return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "nada", modo, resumen: { texto: "rutina-estado no está marcado para revisión" } }) };
+  const doc = Object.assign({}, r.doc, { latido: ts(ahora()) });
+  delete doc.h; delete doc.revisar;
+  const g = armarGrupo({ dir, grupo: "revisado", docs: [{ id: "rutina-estado", data: doc }], modo });
+  return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "escribir", modo, resumen: { quita: r.doc.revisar, ifVersion: r.version }, escribir: g.escribir }) };
+}
+
 export async function main(argv, { ahora = Date.now } = {}) {
   const a = leerArgs(argv, { valores: ["--dir", "--grupo", "--operar", "--activado"], banderas: ["--verificar", "--reintento"], posicionales: 1 });
   if (a.ayuda) { process.stdout.write(AYUDA + "\n"); return { codigo: 0, linea: null }; }
   const sub = a._[0];
-  if (!a.dir || !["importar", "registrar", "verificar", "presupuesto", "config"].includes(sub)) return { codigo: 1, linea: lineaPaso({ paso: PASO, ok: false, accion: "error", resumen: { texto: AYUDA } }) };
+  if (!a.dir || !["importar", "registrar", "verificar", "presupuesto", "config", "revisado"].includes(sub)) return { codigo: 1, linea: lineaPaso({ paso: PASO, ok: false, accion: "error", resumen: { texto: AYUDA } }) };
   const dir = path.resolve(a.dir), modo = modoDe(dir), reg = crearRegistro({ dir, paso: `db ${sub}` });
   if (sub === "config") return armarConfig({ dir, modo: modo || "en_linea", operar: a.operar, activado: a.activado === undefined ? "null" : a.activado, ahora });
   if (sub === "importar") {
@@ -54,8 +66,9 @@ export async function main(argv, { ahora = Date.now } = {}) {
   }
   if (sub === "verificar") {
     const r = verificarEstado(dir);
-    return { codigo: r.codigo, linea: lineaPaso({ paso: PASO, ok: r.codigo === 0, accion: r.accion, modo, resumen: r.resumen }) };
+    return { codigo: r.codigo, linea: lineaPaso({ paso: PASO, ok: r.codigo === 0, accion: r.accion, modo, resumen: r.resumen, escribir: r.escribir }) };
   }
+  if (sub === "revisado") return armarRevisado({ dir, modo: modo || "en_linea", ahora });
   const r = presupuesto(dir);
   return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: r.total > r.tope ? "sobre_tope" : "listo", modo, resumen: r }) };
 }

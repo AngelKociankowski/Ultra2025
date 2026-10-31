@@ -371,7 +371,7 @@ export function conciliarEjecucion({ libro, doc, opsDoc, portafolio, historial =
   }
   const nuevos = new Set(res.map(r => r.id));
   const ap = aplicarResultados({ libro, opsHoy: opsDoc || opsNuevo(doc.f), plan: plan.filter(o => nuevos.has(o.id)), res, simulacion: false, ahora: t, dia: doc.f });
-  return { libro: ap.libro, ops: ap.ops, doc: Object.assign({}, doc, { res, fin: ts(t) }) };
+  return { libro: ap.libro, ops: ap.ops, doc: Object.assign({}, doc, { lineas: [], res, fin: ts(t) }) };
 }
 
 // Aplica los eventos de conciliar a los documentos ops-<f> ({ "<f>": OpsDoc v2 }). El día de cada operación sale de su id.

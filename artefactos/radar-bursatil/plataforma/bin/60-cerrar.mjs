@@ -97,7 +97,8 @@ function cerrar({ dir, a, t, reg }) {
     if (opsHoy.ops.length) poner(`ops-${fecha}`, opsHoy);
     // cierre de ejecuciones: las abiertas que 20-cartera concilió (F.5) y la de hoy de esta sesión
     for (const [f, d] of Object.entries(cartera.ejecuciones || {})) poner(`ejecucion-${f}`, d);
-    if (ejecHoy && ejecP && ejecP.doc) poner(`ejecucion-${fecha}`, Object.assign({}, ejecP.doc, { res: ejecP.res, fin: ts(t) }));
+    // N8 (00o): el cierre va sin `lineas` (el detalle por línea queda en el diario y en ops-<f>)
+    if (ejecHoy && ejecP && ejecP.doc) poner(`ejecucion-${fecha}`, Object.assign({}, ejecP.doc, { lineas: [], res: ejecP.res, fin: ts(t) }));
     // N11: abierta → queda sin fin, pero con lo que el diario sabe (qué salió, cuándo, con qué monto) para conciliarla mañana
     if (abierta) {
       const doc = leerTrabajo(dir, "ejecucion-doc.json");
@@ -212,10 +213,14 @@ function cerrar({ dir, a, t, reg }) {
   const estadoFin = { kind: "rutinaEstado", v: 2, fecha, estado: degradada ? "degradada" : "hecha", paso: "cerrar", sesion: (prep.rutina && prep.rutina.sesion) || "s-desconocida",
     inicio: (prep.rutina && prep.rutina.inicio) || ts(t), latido: ts(t), fin: ts(t), commit: prep.commit || null, modo, ejecucionesAbiertas: abiertas,
     previo: previoDe(radar) || (estadoPrevio ? estadoPrevio.previo || null : null), escritos, motivo: a.degradado ? `degradado: ${a.degradado}` : null };
+  if (estadoPrevio && estadoPrevio.revisar) estadoFin.revisar = estadoPrevio.revisar; // sigue marcado hasta que el director lo quite
   docs.push({ id: "rutina-estado", data: estadoFin });
   const g = armarGrupo({ dir, grupo: "final", docs, modo, delDia, accionDia });
   escribirAviso(dir, aviso);
-  escribirTrabajo(dir, "verificar.json", { lecturas: [lectura("rutina-estado", { obligatoria: true, dirAbs: path.resolve(dir) })] });
+  // N-5b (00o): tras escribir se releen rutina-estado, cartera-libro y, si hubo envíos, ejecucion-<hoy>
+  const releer = ["rutina-estado"].concat(docs.some(d => d.id === "cartera-libro") ? ["cartera-libro"] : [],
+    docs.some(d => d.id === `ejecucion-${fecha}` && (d.data.res || []).some(r => r.env)) ? [`ejecucion-${fecha}`] : []);
+  escribirTrabajo(dir, "verificar.json", { lecturas: releer.map(id => lectura(id, { obligatoria: true, dirAbs: path.resolve(dir) })) });
   reg.info("cierre listo", { estado, docs: docs.map(d => d.id), omitidos: g.omitidos });
   return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "listo", modo, resumen: { estado, docs: g.ops, omitidos: g.omitidos.map(o => o.id), aviso: aviso.length }, escribir: g.escribir }) };
 }
@@ -235,7 +240,7 @@ function cerrarMinimo({ dir, t, error, a }) {
   const docs = [{ id: `bitacora-${fecha}`, data: bit }, { id: `bitacora-mes-${mes}`, data: { kind: "bitacoraMes", v: 1, mes, d: previas.concat([[fecha, "degradada", null, null, 0, 1]]) } }];
   docs.push({ id: "rutina-estado", data: { kind: "rutinaEstado", v: 2, fecha, estado: "degradada", paso: "cerrar", sesion: (prep.rutina && prep.rutina.sesion) || "s-desconocida", inicio: (prep.rutina && prep.rutina.inicio) || ts(t),
     latido: ts(t), fin: ts(t), commit: prep.commit || null, modo, ejecucionesAbiertas: previo && Array.isArray(previo.ejecucionesAbiertas) ? previo.ejecucionesAbiertas.filter(esFecha) : [],
-    previo: previo ? previo.previo || null : null, escritos: {}, motivo: corto(`cierre mínimo: ${error}`, 120) } });
+    previo: previo ? previo.previo || null : null, escritos: {}, motivo: corto(`cierre mínimo: ${error}`, 120), ...(previo && previo.revisar ? { revisar: previo.revisar } : {}) } });
   const g = armarGrupo({ dir, grupo: "final", docs, modo, delDia: [`bitacora-${fecha}`], accionDia: prep.rutina ? prep.rutina.accion : null });
   escribirAviso(dir, aviso);
   escribirTrabajo(dir, "verificar.json", { lecturas: [lectura("rutina-estado", { obligatoria: true, dirAbs: path.resolve(dir) })] });

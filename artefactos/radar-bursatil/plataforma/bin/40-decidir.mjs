@@ -38,7 +38,7 @@ export async function main(argv, { ahora = Date.now, pagina = null } = {}) {
   if (!fer) ventana.dentro = false;
   // la rutina no lee preferencias de la página: la tasa de CETES no entra (solo cambia el texto del efectivo en buildPortfolio)
   const r = decidir({ C, analisis, cartera, eventos: nv.eventos, config, contexto: { fecha: prep.fechaET, mercadoAbierto: C.marketState(t, fer || []).open, ventanaDentro: ventana.dentro,
-    bloqueoLibro: !!(prep.bloqueos && prep.bloqueos.libro), bloqueoDatos: (cartera && cartera.bloqueos && cartera.bloqueos.ordenes) || null, calendarioAusente: !fer, cetesPct: null, nowMs: t } });
+    bloqueoLibro: !!(prep.bloqueos && prep.bloqueos.libro), bloqueoDatos: (cartera && cartera.bloqueos && cartera.bloqueos.ordenes) || (prep.bloqueos && prep.bloqueos.revision) || null, calendarioAusente: !fer, cetesPct: null, nowMs: t } });
   r.alertas.push(...alertasNot);
   const plan = { fecha: r.fecha, simulacion: r.simulacion, ordenes: r.ordenes };
   escribirTrabajo(dir, "plan-ordenes.json", plan);
