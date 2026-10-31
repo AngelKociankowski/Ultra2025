@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { leerArgs, lineaPaso, correrCli, leerTrabajo, escribirTrabajo, leerDoc, rutas } from "../lib/archivos.mjs";
+import { leerArgs, lineaPaso, correrCli, leerTrabajo, escribirTrabajo, leerDoc, leerJson, rutas } from "../lib/archivos.mjs";
 import { crearRegistro } from "../lib/registro.mjs";
 import { crearEToro } from "../lib/etoro.mjs";
 import { transporteCurl } from "../lib/http.mjs";
@@ -94,8 +94,18 @@ async function armar({ dir, x, et, ahora, dormir, reg }) {
   const doc = { kind: "ejecucion", v: 1, f, sesion: (x.prep.rutina && x.prep.rutina.sesion) || "s-desconocida", armado: ts(ahora()), fin: null,
     antes: antesDe(cp, new Set(lineas.map(l => l.i))), lineas, res: [] };
   escribirTrabajo(dir, "ejecucion-doc.json", doc);
-  const id = `ejecucion-${f}`;
-  const g = armarGrupo({ dir, grupo: "pre-ejecucion", docs: [{ id, data: doc }], modo, crear: [id] });
+  const id = `ejecucion-${f}`, docs = [{ id, data: doc }];
+  // R1 (00p §2): la fecha queda en rutina-estado.ejecucionesAbiertas antes del primer POST, en el mismo db_write que el reclamo
+  // (si cualquiera de los dos choca, no se escribe ninguno y no se envía nada)
+  let ahoraDoc = null;
+  try { ahoraDoc = leerJson(path.join(x.R.salida, "ahora", "rutina-estado.json")); } catch (e) { ahoraDoc = null; }
+  if (ahoraDoc && escritoPorEstaSesion(dir, "rutina-estado", "ahora") && leerVersiones(dir)["rutina-estado"].h === ahoraDoc.h) {
+    // solo cambia la lista (y el paso): el latido sigue siendo el del ahora, para no mover la regla de los 30 min de §D.2
+    const r = Object.assign({}, ahoraDoc, { paso: "ejecutando", ejecucionesAbiertas: [...new Set((ahoraDoc.ejecucionesAbiertas || []).concat([f]))].sort() });
+    delete r.h;
+    docs.push({ id: "rutina-estado", data: r });
+  } else reg.aviso("pre-ejecucion sin rutina-estado: esta sesión no registró su ahora");
+  const g = armarGrupo({ dir, grupo: "pre-ejecucion", docs, modo, crear: [id] });
   reg.info("armado", { lineas: lineas.length, antes: doc.antes });
   return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "armado", modo, resumen: { lineas: lineas.length, antes: doc.antes.pos.length + doc.antes.ord.length }, escribir: g.escribir }) };
 }

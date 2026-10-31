@@ -64,7 +64,7 @@ function cerrar({ dir, a, t, reg }) {
   const fallas = [];
   if (a.degradado) { fallas.push({ paso: a.degradado, texto: textoFalla(a.degradado) }); errores.push([a.degradado, "degradado"]); }
   const carteraOk = !!(cartera && cartera.estado === "listo" && cartera.libro && cartera.valuacion);
-  if (cartera && !carteraOk && a.degradado !== "cartera") fallas.push({ paso: "cartera", texto: cartera.estado === "sin_libro" ? "no se pudo leer cartera-libro; sin órdenes hoy" : TEXTO_FALLA.cartera });
+  if (cartera && !carteraOk && a.degradado !== "cartera") fallas.push({ paso: "cartera", texto: cartera.motivo || (cartera.estado === "sin_libro" ? "no se pudo leer cartera-libro; sin órdenes hoy" : TEXTO_FALLA.cartera) });
   if (nfmp && Array.isArray(nfmp.errores) && nfmp.errores.length) errores.push(["30-fmp-noticias", "sin_fmp"]);
   if (!out) errores.push(["10-radar", (analisis && analisis.motivo) || "sin_radar"]);
   if (!notasDoc) errores.push(["noticias", "sin_notas"]);
@@ -205,8 +205,11 @@ function cerrar({ dir, a, t, reg }) {
     if (v.estado === "no_existe") noExisten.add(m[1]);
     else if (v.estado === "ok") { const r = leerDoc(dir, id); if (r.estado === "ok" && r.doc.fin === null) leidasAbiertas.push(m[1]); }
   }
-  const abiertas = [...new Set((estadoPrevio && Array.isArray(estadoPrevio.ejecucionesAbiertas) ? estadoPrevio.ejecucionesAbiertas : []).concat(leidasAbiertas, abierta ? [fecha] : []))]
-    .filter(f => esFecha(f) && !cerradas.has(f) && !noExisten.has(f) && (f !== fecha || abierta || leidasAbiertas.includes(f))).sort();
+  // R1 (00p §2): las candidatas de hoy (prep.recuperacion) y el reclamo propio también; solo salen si se cerraron (conciliadas con
+  // éxito) o si se leyó que no existen. Si su lectura falló o llegó dañada, se quedan.
+  const candidatas = (prep.recuperacion && Array.isArray(prep.recuperacion.ejecuciones)) ? prep.recuperacion.ejecuciones : [];
+  const abiertas = [...new Set((estadoPrevio && Array.isArray(estadoPrevio.ejecucionesAbiertas) ? estadoPrevio.ejecucionesAbiertas : [])
+    .concat(candidatas, leidasAbiertas, ejecHoy ? [fecha] : []))].filter(f => esFecha(f) && !cerradas.has(f) && !noExisten.has(f)).sort();
   // escritos (§E.5.1): h de este grupo + los de los documentos de lectura diaria que hoy no se reescribieron (salvo los desactualizados)
   const escritos = Object.fromEntries(docs.map(d => [d.id, conH(d.data).h]));
   const persistentes = id => id === "cartera-libro" || id === "etoro-mapa" || /^bitacora-mes-/.test(id);
@@ -240,7 +243,9 @@ function cerrarMinimo({ dir, t, error, a }) {
   const previas = bmLeido.estado === "ok" ? bmLeido.doc.d.filter(x => Array.isArray(x) && esFecha(x[0]) && x[0].slice(0, 7) === mes && x[0] !== fecha) : [];
   const docs = [{ id: `bitacora-${fecha}`, data: bit }, { id: `bitacora-mes-${mes}`, data: { kind: "bitacoraMes", v: 1, mes, d: previas.concat([[fecha, "degradada", null, null, 0, 1]]) } }];
   docs.push({ id: "rutina-estado", data: { kind: "rutinaEstado", v: 2, fecha, estado: "degradada", paso: "cerrar", sesion: (prep.rutina && prep.rutina.sesion) || "s-desconocida", inicio: (prep.rutina && prep.rutina.inicio) || ts(t),
-    latido: ts(t), fin: ts(t), commit: prep.commit || null, modo, ejecucionesAbiertas: previo && Array.isArray(previo.ejecucionesAbiertas) ? previo.ejecucionesAbiertas.filter(esFecha) : [],
+    latido: ts(t), fin: ts(t), commit: prep.commit || null, modo,
+    ejecucionesAbiertas: [...new Set((previo && Array.isArray(previo.ejecucionesAbiertas) ? previo.ejecucionesAbiertas : []).concat(
+      (prep.recuperacion && Array.isArray(prep.recuperacion.ejecuciones)) ? prep.recuperacion.ejecuciones : [], escritoPorEstaSesion(dir, `ejecucion-${fecha}`, "pre-ejecucion") ? [fecha] : []))].filter(esFecha).sort(),
     previo: previo ? previo.previo || null : null, escritos: {}, motivo: corto(`cierre mínimo: ${error}`, 120), ...(previo && previo.revisar ? { revisar: previo.revisar } : {}) } });
   const g = armarGrupo({ dir, grupo: "final", docs, modo, delDia: [`bitacora-${fecha}`], accionDia: prep.rutina ? prep.rutina.accion : null });
   escribirAviso(dir, aviso);

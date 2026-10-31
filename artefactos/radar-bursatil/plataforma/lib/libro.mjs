@@ -185,15 +185,11 @@ export function conciliar({ libro, portafolio, historial, ahora, ordenes = {}, o
       continue;
     }
     if (pend.orderId !== null && colaIds.has(pend.orderId)) {
-      // F.7 (N12): en cola se respeta hasta el día hábil siguiente; después se avisa a diario y al 3.er día hábil se libera
+      // R3 (00p §2): mientras siga visible en ordersForOpen no se libera nunca (su efectivo sigue reservado); desde el 2.º día
+      // hábil el aviso pide cancelarla a mano. Si eToro la llena tarde, casa por orderID. La rutina no cancela órdenes.
       const n = diasHabilesEntre(diaDe(pend), hoy, feriados);
       pend.estado = "aceptada";
-      if (n <= 1) continue;
-      if (n < DIAS_INCIERTA) { alertas.push(`Compra de ${pend.sym} del ${diaDe(pend)} sigue en cola en eToro (${n} días hábiles).`); continue; }
-      L.efectivoUSD = cts(L.efectivoUSD + pend.montoUSD);
-      L.pendientes.splice(L.pendientes.indexOf(pend), 1);
-      eventos.push({ tipo: "no_ejecutada", lado: "compra", opId: pend.opId, orderId: pend.orderId, sym: pend.sym, error: `en cola sin llenar ${n} días hábiles` });
-      alertas.push(`Compra de ${pend.sym} del ${diaDe(pend)} sigue en cola tras ${n} días hábiles: se da por no ejecutada y vuelven US$ ${cts(pend.montoUSD).toFixed(2)}; cancela la orden ${pend.orderId} a mano en eToro para que no se llene fuera del mandato.`);
+      if (n >= 2) alertas.push(`Compra de ${pend.sym} del ${diaDe(pend)} sigue en cola en eToro (${n} días hábiles; US$ ${cts(pend.montoUSD).toFixed(2)} reservados): cancela la orden ${pend.orderId} a mano en eToro o déjala llenarse.`);
       continue;
     }
     const o = pend.orderId !== null ? ordenes[pend.orderId] : null;

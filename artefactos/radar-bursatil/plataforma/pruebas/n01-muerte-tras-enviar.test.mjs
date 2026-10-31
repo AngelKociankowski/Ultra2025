@@ -25,7 +25,8 @@ for (const variante of ["sin-cerrar", "final-409"]) {
       e.db.docs.get(`${DB_RUTA}/rutina-estado`).version += 1; // escritura ajena
       assert.equal(e.S.escribir("final").accion, "conflicto");
     }
-    assert.deepEqual([e.db.doc("rutina-estado").estado, e.db.doc("rutina-estado").ejecucionesAbiertas], ["en_curso", []]);
+    // R1 (00p): la fecha ya quedó en db con el reclamo, antes del POST
+    assert.deepEqual([e.db.doc("rutina-estado").estado, e.db.doc("rutina-estado").ejecucionesAbiertas], ["en_curso", [F1]]);
     const t2 = Date.parse("2026-11-03T14:47:00Z");
     const et2 = etoroFalso({ portafolio: t.pf, tasas: tasasA(leerFix("etoro/lunes-tasas.json").rates.concat([{ instrumentID: 3006, bid: 691, ask: 691.2 }]), t2) });
     const d = await prepararDia({ db: e.db, t: t2, etoro: et2 });

@@ -112,7 +112,8 @@ export function importar(dir, { requeridos = null } = {}) {
 // ---- armar un grupo de escritura (§E.4, §E.8) ----
 // docs: [{ id, data }] en el orden de escritura. crear: ids que se escriben siempre sin ifVersion (reclamo de envío).
 // delDia: ids del día que, si nadie los leyó y preparar dijo "continuar", se escriben sin ifVersion.
-export function armarGrupo({ dir, grupo, docs, modo, crear = [], delDia = [], accionDia = null }) {
+// reponer: ids que se reescriben aunque se hayan leído dañados, con la versión leída (solo herramientas del director, R2).
+export function armarGrupo({ dir, grupo, docs, modo, crear = [], delDia = [], accionDia = null, reponer = [] }) {
   if (!/^[a-z0-9-]{1,40}$/.test(grupo)) throw new ErrorArchivo("grupo_invalido", grupo);
   const R = rutas(dir), g = path.join(R.salida, grupo);
   fs.rmSync(g, { recursive: true, force: true });
@@ -124,6 +125,7 @@ export function armarGrupo({ dir, grupo, docs, modo, crear = [], delDia = [], ac
     let ifVersion;
     if (crear.includes(id)) ifVersion = null;
     else if (v && v.estado === "ok" && Number.isInteger(v.version)) ifVersion = v.version;
+    else if (v && v.estado === "corrupto" && reponer.includes(id) && Number.isInteger(v.version)) ifVersion = v.version;
     else if (v && v.estado === "no_existe") ifVersion = null;
     else if (!v && delDia.includes(id) && accionDia === "continuar") ifVersion = null;
     else { omitidos.push({ id, motivo: !v ? `no se leyó ${id}; no se escribe` : `${id} en estado ${v.estado}; no se escribe` }); continue; }
@@ -251,7 +253,8 @@ export function verificarEstado(dir) {
   }
   let escribir = null;
   if (distintos.length && hOkay && doc) {
-    const marca = Object.assign({}, doc, { revisar: { f: doc.fecha, motivo: `no quedó en db como se preparó: ${distintos.join(", ")}`, ids: distintos } });
+    const marca = Object.assign({}, doc, { revisar: { f: doc.fecha, motivo: `no quedó en db como se preparó: ${distintos.join(", ")}`, ids: distintos,
+      esperado: Object.fromEntries(distintos.map(id => [id, esperado(id).h])) } });
     escribir = armarGrupo({ dir, grupo: "revision", docs: [{ id: "rutina-estado", data: marca }], modo: modoDeCarpeta(dir) }).escribir;
     const rutaAviso = path.join(R.salida, "aviso.txt"), linea = TEXTO_REVISION(distintos);
     let aviso = fs.existsSync(rutaAviso) ? fs.readFileSync(rutaAviso, "utf8") : "";

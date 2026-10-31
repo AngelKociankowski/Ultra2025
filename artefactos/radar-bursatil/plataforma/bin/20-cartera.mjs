@@ -112,9 +112,12 @@ export async function main(argv, { transporteEToro = null, transporteFmp = null,
   }
   // N7: una ejecución abierta que llegó dañada puede llevar dinero ya enviado: sin ella el libro miente → hoy no se concilia
   // ni se escribe el libro (la fecha sigue en ejecucionesAbiertas para mañana)
-  if (danados.some(id => id.startsWith("ejecucion-"))) {
+  const ejDanadas = danados.filter(id => id.startsWith("ejecucion-"));
+  if (ejDanadas.length) {
     alertas.push("Sin conciliación ni valuación hoy: una ejecución abierta llegó dañada (se reintenta mañana).");
-    return fin(3, "sin_libro", Object.assign({ estado: "sin_libro", alertas }, vacio));
+    // R1: la falla va en el aviso (no solo en las alertas, que se recortan)
+    const motivo = `${ejDanadas.join(", ")} llegó dañada o no se pudo leer: sin conciliación ni órdenes hoy; se reintenta mañana`;
+    return fin(3, "sin_libro", Object.assign({ estado: "sin_libro", motivo, alertas }, vacio));
   }
   const conv = libroDeDb(rl.doc), libro0 = conv.libro;
   alertas.push(...conv.alertas);
