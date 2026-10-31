@@ -1,0 +1,5 @@
+{ "pagina": "5.5.1",
+  "sha256": { "core": "ea9b20ab5828357625ffb4d1f7530402dc4eed250f17c959685e792ddf5b79c7",
+              "data": "87537214c00d0a46033280f730c050456cbcebc3d1027029978cb50c71970bbc",
+              "ui":   "c7e7d34987b601a85c75ea1bf9e202f7b023637cd9801e0c779f9c9b4311e71a" },
+  "puerto": "ui.js v5.5.1 líneas 1236–1501 (runCtx, deepSteps, fetchFinalists, runPaid), 679–683 (stripJump), 803–807 (asOfNow), 817–833 (loadMacro)" }

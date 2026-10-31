@@ -1,0 +1,57 @@
+{
+ "page": 1,
+ "pageSize": 20,
+ "totalItems": 5,
+ "items": [
+  {
+   "instrumentId": 100580,
+   "internalSymbolFull": "DIA",
+   "displayname": "DIA",
+   "isDelisted": false,
+   "isCurrentlyTradable": true,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 10,
+   "currentRate": 0.1332
+  },
+  {
+   "instrumentId": 11655,
+   "internalSymbolFull": "DIA.L",
+   "displayname": "Dialight Plc",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 5,
+   "currentRate": 550
+  },
+  {
+   "instrumentId": 4222,
+   "internalSymbolFull": "DIA.MI",
+   "displayname": "Diasorin",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 5,
+   "currentRate": 80.48
+  },
+  {
+   "instrumentId": 3026,
+   "internalSymbolFull": "DIA.US",
+   "displayname": "State Street SPDR Dow Jones In",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 517.13
+  },
+  {
+   "instrumentId": 1321,
+   "internalSymbolFull": "DIA.MC",
+   "displayname": "Distribuidora Internacional de Alimentacion SA",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 5,
+   "currentRate": 45.4
+  }
+ ]
+}

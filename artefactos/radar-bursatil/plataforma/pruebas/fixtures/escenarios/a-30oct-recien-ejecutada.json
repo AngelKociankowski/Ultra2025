@@ -1,0 +1,27 @@
+{
+ "nombre": "a-30oct-recien-ejecutada",
+ "descripcion": "Análisis del 30-oct + cartera recién ejecutada (lunes): todas las desviaciones < 5 pts → 0 órdenes",
+ "objetivo": null,
+ "esperado": {
+  "modo": "normal",
+  "ordenes": [],
+  "acciones": {
+   "SPY": [
+    "mantener",
+    null
+   ],
+   "DIA": [
+    "mantener",
+    null
+   ],
+   "XLF": [
+    "mantener",
+    null
+   ],
+   "XLE": [
+    "mantener",
+    null
+   ]
+  }
+ }
+}

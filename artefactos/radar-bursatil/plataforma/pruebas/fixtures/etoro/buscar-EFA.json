@@ -1,0 +1,27 @@
+{
+ "page": 1,
+ "pageSize": 20,
+ "totalItems": 2,
+ "items": [
+  {
+   "instrumentId": 3009,
+   "internalSymbolFull": "EFA",
+   "displayname": "iShares MSCI EAFE ETF",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 103.37
+  },
+  {
+   "instrumentId": 10858,
+   "internalSymbolFull": "EFAV",
+   "displayname": "Ishares Msci Eafe Min Vol Fa",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 96.25
+  }
+ ]
+}

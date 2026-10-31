@@ -1,0 +1,107 @@
+{
+ "page": 1,
+ "pageSize": 20,
+ "totalItems": 10,
+ "items": [
+  {
+   "instrumentId": 3000,
+   "internalSymbolFull": "SPY",
+   "displayname": "State Street SPDR S&P 500 ETF",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 755.72
+  },
+  {
+   "instrumentId": 3417,
+   "internalSymbolFull": "SPY.RTH",
+   "displayname": "State Street SPDR S&P 500 ETF",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 755.72
+  },
+  {
+   "instrumentId": 10583,
+   "internalSymbolFull": "SPY4.DE",
+   "displayname": "SPDR S&P 400 US Mid Cap UCITS ETF",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 102.2
+  },
+  {
+   "instrumentId": 2864,
+   "internalSymbolFull": "SPY5.L",
+   "displayname": "SS SPDR S&P 500 UCITS ETF",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 759.03
+  },
+  {
+   "instrumentId": 3233,
+   "internalSymbolFull": "SPYD",
+   "displayname": "SPDR Portfolio S&P 500 High Dividend ETF",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 49.06
+  },
+  {
+   "instrumentId": 3234,
+   "internalSymbolFull": "SPYG",
+   "displayname": "SPDR Portfolio S&P 500 Growth ETF",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 116.42
+  },
+  {
+   "instrumentId": 10596,
+   "internalSymbolFull": "SPYN.DE",
+   "displayname": "SS SPDR MSCI Europe Energy UCITS ETF",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 352.35
+  },
+  {
+   "instrumentId": 3430,
+   "internalSymbolFull": "SPYU",
+   "displayname": "MAX S&P 500 4X Leveraged ETN ",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 31.35
+  },
+  {
+   "instrumentId": 10811,
+   "internalSymbolFull": "SPYX",
+   "displayname": "SPDR S&P 500 Fossil Fuel Reserves Free ETF",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 61.78
+  },
+  {
+   "instrumentId": 8787,
+   "internalSymbolFull": "SPYtest",
+   "displayname": "SPYtest",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 529.205
+  }
+ ]
+}

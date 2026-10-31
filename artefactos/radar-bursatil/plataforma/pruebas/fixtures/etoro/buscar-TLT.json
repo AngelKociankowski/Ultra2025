@@ -1,0 +1,17 @@
+{
+ "page": 1,
+ "pageSize": 20,
+ "totalItems": 1,
+ "items": [
+  {
+   "instrumentId": 3020,
+   "internalSymbolFull": "TLT",
+   "displayname": "iShares 20+ Year Treasury Bond ETF ",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 81.84
+  }
+ ]
+}

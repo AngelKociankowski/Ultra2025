@@ -1,0 +1,40 @@
+{
+ "clientPortfolio": {
+  "positions": [],
+  "mirrors": [],
+  "credit": 100000,
+  "orders": [],
+  "stockOrders": [],
+  "entryOrders": [],
+  "exitOrders": [],
+  "ordersForOpen": [
+   {
+    "instrumentID": 3000,
+    "amount": 500,
+    "amountInUnits": 0.661997,
+    "isBuy": true,
+    "leverage": 1,
+    "stopLossRate": 0,
+    "takeProfitRate": 0,
+    "isTslEnabled": false,
+    "isDiscounted": true,
+    "mirrorID": 0,
+    "frozenAmount": 500,
+    "totalExternalCosts": 0,
+    "isNoTakeProfit": true,
+    "isNoStopLoss": true,
+    "lotCount": 0.661997,
+    "openPositionActionType": 0,
+    "orderID": 391213449,
+    "orderType": 17,
+    "statusID": 11,
+    "CID": 10000001,
+    "openDateTime": "2026-10-30T21:08:20.19Z",
+    "lastUpdate": "2026-10-30T21:08:20.19Z"
+   }
+  ],
+  "ordersForClose": [],
+  "ordersForCloseMultiple": [],
+  "bonusCredit": 0
+ }
+}

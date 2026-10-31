@@ -1,0 +1,43 @@
+{
+ "nombre": "d-satelite-3.5-vs-2.9",
+ "descripcion": "Nuevo satélite 3.5 % → C1 compra; 2.9 % → se queda en efectivo",
+ "efectivoUSD": 5000,
+ "objetivo": {
+  "pesos": {
+   "SPY": "actual",
+   "DIA": "actual",
+   "XLF": "actual",
+   "XLE": "actual",
+   "IWM": 0.035,
+   "EFA": 0.029
+  },
+  "roles": {
+   "IWM": "Satélite",
+   "EFA": "Satélite"
+  }
+ },
+ "esperado": {
+  "ordenes": [
+   [
+    "IWM",
+    "compra",
+    "C1",
+    1295.33
+   ]
+  ],
+  "acciones": {
+   "IWM": [
+    "comprar",
+    "C1"
+   ],
+   "EFA": [
+    "mantener",
+    null
+   ]
+  },
+  "motivos": {
+   "EFA": "Peso 2.9 % menor al mínimo de 3 % para abrir posición",
+   "IWM": "Entra al objetivo con 3.5 % (Satélite, señal Compra 59 %)"
+  }
+ }
+}

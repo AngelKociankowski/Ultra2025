@@ -1,0 +1,32 @@
+{
+ "nombre": "l-sin-asignacion",
+ "descripcion": "Símbolo sin asignación verificada en eToro → omitida con alerta",
+ "efectivoUSD": 5000,
+ "mapaQuitar": [
+  "XLK"
+ ],
+ "objetivo": {
+  "pesos": {
+   "SPY": "actual",
+   "DIA": "actual",
+   "XLF": "actual",
+   "XLE": "actual",
+   "XLK": 0.05
+  }
+ },
+ "esperado": {
+  "ordenes": [],
+  "acciones": {
+   "XLK": [
+    "omitida",
+    "C1"
+   ]
+  },
+  "razones": {
+   "XLK": "Sin instrumento verificado en eToro"
+  },
+  "alertas": [
+   "XLK sin instrumento verificado en eToro"
+  ]
+ }
+}

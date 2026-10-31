@@ -1,0 +1,49 @@
+{
+ "nombre": "f-minimo-99-y-v1-60",
+ "descripcion": "Orden de 99 USD → omitida; V1 de 60 USD → se hace",
+ "quitarSyms": [
+  "SPY",
+  "DIA",
+  "XLF",
+  "XLE"
+ ],
+ "agregarLotes": [
+  {
+   "sym": "GLD",
+   "instrumentId": 3025,
+   "positionId": 2600000102,
+   "unidades": 0.168645,
+   "costoUSD": 60,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  }
+ ],
+ "efectivoUSD": 1440,
+ "objetivo": {
+  "pesos": {
+   "SPY": 0.066
+  }
+ },
+ "esperado": {
+  "ordenes": [
+   [
+    "GLD",
+    "venta",
+    "V1",
+    null
+   ]
+  ],
+  "acciones": {
+   "GLD": [
+    "vender",
+    "V1"
+   ],
+   "SPY": [
+    "omitida",
+    "C1"
+   ]
+  },
+  "razones": {
+   "SPY": "Menor a US$ 100"
+  }
+ }
+}

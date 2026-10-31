@@ -1,0 +1,209 @@
+{
+ "nombre": "h-noticias",
+ "descripcion": "Evento confirmado en candidato → vetada; en acción en cartera → N2; ETF con fusion_pendiente → nada; con deslistado → N2",
+ "efectivoUSD": 5000,
+ "agregarLotes": [
+  {
+   "sym": "AAPL",
+   "instrumentId": 1001,
+   "positionId": 2600000103,
+   "unidades": 5,
+   "costoUSD": 1700,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  }
+ ],
+ "objetivo": {
+  "pesos": {
+   "SPY": "actual",
+   "DIA": "actual",
+   "XLF": "actual",
+   "XLE": "actual",
+   "AAPL": "actual",
+   "IWM": 0.04
+  }
+ },
+ "notas": [
+  {
+   "id": "n1",
+   "titulo": "IWM: quiebra",
+   "medio": "Reuters",
+   "url": "https://www.reuters.com/a1",
+   "fecha": "2026-11-02",
+   "tema": "empresa",
+   "simbolos": [
+    "IWM"
+   ],
+   "resumen": "Según la nota.",
+   "evento": {
+    "categoria": "quiebra",
+    "simbolo": "IWM",
+    "magnitudPct": null,
+    "descripcion": "Lo dice la nota."
+   }
+  },
+  {
+   "id": "n2",
+   "titulo": "IWM: quiebra",
+   "medio": "WSJ",
+   "url": "https://www.wsj.com/a2",
+   "fecha": "2026-11-02",
+   "tema": "empresa",
+   "simbolos": [
+    "IWM"
+   ],
+   "resumen": "Según la nota.",
+   "evento": {
+    "categoria": "quiebra",
+    "simbolo": "IWM",
+    "magnitudPct": null,
+    "descripcion": "Lo dice la nota."
+   }
+  },
+  {
+   "id": "n3",
+   "titulo": "AAPL: fraude",
+   "medio": "Reuters",
+   "url": "https://www.reuters.com/a3",
+   "fecha": "2026-11-02",
+   "tema": "empresa",
+   "simbolos": [
+    "AAPL"
+   ],
+   "resumen": "Según la nota.",
+   "evento": {
+    "categoria": "fraude",
+    "simbolo": "AAPL",
+    "magnitudPct": null,
+    "descripcion": "Lo dice la nota."
+   }
+  },
+  {
+   "id": "n4",
+   "titulo": "AAPL: fraude",
+   "medio": "CNBC",
+   "url": "https://www.cnbc.com/a4",
+   "fecha": "2026-11-02",
+   "tema": "empresa",
+   "simbolos": [
+    "AAPL"
+   ],
+   "resumen": "Según la nota.",
+   "evento": {
+    "categoria": "fraude",
+    "simbolo": "AAPL",
+    "magnitudPct": null,
+    "descripcion": "Lo dice la nota."
+   }
+  },
+  {
+   "id": "n5",
+   "titulo": "XLF: fusion_pendiente",
+   "medio": "Reuters",
+   "url": "https://www.reuters.com/a5",
+   "fecha": "2026-11-02",
+   "tema": "empresa",
+   "simbolos": [
+    "XLF"
+   ],
+   "resumen": "Según la nota.",
+   "evento": {
+    "categoria": "fusion_pendiente",
+    "simbolo": "XLF",
+    "magnitudPct": null,
+    "descripcion": "Lo dice la nota."
+   }
+  },
+  {
+   "id": "n6",
+   "titulo": "XLF: fusion_pendiente",
+   "medio": "FT",
+   "url": "https://www.ft.com/a6",
+   "fecha": "2026-11-02",
+   "tema": "empresa",
+   "simbolos": [
+    "XLF"
+   ],
+   "resumen": "Según la nota.",
+   "evento": {
+    "categoria": "fusion_pendiente",
+    "simbolo": "XLF",
+    "magnitudPct": null,
+    "descripcion": "Lo dice la nota."
+   }
+  },
+  {
+   "id": "n7",
+   "titulo": "XLE: deslistado",
+   "medio": "Reuters",
+   "url": "https://www.reuters.com/a7",
+   "fecha": "2026-11-02",
+   "tema": "empresa",
+   "simbolos": [
+    "XLE"
+   ],
+   "resumen": "Según la nota.",
+   "evento": {
+    "categoria": "deslistado",
+    "simbolo": "XLE",
+    "magnitudPct": null,
+    "descripcion": "Lo dice la nota."
+   }
+  },
+  {
+   "id": "n8",
+   "titulo": "XLE: deslistado",
+   "medio": "Bloomberg",
+   "url": "https://www.bloomberg.com/a8",
+   "fecha": "2026-11-02",
+   "tema": "empresa",
+   "simbolos": [
+    "XLE"
+   ],
+   "resumen": "Según la nota.",
+   "evento": {
+    "categoria": "deslistado",
+    "simbolo": "XLE",
+    "magnitudPct": null,
+    "descripcion": "Lo dice la nota."
+   }
+  }
+ ],
+ "esperado": {
+  "ordenes": [
+   [
+    "XLE",
+    "venta",
+    "N2",
+    null
+   ],
+   [
+    "AAPL",
+    "venta",
+    "N2",
+    null
+   ]
+  ],
+  "acciones": {
+   "IWM": [
+    "vetada",
+    "C1"
+   ],
+   "AAPL": [
+    "vender",
+    "N2"
+   ],
+   "XLF": [
+    "mantener",
+    null
+   ],
+   "XLE": [
+    "vender",
+    "N2"
+   ]
+  },
+  "motivos": {
+   "AAPL": "Evento confirmado: fraude (Reuters, CNBC)",
+   "XLE": "Evento confirmado: deslistado (Reuters, Bloomberg)"
+  }
+ }
+}

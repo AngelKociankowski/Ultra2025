@@ -1,0 +1,34 @@
+{
+ "nombre": "b-gld-evitar",
+ "descripcion": "GLD en cartera (1 unidad, sin mover los pesos de lo demás fuera de la banda) con señal 1 (Evitar, 47 %) → V1 vende todo",
+ "agregarLotes": [
+  {
+   "sym": "GLD",
+   "instrumentId": 3025,
+   "positionId": 2600000101,
+   "unidades": 1,
+   "costoUSD": 350,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  }
+ ],
+ "objetivo": null,
+ "esperado": {
+  "ordenes": [
+   [
+    "GLD",
+    "venta",
+    "V1",
+    null
+   ]
+  ],
+  "acciones": {
+   "GLD": [
+    "vender",
+    "V1"
+   ]
+  },
+  "motivos": {
+   "GLD": "Pasó a Evitar (47 %)"
+  }
+ }
+}

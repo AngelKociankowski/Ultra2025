@@ -1,0 +1,46 @@
+{
+ "nombre": "i-analisis-parcial",
+ "descripcion": "Análisis parcial → solo V1 y N2 (el C1 se queda)",
+ "parcial": true,
+ "efectivoUSD": 5000,
+ "agregarLotes": [
+  {
+   "sym": "GLD",
+   "instrumentId": 3025,
+   "positionId": 2600000104,
+   "unidades": 10,
+   "costoUSD": 3500,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  }
+ ],
+ "objetivo": {
+  "pesos": {
+   "SPY": "actual",
+   "DIA": "actual",
+   "XLF": "actual",
+   "XLE": "actual",
+   "IWM": 0.04
+  }
+ },
+ "esperado": {
+  "modo": "restringido",
+  "ordenes": [
+   [
+    "GLD",
+    "venta",
+    "V1",
+    null
+   ]
+  ],
+  "acciones": {
+   "IWM": [
+    "mantener",
+    null
+   ],
+   "GLD": [
+    "vender",
+    "V1"
+   ]
+  }
+ }
+}

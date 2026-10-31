@@ -1,0 +1,72 @@
+{
+ "rates": [
+  {
+   "instrumentID": 3000,
+   "ask": 755.29,
+   "bid": 755.26,
+   "lastExecution": 755.26,
+   "conversionRateAsk": 1,
+   "conversionRateBid": 1,
+   "date": "2026-10-30T19:59:57.0102154Z",
+   "unitMargin": 755.26,
+   "unitMarginAsk": 755.29,
+   "unitMarginBid": 755.26,
+   "priceRateID": 162682070821,
+   "bidDiscounted": 755.26,
+   "askDiscounted": 755.29,
+   "unitMarginBidDiscounted": 755.26,
+   "unitMarginAskDiscounted": 755.29
+  },
+  {
+   "instrumentID": 3026,
+   "ask": 517.33,
+   "bid": 517.32,
+   "lastExecution": 517.32,
+   "conversionRateAsk": 1,
+   "conversionRateBid": 1,
+   "date": "2026-10-30T19:59:55.228908Z",
+   "unitMargin": 517.32,
+   "unitMarginAsk": 517.33,
+   "unitMarginBid": 517.32,
+   "priceRateID": 162682102235,
+   "bidDiscounted": 517.32,
+   "askDiscounted": 517.33,
+   "unitMarginBidDiscounted": 517.32,
+   "unitMarginAskDiscounted": 517.33
+  },
+  {
+   "instrumentID": 3004,
+   "ask": 56.54,
+   "bid": 56.53,
+   "lastExecution": 56.53,
+   "conversionRateAsk": 1,
+   "conversionRateBid": 1,
+   "date": "2026-10-30T19:59:54.8995604Z",
+   "unitMargin": 56.53,
+   "unitMarginAsk": 56.54,
+   "unitMarginBid": 56.53,
+   "priceRateID": 162682102135,
+   "bidDiscounted": 56.53,
+   "askDiscounted": 56.54,
+   "unitMarginBidDiscounted": 56.53,
+   "unitMarginAskDiscounted": 56.54
+  },
+  {
+   "instrumentID": 3008,
+   "ask": 70.05,
+   "bid": 70.04,
+   "lastExecution": 70.04,
+   "conversionRateAsk": 1,
+   "conversionRateBid": 1,
+   "date": "2026-10-30T19:59:53.445873Z",
+   "unitMargin": 70.04,
+   "unitMarginAsk": 70.05,
+   "unitMarginBid": 70.04,
+   "priceRateID": 162682101687,
+   "bidDiscounted": 70.04,
+   "askDiscounted": 70.05,
+   "unitMarginBidDiscounted": 70.04,
+   "unitMarginAskDiscounted": 70.05
+  }
+ ]
+}

@@ -1,0 +1,59 @@
+{
+ "_nota": "SINTÉTICO (T09–T11): tasas del lunes 2-nov 9:50 ET",
+ "rates": [
+  {
+   "instrumentID": 3000,
+   "ask": 758.24,
+   "bid": 758.2,
+   "lastExecution": 758.2,
+   "conversionRateAsk": 1,
+   "conversionRateBid": 1,
+   "date": "2026-11-02T14:50:00Z"
+  },
+  {
+   "instrumentID": 3026,
+   "ask": 519.04,
+   "bid": 519,
+   "lastExecution": 519,
+   "conversionRateAsk": 1,
+   "conversionRateBid": 1,
+   "date": "2026-11-02T14:50:00Z"
+  },
+  {
+   "instrumentID": 3004,
+   "ask": 56.81,
+   "bid": 56.8,
+   "lastExecution": 56.8,
+   "conversionRateAsk": 1,
+   "conversionRateBid": 1,
+   "date": "2026-11-02T14:50:00Z"
+  },
+  {
+   "instrumentID": 3008,
+   "ask": 70.12,
+   "bid": 70.1,
+   "lastExecution": 70.1,
+   "conversionRateAsk": 1,
+   "conversionRateBid": 1,
+   "date": "2026-11-02T14:50:00Z"
+  },
+  {
+   "instrumentID": 1001,
+   "ask": 345.1,
+   "bid": 345,
+   "lastExecution": 345,
+   "conversionRateAsk": 1,
+   "conversionRateBid": 1,
+   "date": "2026-11-02T14:50:00Z"
+  },
+  {
+   "instrumentID": 63,
+   "ask": 18.72,
+   "bid": 18.7,
+   "lastExecution": 18.7,
+   "conversionRateAsk": 1,
+   "conversionRateBid": 1,
+   "date": "2026-11-02T14:50:00Z"
+  }
+ ]
+}

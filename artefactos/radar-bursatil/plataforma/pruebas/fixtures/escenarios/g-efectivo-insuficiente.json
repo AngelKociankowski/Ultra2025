@@ -1,0 +1,34 @@
+{
+ "nombre": "g-efectivo-insuficiente",
+ "descripcion": "Efectivo insuficiente → todas las compras se escalan por el mismo factor",
+ "efectivoUSD": 1000,
+ "objetivo": {
+  "pesos": {
+   "SPY": "actual",
+   "DIA": "actual",
+   "XLF": "actual",
+   "XLE": "actual",
+   "IWM": 0.04,
+   "EFA": 0.04
+  }
+ },
+ "esperado": {
+  "ordenes": [
+   [
+    "IWM",
+    "compra",
+    "C1",
+    500.0
+   ],
+   [
+    "EFA",
+    "compra",
+    "C1",
+    500.0
+   ]
+  ],
+  "alertas": [
+   "Compras escaladas al 37.9 %"
+  ]
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "page": 1,
+ "pageSize": 20,
+ "totalItems": 2,
+ "items": [
+  {
+   "instrumentId": 3021,
+   "internalSymbolFull": "XLK",
+   "displayname": "State Street Technology Select Sector SPDR ETF",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 179.51
+  },
+  {
+   "instrumentId": 8795,
+   "internalSymbolFull": "XLKS.L",
+   "displayname": "Invesco Technology S&P US Select Sector UCITS ETF",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 1037.4
+  }
+ ]
+}

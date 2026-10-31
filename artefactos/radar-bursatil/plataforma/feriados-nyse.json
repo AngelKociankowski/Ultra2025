@@ -1,0 +1,185 @@
+{
+ "2026": [
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2026-12-25",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Christmas"
+  },
+  {
+   "adjCloseTime": "13:00",
+   "adjOpenTime": null,
+   "date": "2026-12-24",
+   "exchange": "NYSE",
+   "isClosed": null,
+   "isFullyClosed": false,
+   "name": "Christmas Eve (early close)"
+  },
+  {
+   "adjCloseTime": "13:00",
+   "adjOpenTime": null,
+   "date": "2026-11-27",
+   "exchange": "NYSE",
+   "isClosed": null,
+   "isFullyClosed": false,
+   "name": "Day after Thanksgiving (early close)"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2026-11-26",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Thanksgiving Day"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2026-09-07",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Labor Day"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2026-07-03",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Independence Day"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2026-06-19",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Juneteenth"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2026-05-25",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Memorial Day"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2026-04-03",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Good Friday"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2026-02-16",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Washington's Birthday"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2026-01-19",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Martin Luther King, Jr. Day"
+  }
+ ],
+ "2027": [
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2027-01-01",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "New Years Day"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2027-01-18",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Martin Luther King, Jr. Day"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2027-02-15",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Washington's Birthday"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2027-03-26",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Good Friday"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2027-05-31",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Memorial Day"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2027-06-18",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Juneteenth"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2027-07-05",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Independence Day"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2027-09-06",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Labor Day"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2027-11-25",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Thanksgiving Day"
+  },
+  {
+   "adjCloseTime": "13:00",
+   "adjOpenTime": null,
+   "date": "2027-11-26",
+   "exchange": "NYSE",
+   "isClosed": null,
+   "name": "Day after Thanksgiving (early close)"
+  },
+  {
+   "adjCloseTime": null,
+   "adjOpenTime": null,
+   "date": "2027-12-24",
+   "exchange": "NYSE",
+   "isClosed": true,
+   "name": "Christmas"
+  }
+ ],
+ "_nota": "NYSE. 2026: las 11 filas de feriados-2026 del volcado de db del 30-oct (FMP holidays-by-exchange). 2027: NYSE Group, \"NYSE Group Announces 2025, 2026 and 2027 Holiday and Early Closings Calendar\" (Business Wire, 2024-11-08)."
+}

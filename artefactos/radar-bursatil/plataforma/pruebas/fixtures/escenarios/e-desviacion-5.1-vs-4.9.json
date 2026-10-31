@@ -1,0 +1,48 @@
+{
+ "nombre": "e-desviacion-5.1-vs-4.9",
+ "descripcion": "Desviación de 5.1 pts → R1 (venta parcial FIFO); 4.9 pts → mantener. Unidades: 0.051 × 37 009.48 / 758.20 = 2.489426 (6 decimales hacia abajo); FIFO: lote 1 completo (0.660414) + 1.829012 del lote 2",
+ "efectivoUSD": 5000,
+ "objetivo": {
+  "pesos": {
+   "SPY": "actual-0.051",
+   "DIA": "actual+0.049",
+   "XLF": "actual",
+   "XLE": "actual"
+  }
+ },
+ "esperado": {
+  "ordenes": [
+   [
+    "SPY",
+    "venta",
+    "R1",
+    null
+   ]
+  ],
+  "acciones": {
+   "SPY": [
+    "vender",
+    "R1"
+   ],
+   "DIA": [
+    "mantener",
+    null
+   ]
+  },
+  "cierres": {
+   "SPY": [
+    [
+     2600000001,
+     null
+    ],
+    [
+     2600000002,
+     1.829012
+    ]
+   ]
+  },
+  "motivos": {
+   "SPY": "Desviación de +5.1 pts contra el objetivo (56.2 % → 51.1 %)"
+  }
+ }
+}

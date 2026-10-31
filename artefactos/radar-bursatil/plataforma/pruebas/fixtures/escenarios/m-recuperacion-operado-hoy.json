@@ -1,0 +1,30 @@
+{
+ "nombre": "m-recuperacion-operado-hoy",
+ "descripcion": "Recuperación con operadoHoy → sin órdenes para esos símbolos",
+ "agregarLotes": [
+  {
+   "sym": "GLD",
+   "instrumentId": 3025,
+   "positionId": 2600000105,
+   "unidades": 10,
+   "costoUSD": 3500,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  }
+ ],
+ "operadoHoy": [
+  "GLD"
+ ],
+ "objetivo": null,
+ "esperado": {
+  "ordenes": [],
+  "acciones": {
+   "GLD": [
+    "omitida",
+    "V1"
+   ]
+  },
+  "razones": {
+   "GLD": "Ya recibió una orden hoy (recuperación)"
+  }
+ }
+}

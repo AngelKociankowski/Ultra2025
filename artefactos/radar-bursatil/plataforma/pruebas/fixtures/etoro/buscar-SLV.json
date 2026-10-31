@@ -1,0 +1,37 @@
+{
+ "page": 1,
+ "pageSize": 20,
+ "totalItems": 3,
+ "items": [
+  {
+   "instrumentId": 4430,
+   "internalSymbolFull": "SLV",
+   "displayname": "iShares Silver Trust",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 44.6
+  },
+  {
+   "instrumentId": 8999,
+   "internalSymbolFull": "SLVM",
+   "displayname": "Sylvamo Corp.",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 5,
+   "currentRate": 32.24
+  },
+  {
+   "instrumentId": 12157,
+   "internalSymbolFull": "SLVR.L",
+   "displayname": "WisdomTree Silver",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 6,
+   "currentRate": 39.87
+  }
+ ]
+}

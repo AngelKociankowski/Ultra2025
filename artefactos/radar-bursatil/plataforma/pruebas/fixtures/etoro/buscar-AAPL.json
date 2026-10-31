@@ -1,0 +1,47 @@
+{
+ "page": 1,
+ "pageSize": 20,
+ "totalItems": 4,
+ "items": [
+  {
+   "instrumentId": 1001,
+   "internalSymbolFull": "AAPL",
+   "displayname": "Apple",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 5,
+   "currentRate": 344.63
+  },
+  {
+   "instrumentId": 15569,
+   "internalSymbolFull": "AAPL.24-7",
+   "displayname": "Apple 24/7",
+   "isDelisted": false,
+   "isCurrentlyTradable": true,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 5,
+   "currentRate": 344.59
+  },
+  {
+   "instrumentId": 14254,
+   "internalSymbolFull": "AAPL.EUR",
+   "displayname": "Apple",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 5,
+   "currentRate": 308.45
+  },
+  {
+   "instrumentId": 8754,
+   "internalSymbolFull": "AAPL.RTH",
+   "displayname": "Apple",
+   "isDelisted": false,
+   "isCurrentlyTradable": false,
+   "isBuyEnabled": true,
+   "internalAssetClassId": 5,
+   "currentRate": 344.63
+  }
+ ]
+}

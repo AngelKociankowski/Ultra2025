@@ -1,0 +1,60 @@
+{
+ "instrumentDisplayDatas": [
+  {
+   "instrumentID": 63,
+   "instrumentDisplayName": "USD/MXN",
+   "instrumentTypeID": 1,
+   "symbolFull": "USDMXN",
+   "exchangeID": 1
+  },
+  {
+   "instrumentID": 1001,
+   "instrumentDisplayName": "Apple",
+   "instrumentTypeID": 5,
+   "symbolFull": "AAPL",
+   "exchangeID": 4
+  },
+  {
+   "instrumentID": 3000,
+   "instrumentDisplayName": "State Street SPDR S&P 500 ETF",
+   "instrumentTypeID": 6,
+   "symbolFull": "SPY",
+   "exchangeID": 5
+  },
+  {
+   "instrumentID": 3004,
+   "instrumentDisplayName": "State Street Financial Select Sector SPDR ETF",
+   "instrumentTypeID": 6,
+   "symbolFull": "XLF",
+   "exchangeID": 5
+  },
+  {
+   "instrumentID": 3008,
+   "instrumentDisplayName": "State Street Energy Select Sector SPDR ETF",
+   "instrumentTypeID": 6,
+   "symbolFull": "XLE",
+   "exchangeID": 5
+  },
+  {
+   "instrumentID": 3020,
+   "instrumentDisplayName": "iShares 20+ Year Treasury Bond ETF ",
+   "instrumentTypeID": 6,
+   "symbolFull": "TLT",
+   "exchangeID": 4
+  },
+  {
+   "instrumentID": 3025,
+   "instrumentDisplayName": "SPDR Gold",
+   "instrumentTypeID": 6,
+   "symbolFull": "GLD",
+   "exchangeID": 5
+  },
+  {
+   "instrumentID": 3026,
+   "instrumentDisplayName": "State Street SPDR Dow Jones In",
+   "instrumentTypeID": 6,
+   "symbolFull": "DIA.US",
+   "exchangeID": 5
+  }
+ ]
+}

@@ -1,0 +1,131 @@
+{
+ "nombre": "k-tope-12",
+ "descripcion": "15 órdenes posibles → 12, con prioridad V1/N2, V2, R1, C1 y monto descendente",
+ "efectivoUSD": 50000,
+ "agregarLotes": [
+  {
+   "sym": "GLD",
+   "instrumentId": 3025,
+   "positionId": 2600000201,
+   "unidades": 10,
+   "costoUSD": 3500,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  },
+  {
+   "sym": "TLT",
+   "instrumentId": 3020,
+   "positionId": 2600000202,
+   "unidades": 40,
+   "costoUSD": 3300,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  },
+  {
+   "sym": "SLV",
+   "instrumentId": 4430,
+   "positionId": 2600000203,
+   "unidades": 60,
+   "costoUSD": 2700,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  },
+  {
+   "sym": "PG",
+   "instrumentId": 9101,
+   "positionId": 2600000204,
+   "unidades": 10,
+   "costoUSD": 1600,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  },
+  {
+   "sym": "BDX",
+   "instrumentId": 9102,
+   "positionId": 2600000205,
+   "unidades": 10,
+   "costoUSD": 2000,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  },
+  {
+   "sym": "DIS",
+   "instrumentId": 9103,
+   "positionId": 2600000206,
+   "unidades": 10,
+   "costoUSD": 1100,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  },
+  {
+   "sym": "QQQ",
+   "instrumentId": 3006,
+   "positionId": 2600000207,
+   "unidades": 3,
+   "costoUSD": 2000,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  },
+  {
+   "sym": "IWM",
+   "instrumentId": 3005,
+   "positionId": 2600000208,
+   "unidades": 7,
+   "costoUSD": 1900,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  },
+  {
+   "sym": "EFA",
+   "instrumentId": 3009,
+   "positionId": 2600000209,
+   "unidades": 20,
+   "costoUSD": 2000,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  }
+ ],
+ "fuera": {
+  "QQQ": {
+   "desde": "2026-10-29",
+   "dias": 2
+  },
+  "IWM": {
+   "desde": "2026-10-29",
+   "dias": 2
+  },
+  "EFA": {
+   "desde": "2026-10-29",
+   "dias": 2
+  }
+ },
+ "objetivo": {
+  "pesos": {
+   "SPY": "actual+0.09",
+   "DIA": "actual+0.08",
+   "XLF": "actual+0.07",
+   "XLE": "actual+0.06",
+   "VWO": 0.04,
+   "XLK": 0.04
+  }
+ },
+ "esperado": {
+  "nOrdenes": 12,
+  "acciones": {
+   "XLE": [
+    "omitida",
+    "R1"
+   ],
+   "VWO": [
+    "omitida",
+    "C1"
+   ],
+   "XLK": [
+    "omitida",
+    "C1"
+   ],
+   "SPY": [
+    "comprar",
+    "R1"
+   ],
+   "QQQ": [
+    "vender",
+    "V2"
+   ]
+  },
+  "razones": {
+   "XLE": "Tope de 12 órdenes por día"
+  }
+ }
+}
