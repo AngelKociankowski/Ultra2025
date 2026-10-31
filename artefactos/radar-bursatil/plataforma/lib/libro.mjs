@@ -1,36 +1,27 @@
-// Libro del mandato "Cartera Radar" (12-plan §5.8, §5.9.2–§5.9.4, §5.10). Puro: no habla con la red.
+// Libro del mandato "Cartera Radar" (12-plan §5.8; 12b §E.5.3–§E.5.10, §E.11, §I). Puro: no habla con la red.
+// En memoria se usa la forma expandida (posiciones/lotes/pendientes); en db, la compacta v2 (libroADb / libroDeDb).
 import { CONFIG_DEFECTO } from "./constantes.mjs";
-import { fechaHoraET, mesDe } from "./tiempo.mjs";
+import { fechaHoraET } from "./tiempo.mjs";
+import { usd, u6, fx4, precio as px, ts } from "./db.mjs";
 
-export const MANDATO = Object.freeze({
-  nombre: "Cartera Radar", cuenta: "eToro Demo", inicio: "2026-10-30", capitalBaseMXN: 600000, fxInicio: 18.774,
-  capitalBaseUSD: 31959.09, perfil: "moderado", reglas: "1",
-});
+export const MANDATO = Object.freeze({ inicio: "2026-10-30", baseMXN: 600000, fx0: 18.774, baseUSD: 31959.09, perfil: "moderado" });
+// Base de rendimientos (cierre del 30-oct): [f, v, vm, spy, i, im]
+export const REF_BASE = Object.freeze(["2026-10-30", 31959.09, 600000, 755.26, 1, 1]);
 // Las 5 órdenes del 30-oct (00j; respuesta real de portfolio guardada el 30-oct). SPY va en dos órdenes.
 const ORDENES_INICIALES = Object.freeze([
-  { opId: "2026-10-30-SPY-INICIAL", orderId: 391213449, sym: "SPY", instrumentId: 3000, montoUSD: 500.00, enviadaEl: "2026-10-30T21:08:20.19Z" },
-  { opId: "2026-10-30-SPY-INICIAL-2", orderId: 391187994, sym: "SPY", instrumentId: 3000, montoUSD: 20273.09, enviadaEl: "2026-10-30T22:18:07.83Z" },
-  { opId: "2026-10-30-DIA-INICIAL", orderId: 391187995, sym: "DIA", instrumentId: 3026, montoUSD: 6164.71, enviadaEl: "2026-10-30T22:18:08.18Z" },
-  { opId: "2026-10-30-XLF-INICIAL", orderId: 391213506, sym: "XLF", instrumentId: 3004, montoUSD: 3132.01, enviadaEl: "2026-10-30T22:18:08.477Z" },
-  { opId: "2026-10-30-XLE-INICIAL", orderId: 391187996, sym: "XLE", instrumentId: 3008, montoUSD: 1888.72, enviadaEl: "2026-10-30T22:18:08.8Z" },
+  { id: "2026-10-30-SPY-INICIAL-1", o: 391213449, sym: "SPY", i: 3000, usd: 500.00, env: "2026-10-30T21:08:20Z" },
+  { id: "2026-10-30-SPY-INICIAL-2", o: 391187994, sym: "SPY", i: 3000, usd: 20273.09, env: "2026-10-30T22:18:07Z" },
+  { id: "2026-10-30-DIA-INICIAL", o: 391187995, sym: "DIA", i: 3026, usd: 6164.71, env: "2026-10-30T22:18:08Z" },
+  { id: "2026-10-30-XLF-INICIAL", o: 391213506, sym: "XLF", i: 3004, usd: 3132.01, env: "2026-10-30T22:18:08Z" },
+  { id: "2026-10-30-XLE-INICIAL", o: 391187996, sym: "XLE", i: 3008, usd: 1888.72, env: "2026-10-30T22:18:08Z" },
 ]);
-const MOTIVO_INICIAL = "Cartera inicial: buildPortfolio Moderado del análisis del 30-oct (600 000 MXN a 18.774)";
-// Asignación verificada el 30-oct (12-plan §0.7, §5.7.1): precio eToro = currentRate de la búsqueda con `fields`;
-// precio Radar = row.price del análisis del 30-oct. GLD no tiene precio eToro guardado: queda sin verificar (se verifica al usarse).
+const MOTIVO_INICIAL = "Cartera inicial: buildPortfolio Moderado del 30-oct (600 000 MXN a 18.774)";
+// Asignación verificada el 30-oct (12-plan §5.7.1): [sym, instrumentId, clase, verificadoEl, difPct]. GLD sin precio eToro guardado.
 const MAPA_SEMILLA = Object.freeze([
-  ["SPY", 3000, "SPY", "State Street SPDR S&P 500 ETF", 6, 755.72, 755.77],
-  ["DIA", 3026, "DIA.US", "State Street SPDR Dow Jones In", 6, 517.13, 517.13],
-  ["XLF", 3004, "XLF", "State Street Financial Select Sector SPDR ETF", 6, 56.51, 56.51],
-  ["XLE", 3008, "XLE", "State Street Energy Select Sector SPDR ETF", 6, 70.02, 70.02],
-  ["TLT", 3020, "TLT", "iShares 20+ Year Treasury Bond ETF", 6, 81.84, 81.84],
-  ["GLD", 3025, "GLD", "SPDR Gold Shares", 6, null, 355.78],
-  ["QQQ", 3006, "QQQ", "Invesco QQQ", 6, 690.49, 690.49],
-  ["IWM", 3005, "IWM", "Ishares Russell 2000 ETF", 6, 279.33, 279.33],
-  ["VWO", 4252, "VWO", "Vanguard FTSE Emerging Markets", 6, 55.51, 55.51],
-  ["EFA", 3009, "EFA", "iShares MSCI EAFE ETF", 6, 103.37, 103.37],
-  ["XLK", 3021, "XLK", "State Street Technology Select Sector SPDR ETF", 6, 179.51, 179.51],
-  ["SLV", 4430, "SLV", "iShares Silver Trust", 6, 44.6, 44.6],
-  ["USDMXN", 63, "USDMXN", "USD/MXN", 1, null, 18.774],
+  ["SPY", 3000, 6, "2026-10-30", -0.01], ["DIA", 3026, 6, "2026-10-30", 0], ["XLF", 3004, 6, "2026-10-30", 0], ["XLE", 3008, 6, "2026-10-30", 0],
+  ["TLT", 3020, 6, "2026-10-30", 0], ["GLD", 3025, 6, null, null], ["QQQ", 3006, 6, "2026-10-30", 0], ["IWM", 3005, 6, "2026-10-30", 0],
+  ["VWO", 4252, 6, "2026-10-30", 0], ["EFA", 3009, 6, "2026-10-30", 0], ["XLK", 3021, 6, "2026-10-30", 0], ["SLV", 4430, 6, "2026-10-30", 0],
+  ["USDMXN", 63, 1, "2026-10-30", null],
 ]);
 
 export const cts = x => Math.round(x * 100) / 100;
@@ -38,36 +29,76 @@ const seis = x => Math.floor(x * 1e6 + 1e-6) / 1e6;
 const copia = o => JSON.parse(JSON.stringify(o));
 const isNum = v => typeof v === "number" && Number.isFinite(v);
 const num = (...vs) => { for (const v of vs) if (isNum(v)) return v; return null; };
+const esFecha = v => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
-function opDe({ id, fechaIso, sym, instrumentId, lado, regla, motivo, montoUSD = null, unidades = null, orderId = null, estado, simulacion = false, noticias = [] }) {
-  const et = fechaHoraET(Date.parse(fechaIso));
-  return { id, fecha: et.fecha, hora: et.hora, sym, instrumentId, lado, regla, motivo, montoUSD, unidades, orderId, positionIds: [],
-    estado, ejecucion: null, realizadoUSD: null, error: null, noticias, simulacion };
-}
-
+// Semilla (12b §E.11): 5 documentos nuevos en forma de db (sin h; lo pone lib/db.mjs al armar el grupo)
 export function semilla({ ahora = Date.now } = {}) {
-  const at = ahora();
-  const efectivo = cts(MANDATO.capitalBaseUSD - ORDENES_INICIALES.reduce((a, o) => a + o.montoUSD, 0));
-  const libro = {
-    kind: "carteraLibro", v: 1, at, mandato: Object.assign({}, MANDATO), efectivoUSD: efectivo, realizadoUSD: 0, posiciones: [],
-    pendientes: ORDENES_INICIALES.map(o => ({ opId: o.opId, orderId: o.orderId, sym: o.sym, instrumentId: o.instrumentId, lado: "compra", montoUSD: o.montoUSD, positionId: null, unidades: null, enviadaEl: o.enviadaEl })),
-    fueraDelObjetivo: {}, operadoHoy: { fecha: null, syms: [] },
-    ultimaValuacion: { at, valorUSD: MANDATO.capitalBaseUSD, valorMXN: MANDATO.capitalBaseMXN, fx: MANDATO.fxInicio }, ultimaRutina: null,
-  };
-  const ops = { "2026-10": { kind: "carteraOps", v: 1, mes: "2026-10", at,
-    ops: ORDENES_INICIALES.map(o => opDe({ id: o.opId, fechaIso: o.enviadaEl, sym: o.sym, instrumentId: o.instrumentId, lado: "compra", regla: "INICIAL", motivo: MOTIVO_INICIAL, montoUSD: o.montoUSD, orderId: o.orderId, estado: "pendiente" })) } };
-  const serie = { kind: "carteraSerie", v: 1, anio: 2026, at, base: { fecha: "2026-10-30", valorUSD: MANDATO.capitalBaseUSD, valorMXN: MANDATO.capitalBaseMXN, fx: MANDATO.fxInicio, spy: 755.26 }, puntos: [] };
-  const instrumentos = {};
-  for (const [sym, id, simboloEToro, nombre, clase, pe, pr] of MAPA_SEMILLA) {
-    const verificado = isNum(pe) && isNum(pr);
-    instrumentos[sym] = { instrumentId: id, simboloEToro, nombre, clase, verificadoEl: verificado ? "2026-10-30" : null, precioEToro: pe, precioRadar: pr,
-      difPct: verificado ? Math.round((pe / pr - 1) * 10000) / 100 : null };
-  }
-  const mapa = { kind: "etoroMapa", v: 1, at, instrumentos, rechazados: { DIA: [{ instrumentId: 100580, motivo: "clase 10 (cripto)" }] } };
-  const config = Object.assign({ kind: "rutinaConfig", v: 1, at }, copia(CONFIG_DEFECTO));
-  const indiceBitacora = { kind: "bitacoraIndice", v: 1, at, dias: [] };
-  return { libro, ops, serie, mapa, config, indiceBitacora };
+  const at = ts(ahora());
+  const efectivo = usd(MANDATO.baseUSD - ORDENES_INICIALES.reduce((a, o) => a + o.usd, 0));
+  const pend = ORDENES_INICIALES.map(o => ({ id: o.id, dia: "2026-10-30", sym: o.sym, i: o.i, lado: "c", o: o.o, usd: o.usd, u: null, pos: null, env: o.env, est: "aceptada" }));
+  const refs = { base: REF_BASE.slice(), dia: REF_BASE.slice(), sem: REF_BASE.slice(), mes: REF_BASE.slice(), anio: REF_BASE.slice() };
+  const libro = { kind: "carteraLibro", v: 2, at, mandato: Object.assign({}, MANDATO), efectivo, realizado: 0, lotes: [], pend, fuera: {}, precios: {}, refs };
+  const ops = { kind: "carteraOps", v: 2, f: "2026-10-30", ops: ORDENES_INICIALES.map(o => ({ id: o.id, sym: o.sym, i: o.i, lado: "c", regla: "INICIAL", mot: MOTIVO_INICIAL,
+    usd: o.usd, u: null, est: "aceptada", o: o.o, pos: [], px: null, uej: null, usdej: null, real: null, env: o.env, err: null, not: [], sim: false })) };
+  const mapa = { kind: "etoroMapa", v: 2, at, i: Object.fromEntries(MAPA_SEMILLA.map(([sym, id, clase, f, d]) => [sym, [id, clase, f, d]])), rech: { DIA: [[100580, "clase 10"]] } };
+  const config = Object.assign({ kind: "rutinaConfig", v: 2, at }, copia(CONFIG_DEFECTO));
+  const punto = { kind: "carteraPunto", v: 1, f: "2026-10-30", t: "16:00", v_: MANDATO.baseUSD, vm: MANDATO.baseMXN, e: efectivo, fx: MANDATO.fx0, spy: 755.26, i: 1, im: 1, fl: 0 };
+  return { "rutina-config": config, "cartera-libro": libro, "etoro-mapa": mapa, "ops-2026-10-30": ops, "punto-2026-10-30": punto };
 }
+
+// ---- forma de db ↔ forma de trabajo ----
+const LADO = { c: "compra", v: "venta" }, LADO_DB = { compra: "c", venta: "v" };
+// db v2 → memoria; las entradas malformadas se descartan con alerta (H15)
+export function libroDeDb(doc) {
+  const alertas = [], posiciones = [];
+  for (const l of Array.isArray(doc.lotes) ? doc.lotes : []) {
+    if (!Array.isArray(l) || l.length !== 7 || typeof l[0] !== "string" || !isNum(l[1]) || !isNum(l[2]) || !isNum(l[4]) || !isNum(l[5])) { alertas.push(`Lote mal formado en cartera-libro: ${JSON.stringify(l).slice(0, 60)}; se ignora.`); continue; }
+    let p = posiciones.find(x => x.sym === l[0]);
+    if (!p) { p = { sym: l[0], instrumentId: l[1], lotes: [] }; posiciones.push(p); }
+    p.lotes.push({ positionId: l[2], orderId: isNum(l[3]) ? l[3] : null, unidades: l[4], costoUSD: l[5], abiertaEl: String(l[6] || "") });
+  }
+  const pendientes = [];
+  for (const x of Array.isArray(doc.pend) ? doc.pend : []) {
+    if (!x || typeof x !== "object" || typeof x.id !== "string" || typeof x.sym !== "string" || !isNum(x.i) || !LADO[x.lado] || !["aceptada", "incierta"].includes(x.est)) { alertas.push(`Pendiente mal formado en cartera-libro: ${JSON.stringify(x).slice(0, 60)}; se ignora.`); continue; }
+    pendientes.push({ opId: x.id, dia: esFecha(x.dia) ? x.dia : x.id.slice(0, 10), orderId: isNum(x.o) ? x.o : null, sym: x.sym, instrumentId: x.i, lado: LADO[x.lado],
+      montoUSD: isNum(x.usd) ? x.usd : null, unidades: isNum(x.u) ? x.u : null, positionId: isNum(x.pos) ? x.pos : null, enviadaEl: String(x.env || ""), estado: x.est });
+  }
+  const fueraDelObjetivo = {};
+  for (const [sym, v] of Object.entries(doc.fuera || {})) if (Array.isArray(v) && esFecha(v[0]) && Number.isInteger(v[1])) fueraDelObjetivo[sym] = { desde: v[0], dias: v[1] };
+  const refs = copia(doc.refs);
+  return { libro: { mandato: copia(doc.mandato), efectivoUSD: doc.efectivo, realizadoUSD: doc.realizado, posiciones, pendientes, fueraDelObjetivo,
+    precios: copia(doc.precios || {}), refs, operadoHoy: { fecha: null, syms: [] }, ultimaRutina: refs && refs.dia ? refs.dia[0] : null }, alertas };
+}
+export function libroADb(L, atMs) {
+  const lotes = [];
+  for (const p of L.posiciones) for (const l of p.lotes) lotes.push([p.sym, p.instrumentId, l.positionId, l.orderId ?? null, u6(l.unidades), usd(l.costoUSD), ts(Date.parse(l.abiertaEl)) || l.abiertaEl]);
+  const pend = L.pendientes.map(x => ({ id: x.opId, dia: x.dia || x.opId.slice(0, 10), sym: x.sym, i: x.instrumentId, lado: LADO_DB[x.lado], o: x.orderId ?? null,
+    usd: x.montoUSD === null || x.montoUSD === undefined ? null : usd(x.montoUSD), u: x.unidades === null || x.unidades === undefined ? null : u6(x.unidades), pos: x.positionId ?? null,
+    env: ts(Date.parse(x.enviadaEl)) || x.enviadaEl, est: x.estado === "incierta" ? "incierta" : "aceptada" }));
+  const fuera = Object.fromEntries(Object.entries(L.fueraDelObjetivo || {}).map(([s, v]) => [s, [v.desde, v.dias]]));
+  const precios = Object.fromEntries(Object.entries(L.precios || {}).map(([s, v]) => [s, [px(v[0]), v[1]]]));
+  return { kind: "carteraLibro", v: 2, at: ts(atMs), mandato: copia(L.mandato), efectivo: usd(L.efectivoUSD), realizado: usd(L.realizadoUSD), lotes, pend, fuera, precios, refs: copia(L.refs) };
+}
+// etoro-mapa v2 ↔ memoria ({ instrumentos: { sym: {instrumentId, clase, verificadoEl, difPct} }, rechazados })
+export function mapaDeDb(doc) {
+  const instrumentos = {}, rechazados = {};
+  for (const [sym, v] of Object.entries((doc && doc.i) || {})) if (Array.isArray(v) && isNum(v[0])) instrumentos[sym] = { instrumentId: v[0], clase: v[1], verificadoEl: v[2] || null, difPct: isNum(v[3]) ? v[3] : null };
+  for (const [sym, v] of Object.entries((doc && doc.rech) || {})) if (Array.isArray(v)) rechazados[sym] = v.filter(Array.isArray).map(([instrumentId, motivo]) => ({ instrumentId, motivo }));
+  return { instrumentos, rechazados };
+}
+export function mapaADb(m, atMs) {
+  return { kind: "etoroMapa", v: 2, at: ts(atMs), i: Object.fromEntries(Object.entries(m.instrumentos).map(([s, x]) => [s, [x.instrumentId, x.clase, x.verificadoEl || null, isNum(x.difPct) ? x.difPct : null]])),
+    rech: Object.fromEntries(Object.entries(m.rechazados || {}).map(([s, l]) => [s, l.map(r => [r.instrumentId ?? null, String(r.motivo).slice(0, 40)])])) };
+}
+// ops-<f>: entradas válidas (H15) y documento nuevo
+export function opsValidas(doc, alertas = []) {
+  return (Array.isArray(doc && doc.ops) ? doc.ops : []).filter(o => {
+    const ok = o && typeof o === "object" && typeof o.id === "string" && typeof o.sym === "string" && (o.lado === "c" || o.lado === "v") && typeof o.est === "string";
+    if (!ok) alertas.push(`Operación mal formada en ops-${doc.f}: ${JSON.stringify(o).slice(0, 60)}; se ignora.`);
+    return ok;
+  });
+}
+export const opsNuevo = f => ({ kind: "carteraOps", v: 2, f, ops: [] });
 
 // ---- lecturas auxiliares de respuestas de eToro (formas observadas el 30-oct; las de posiciones se fijan en T09b) ----
 const cpDe = portafolio => (portafolio && portafolio.clientPortfolio) || portafolio || {};
@@ -114,47 +145,17 @@ function registrarVenta(L, { sym, positionId, unidades, precio }) {
 }
 
 // ordenes: { [orderId]: respuesta de orden(orderId) } para pendientes que ya no están ni en cola ni como posición.
-// ops: operaciones del mes (regla 2 de pertenencia). bids: { instrumentId: {bid} } para cierres sin fila en historial.
-export function conciliar({ libro, portafolio, historial, ahora, planRecuperado = null, ordenes = {}, ops = [], bids = {} }) {
+// ops: operaciones conocidas (regla 2 de pertenencia). bids: { instrumentId: {bid} } para cierres sin fila en historial.
+// La recuperación de ejecuciones abiertas (ejecucion-<f>) va aparte (12b §F.5).
+export function conciliar({ libro, portafolio, historial, ahora, ordenes = {}, ops = [], bids = {} }) {
   const L = copia(libro), eventos = [], alertas = [];
-  const t = typeof ahora === "function" ? ahora() : ahora, hoy = fechaHoraET(t).fecha;
+  const t = typeof ahora === "function" ? ahora() : ahora;
   const cp = cpDe(portafolio), posiciones = Array.isArray(cp.positions) ? cp.positions : [], enCola = Array.isArray(cp.ordersForOpen) ? cp.ordersForOpen : [];
   const colaIds = new Set(enCola.map(ordId).filter(x => x !== null));
-  const bidDe = id => (bids[id] && isNum(bids[id].bid) ? bids[id].bid : null);
-
-  // 0. Recuperación: lo que la sesión caída envió se adopta con su regla (§5.8)
-  if (planRecuperado && Array.isArray(planRecuperado.plan)) {
-    const inicio = num(planRecuperado.inicio) || 0, operados = [];
-    for (const o of planRecuperado.plan) {
-      if (o.lado === "compra") {
-        if (L.pendientes.some(p => p.opId === o.id)) continue;
-        const nueva = enCola.find(x => instId(x) === o.instrumentId && Date.parse(x.openDateTime) >= inicio && !L.pendientes.some(p => p.orderId === ordId(x)))
-          || posiciones.find(x => instId(x) === o.instrumentId && Date.parse(x.openDateTime) >= inicio && !L.posiciones.some(p => p.lotes.some(l => l.positionId === posId(x))) && !L.pendientes.some(p => p.orderId === ordId(x)));
-        if (!nueva) continue;
-        L.pendientes.push({ opId: o.id, orderId: ordId(nueva), sym: o.sym, instrumentId: o.instrumentId, lado: "compra", montoUSD: o.montoUSD, positionId: null, unidades: null, enviadaEl: new Date(inicio).toISOString() });
-        L.efectivoUSD = cts(L.efectivoUSD - o.montoUSD);
-        eventos.push({ tipo: "adoptada", opId: o.id, orden: o, orderId: ordId(nueva) });
-        operados.push(o.sym);
-      } else {
-        for (const c of o.cierres || []) {
-          const lote = L.posiciones.flatMap(p => p.lotes).find(l => l.positionId === c.positionId);
-          if (!lote || L.pendientes.some(p => p.lado === "venta" && p.positionId === c.positionId)) continue;
-          const pos = posiciones.find(x => posId(x) === c.positionId);
-          if (pos && !(num(pos.units) < lote.unidades - 1e-9)) continue;
-          L.pendientes.push({ opId: o.id, orderId: null, sym: o.sym, instrumentId: o.instrumentId, lado: "venta", montoUSD: null, positionId: c.positionId, unidades: c.unidades, enviadaEl: new Date(inicio).toISOString() });
-          eventos.push({ tipo: "adoptada", opId: o.id, orden: o, orderId: null });
-          operados.push(o.sym);
-        }
-      }
-    }
-    if (planRecuperado.de === hoy && operados.length) {
-      const prev = L.operadoHoy && L.operadoHoy.fecha === hoy ? L.operadoHoy.syms : [];
-      L.operadoHoy = { fecha: hoy, syms: [...new Set(prev.concat(operados))] };
-    }
-  }
+  const bidDe = id => (bids[id] && isNum(bids[id].bid) && bids[id].bid > 0 ? bids[id].bid : null);
 
   const lotes = () => L.posiciones.flatMap(p => p.lotes.map(l => ({ p, l })));
-  const opsOrden = new Set((Array.isArray(ops) ? ops : []).map(o => o && o.orderId).filter(x => x !== null && x !== undefined));
+  const opsOrden = new Set((Array.isArray(ops) ? ops : []).map(o => o && (o.o ?? o.orderId)).filter(x => x !== null && x !== undefined));
   const asignadas = new Set(lotes().map(x => x.l.positionId));
 
   // 1. Compras pendientes
@@ -162,7 +163,7 @@ export function conciliar({ libro, portafolio, historial, ahora, planRecuperado 
     let match = posiciones.filter(x => !asignadas.has(posId(x)) && pend.orderId !== null && ordId(x) === pend.orderId);
     if (!match.length) { // regla 3: la posición no trae orderID
       const c = posiciones.find(x => !asignadas.has(posId(x)) && ordId(x) === null && instId(x) === pend.instrumentId
-        && Date.parse(x.openDateTime) >= Date.parse(pend.enviadaEl) && isNum(x.amount) && Math.abs(x.amount / pend.montoUSD - 1) <= 0.01);
+        && Date.parse(x.openDateTime) >= Date.parse(pend.enviadaEl) - 120000 && isNum(x.amount) && Math.abs(x.amount / pend.montoUSD - 1) <= 0.01);
       if (c) match = [c];
     }
     if (match.length) {
@@ -183,11 +184,10 @@ export function conciliar({ libro, portafolio, historial, ahora, planRecuperado 
     if (err) {
       L.efectivoUSD = cts(L.efectivoUSD + pend.montoUSD);
       L.pendientes.splice(L.pendientes.indexOf(pend), 1);
-      eventos.push({ tipo: "rechazada", lado: "compra", opId: pend.opId, orderId: pend.orderId, sym: pend.sym, error: `errorCode ${o.errorCode}, statusID ${o.statusID}` });
+      eventos.push({ tipo: "no_ejecutada", lado: "compra", opId: pend.opId, orderId: pend.orderId, sym: pend.sym, error: `errorCode ${o.errorCode}, statusID ${o.statusID}` });
     } else {
-      if (pend.estado !== "desconocida") eventos.push({ tipo: "desconocida", lado: "compra", opId: pend.opId, orderId: pend.orderId, sym: pend.sym });
-      pend.estado = "desconocida";
-      alertas.push(`Compra de ${pend.sym} (orden ${pend.orderId === null ? "sin número" : pend.orderId}) sin rastro en eToro: el monto no vuelve al efectivo hasta aclararse.`);
+      if (pend.estado !== "incierta") eventos.push({ tipo: "incierta", lado: "compra", opId: pend.opId, orderId: pend.orderId, sym: pend.sym });
+      pend.estado = "incierta";
     }
   }
 
@@ -226,30 +226,45 @@ export function conciliar({ libro, portafolio, historial, ahora, planRecuperado 
     }
   }
   if (opsOrden.size) for (const x of posiciones) if (!asignadas.has(posId(x)) && opsOrden.has(ordId(x)) && !lotes().some(e => e.l.positionId === posId(x))) {
-    alertas.push(`Posición ${posId(x)} (orden ${ordId(x)}) aparece en las operaciones del mes sin pendiente: revisar.`);
+    alertas.push(`Posición ${posId(x)} (orden ${ordId(x)}) aparece en las operaciones sin pendiente: revisar.`);
   }
+  for (const x of L.pendientes) alertas.push(`Pendiente de confirmar: ${x.sym} ${x.lado} desde ${x.dia || String(x.enviadaEl).slice(0, 10)}`);
   return { libro: L, eventos, alertas };
 }
 const cts6 = x => Math.round(x * 1e6) / 1e6;
 
-// fx: { valor, fuente }. tasas: respuesta de tasas() o arreglo de rates.
+// Precio válido (12b §I, H8): número finito > 0 con fecha de hace < 20 min (si se conoce la hora de la valuación).
+const VIGENCIA_MS = 20 * 60000;
+export function precioValido(b, at) {
+  if (!b || !isNum(b.bid) || b.bid <= 0) return false;
+  if (at === null || at === undefined) return true;
+  const d = Date.parse(b.date);
+  return Number.isFinite(d) && Math.abs(at - d) < VIGENCIA_MS;
+}
+// fx: { valor, fuente }. tasas: respuesta de tasas() o arreglo de rates. Sin precio válido: último válido del libro
+// (libro.precios) o costo, con alerta; `precioValido:false` impide órdenes sobre ese símbolo.
 export function valuar({ libro, tasas, fx, at = null }) {
-  const bids = bidsDe(tasas), posiciones = [], alertas = [];
+  const bids = bidsDe(tasas), posiciones = [], alertas = [], precios = copia(libro.precios || {});
+  const hoy = at !== null && at !== undefined ? fechaHoraET(at).fecha : null;
   for (const p of libro.posiciones) {
     if (!p.lotes.length) continue;
     const unidades = cts6(p.lotes.reduce((a, l) => a + l.unidades, 0)), costo = cts(p.lotes.reduce((a, l) => a + l.costoUSD, 0));
-    const bid = bids[p.instrumentId] ? bids[p.instrumentId].bid : null;
-    if (bid === null) alertas.push(`${p.sym} sin precio de eToro: se valúa a costo.`);
-    const valor = cts(bid === null ? costo : unidades * bid);
-    posiciones.push({ sym: p.sym, instrumentId: p.instrumentId, unidades, costoUSD: costo, precioUSD: bid, valorUSD: valor, peso: 0,
+    const b = bids[p.instrumentId], valido = precioValido(b, at);
+    let pu = null;
+    if (valido) { pu = b.bid; if (hoy) precios[p.sym] = [b.bid, hoy]; }
+    else if (Array.isArray(precios[p.sym]) && isNum(precios[p.sym][0]) && precios[p.sym][0] > 0) { pu = precios[p.sym][0]; alertas.push(`Precio inválido de eToro para ${p.sym}; se valúa con el de ${precios[p.sym][1]}`); }
+    else alertas.push(`Precio inválido de eToro para ${p.sym}; se valúa a costo`);
+    const valor = cts(pu === null ? costo : unidades * pu);
+    posiciones.push({ sym: p.sym, instrumentId: p.instrumentId, unidades, costoUSD: costo, precioUSD: pu, precioValido: valido, valorUSD: valor, peso: 0,
       gpUSD: cts(valor - costo), gpPct: costo > 0 ? (valor / costo - 1) * 100 : 0, lotes: p.lotes.length });
   }
-  const pendientesUSD = cts(libro.pendientes.filter(x => x.lado === "compra").reduce((a, x) => a + x.montoUSD, 0));
+  for (const s of Object.keys(precios)) if (!libro.posiciones.some(p => p.sym === s && p.lotes.length)) delete precios[s];
+  const pendientesUSD = cts(libro.pendientes.filter(x => x.lado === "compra").reduce((a, x) => a + (x.montoUSD || 0), 0));
   const valorUSD = cts(posiciones.reduce((a, x) => a + x.valorUSD, 0) + libro.efectivoUSD + pendientesUSD);
   for (const x of posiciones) x.peso = valorUSD > 0 ? x.valorUSD / valorUSD : 0;
   const fxv = fx && isNum(fx.valor) ? fx.valor : null;
   return { at, fx: fxv, fxFuente: fx ? fx.fuente || null : null, valorUSD, efectivoUSD: libro.efectivoUSD, invertidoUSD: cts(valorUSD - libro.efectivoUSD),
-    valorMXN: fxv === null ? null : cts(valorUSD * fxv), posiciones, pendientesUSD, spyUSD: bids[3000] ? bids[3000].bid : null, alertas };
+    valorMXN: fxv === null ? null : cts(valorUSD * fxv), posiciones, pendientesUSD, spyUSD: precioValido(bids[3000], at) ? bids[3000].bid : null, precios, alertas };
 }
 
 // FIFO por abiertaEl. unidades null o ≥ 99 % del total → cierre total de cada lote.
@@ -268,6 +283,13 @@ export function unidadesAVender({ libro, sym, unidades }) {
     resto -= u;
   }
   return out.filter(c => c.unidades === null || c.unidades > 0);
+}
+
+// Forma v1 de una operación: solo la usa aplicarEjecucion (50-ejecutar de 12 §6.6), que B1 reemplaza por aplicarResultados.
+function opDe({ id, fechaIso, sym, instrumentId, lado, regla, motivo, montoUSD = null, unidades = null, orderId = null, estado, simulacion = false, noticias = [] }) {
+  const et = fechaHoraET(Date.parse(fechaIso));
+  return { id, fecha: et.fecha, hora: et.hora, sym, instrumentId, lado, regla, motivo, montoUSD, unidades, orderId, positionIds: [],
+    estado, ejecucion: null, realizadoUSD: null, error: null, noticias, simulacion };
 }
 
 // Tras 50-ejecutar. resultados: cada orden del plan con su resultado mezclado
@@ -318,32 +340,79 @@ export function aplicarEjecucion({ libro, ops, resultados, ahora }) {
   return { libro: L, ops: O };
 }
 
-// Aplica los eventos de conciliar a los documentos de operaciones ({ "<mes>": OpsDoc }). Devuelve meses tocados y alertas.
+// Aplica los eventos de conciliar a los documentos ops-<f> ({ "<f>": OpsDoc v2 }). El día de cada operación sale de su id.
 export function aplicarEventosOps({ docs, eventos, ahora }) {
-  const t = typeof ahora === "function" ? ahora() : ahora, iso = new Date(t).toISOString(), hoy = fechaHoraET(t).fecha, mesHoy = mesDe(hoy);
+  const t = typeof ahora === "function" ? ahora() : ahora, hoy = fechaHoraET(t).fecha;
   const D = copia(docs), tocados = new Set(), alertas = [];
-  const buscar = id => { for (const [mes, d] of Object.entries(D)) { const o = (d.ops || []).find(x => x.id === id); if (o) return { mes, o }; } return null; };
-  const docHoy = () => (D[mesHoy] = D[mesHoy] || { kind: "carteraOps", v: 1, mes: mesHoy, at: t, ops: [] });
+  const buscar = id => { const f = String(id).slice(0, 10), d = D[f]; const o = d && (d.ops || []).find(x => x.id === id); return o ? { f, o } : null; };
   const idLibre = base => { let id = base, k = 2; while (buscar(id)) id = `${base}-${k++}`; return id; };
   for (const e of eventos) {
     if (e.tipo === "ajuste") continue;
+    const ej = e.ejecucion || {};
     if (e.tipo === "externa") {
-      const op = opDe({ id: idLibre(`${hoy}-${e.sym}-EXTERNA`), fechaIso: iso, sym: e.sym, instrumentId: e.instrumentId, lado: "venta", regla: "EXTERNA", motivo: "Cerrada fuera de la rutina", estado: "ejecutada" });
-      Object.assign(op, { positionIds: e.positionIds, ejecucion: e.ejecucion, unidades: e.ejecucion.unidades, realizadoUSD: e.realizadoUSD });
-      docHoy().ops.push(op); tocados.add(mesHoy); continue;
-    }
-    if (e.tipo === "adoptada") {
-      if (buscar(e.opId)) continue;
-      const o = e.orden, op = opDe({ id: e.opId, fechaIso: iso, sym: o.sym, instrumentId: o.instrumentId, lado: o.lado, regla: o.regla, motivo: o.motivo, montoUSD: o.lado === "compra" ? o.montoUSD : null, orderId: e.orderId, estado: "enviada", noticias: o.noticias || [] });
-      docHoy().ops.push(op); tocados.add(mesHoy); continue;
+      D[hoy] = D[hoy] || opsNuevo(hoy);
+      D[hoy].ops.push({ id: idLibre(`${hoy}-${e.sym}-EXTERNA`), sym: e.sym, i: e.instrumentId, lado: "v", regla: "EXTERNA", mot: "Cerrada fuera de la rutina", usd: null, u: u6(ej.unidades),
+        est: "ejecutada", o: null, pos: e.positionIds || [], px: px(ej.precio), uej: u6(ej.unidades), usdej: usd(ej.montoUSD), real: usd(e.realizadoUSD), env: null, err: null, not: [], sim: false });
+      tocados.add(hoy); continue;
     }
     const f = buscar(e.opId);
-    if (!f) { alertas.push(`Operación ${e.opId} no encontrada en los meses leídos; su estado (${e.tipo}) queda solo en el libro.`); continue; }
+    if (!f) {
+      const id = `ops-${String(e.opId).slice(0, 10)}`, txt = `no se leyó ${id}; no se escribe`;
+      if (!alertas.includes(txt)) alertas.push(txt);
+      alertas.push(`${e.opId}: ${e.tipo} queda solo en el libro.`);
+      continue;
+    }
     const o = f.o;
-    if (e.tipo === "ejecutada") { o.estado = "ejecutada"; o.positionIds = e.positionIds || o.positionIds; o.ejecucion = e.ejecucion; o.unidades = e.ejecucion.unidades; if (e.realizadoUSD !== undefined) o.realizadoUSD = e.realizadoUSD; }
-    else if (e.tipo === "rechazada") { o.estado = "rechazada"; o.error = e.error || null; }
-    else if (e.tipo === "desconocida") o.estado = "desconocida";
-    D[f.mes].at = t; tocados.add(f.mes);
+    if (e.tipo === "ejecutada") Object.assign(o, { est: "ejecutada", pos: e.positionIds || o.pos, px: px(ej.precio), uej: u6(ej.unidades), usdej: usd(ej.montoUSD) }, e.realizadoUSD !== undefined ? { real: usd(e.realizadoUSD) } : {});
+    else if (e.tipo === "no_ejecutada") Object.assign(o, { est: "no_ejecutada", err: e.error ? String(e.error).slice(0, 80) : null });
+    else if (e.tipo === "incierta") o.est = "incierta";
+    tocados.add(f.f);
   }
   return { docs: D, tocados: [...tocados].sort(), alertas };
+}
+
+// Resultado de un día en el libro y en ops-<hoy> (12b §F.3.5). plan: órdenes de plan-ordenes.json; res: líneas de
+// ejecucion.json ({id, k, est, env, o, pos, px, uej, usdej, abierta, err}); simulacion: solo se registran como simuladas.
+export function aplicarResultados({ libro, opsHoy, plan, res = [], simulacion, ahora }) {
+  const L = copia(libro), O = copia(opsHoy), t = typeof ahora === "function" ? ahora() : ahora, hoy = fechaHoraET(t).fecha;
+  const poner = op => { O.ops = O.ops.filter(x => x.id !== op.id).concat([op]); };
+  for (const orden of plan) {
+    const venta = orden.lado === "venta";
+    const op = { id: orden.id, sym: orden.sym, i: orden.instrumentId, lado: venta ? "v" : "c", regla: orden.regla, mot: String(orden.motivo || "").slice(0, 120),
+      usd: venta ? null : usd(orden.montoUSD), u: venta ? ((orden.cierres || []).every(c => c.unidades === null) ? null : u6((orden.cierres || []).reduce((a, c) => a + (c.unidades || 0), 0))) : null,
+      est: "simulada", o: null, pos: [], px: null, uej: null, usdej: null, real: null, env: null, err: null, not: (orden.noticias || []).slice(0, 4), sim: !!simulacion };
+    if (simulacion) { poner(op); continue; }
+    const lineas = res.filter(r => r.id === orden.id);
+    let u = 0, monto = 0, real = 0, alguna = false;
+    for (const r of lineas) {
+      op.env = op.env || r.env || null; op.o = op.o || r.o || null; if (r.err) op.err = String(r.err).slice(0, 80);
+      if (!venta) {
+        if (r.est === "ejecutada") {
+          L.efectivoUSD = cts(L.efectivoUSD - (r.usdej ?? orden.montoUSD));
+          (r.pos || []).forEach((positionId, j) => agregarLote(L, { sym: orden.sym, instrumentId: orden.instrumentId, positionId, orderId: r.o ?? null,
+            unidades: j === 0 ? r.uej : 0, costoUSD: j === 0 ? (r.usdej ?? orden.montoUSD) : 0, abiertaEl: r.abierta || r.env }));
+          Object.assign(op, { pos: r.pos || [], px: px(r.px), uej: u6(r.uej), usdej: usd(r.usdej) });
+        } else if (r.est === "aceptada" || r.est === "incierta") {
+          const m = r.usd ?? orden.montoUSD;
+          L.efectivoUSD = cts(L.efectivoUSD - m);
+          L.pendientes.push({ opId: orden.id, dia: hoy, orderId: r.o ?? null, sym: orden.sym, instrumentId: orden.instrumentId, lado: "compra", montoUSD: m, unidades: null, positionId: null, enviadaEl: r.env, estado: r.est });
+          op.usd = usd(m);
+        }
+      } else {
+        const c = (orden.cierres || [])[r.k] || {};
+        if (r.est === "ejecutada" && isNum(r.px)) {
+          const v = registrarVenta(L, { sym: orden.sym, positionId: c.positionId, unidades: c.unidades ?? null, precio: r.px });
+          if (v) { u += v.unidades; monto += v.montoUSD; real += v.realizadoUSD; alguna = true; op.pos.push(c.positionId); }
+        } else if (r.est === "aceptada" || r.est === "incierta") {
+          L.pendientes.push({ opId: orden.id, dia: hoy, orderId: r.o ?? null, sym: orden.sym, instrumentId: orden.instrumentId, lado: "venta", montoUSD: null, unidades: c.unidades ?? null, positionId: c.positionId, enviadaEl: r.env, estado: r.est });
+          op.pos.push(c.positionId);
+        }
+      }
+    }
+    if (venta && alguna) Object.assign(op, { px: px(monto / u), uej: u6(u), usdej: usd(monto), real: usd(real) });
+    const ests = lineas.map(r => r.est);
+    op.est = ests.includes("ejecutada") ? "ejecutada" : ests.includes("aceptada") ? "aceptada" : ests.includes("incierta") ? "incierta" : ests.includes("rechazada") ? "rechazada" : "no_enviada";
+    poner(op);
+  }
+  return { libro: L, ops: O };
 }

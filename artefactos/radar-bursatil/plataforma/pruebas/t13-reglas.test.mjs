@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { decidir, configEfectiva, actualizarFuera, requestIdDe } from "../lib/reglas.mjs";
-import { valuar, semilla } from "../lib/libro.mjs";
+import { valuar, semilla, mapaDeDb } from "../lib/libro.mjs";
 import { validarNoticias } from "../lib/noticias.mjs";
 import { CONFIG_DEFECTO } from "../lib/constantes.mjs";
 import { PAG, OUT30, libroLunes, prepararDia } from "./escenario.mjs";
@@ -26,12 +26,12 @@ function montarEscenario(e, extra = {}) {
   }
   if (e.efectivoUSD !== undefined) libro.efectivoUSD = e.efectivoUSD;
   if (e.fuera) libro.fueraDelObjetivo = e.fuera;
-  if (e.operadoHoy) libro.operadoHoy = { fecha: F, syms: e.operadoHoy };
-  // bid de eToro = precio del Radar para lo que no está en las tasas del lunes
-  const tasas = leerFix("etoro/lunes-tasas.json").rates.slice();
-  for (const p of libro.posiciones) if (!tasas.some(r => r.instrumentID === p.instrumentId)) { const r = OUT30.rows.find(x => x.symbol === p.sym); tasas.push({ instrumentID: p.instrumentId, bid: r.price, ask: r.price }); }
+  if (e.pendientes) libro.pendientes = libro.pendientes.concat(e.pendientes);
+  // bid de eToro = precio del Radar para lo que no está en las tasas del lunes; todas con fecha de ahora (precio válido)
+  const tasas = leerFix("etoro/lunes-tasas.json").rates.map(r => Object.assign({}, r, { date: new Date(T).toISOString() }));
+  for (const p of libro.posiciones) if (!tasas.some(r => r.instrumentID === p.instrumentId)) { const r = OUT30.rows.find(x => x.symbol === p.sym); tasas.push({ instrumentID: p.instrumentId, bid: r.price, ask: r.price, date: new Date(T).toISOString() }); }
   const valuacion = valuar({ libro, tasas, fx: { valor: 18.774, fuente: "radar" }, at: T });
-  const mapa = copia(semilla().mapa);
+  const mapa = mapaDeDb(semilla()["etoro-mapa"]);
   for (const s of e.mapaQuitar || []) delete mapa.instrumentos[s];
   let objetivo = null;
   if (e.objetivo) {
@@ -88,7 +88,7 @@ test("c · QQQ fuera del objetivo con señal Compra: días 1 y 2 mantener, día 
   const dia = (fecha, parcial) => {
     const r = montarEscenario(Object.assign({}, e, { fuera, parcial }));
     const d = r.decisiones.find(x => x.sym === "QQQ");
-    const l = Object.assign(libroLunes(), { fueraDelObjetivo: fuera, ultimaRutina: null });
+    const l = Object.assign(libroLunes(), { fueraDelObjetivo: fuera, ultimaRutina: null, refs: null });
     l.posiciones.push({ sym: "QQQ", instrumentId: 3006, lotes: [{ positionId: 2600000110, orderId: null, unidades: 3, costoUSD: 2000, abiertaEl: "x" }] });
     fuera = actualizarFuera({ libro: l, pesos: r.objetivo.pesos, completo: !parcial, fecha }).fueraDelObjetivo;
     return d;
@@ -123,21 +123,21 @@ test("bloqueado (fuera de ventana): las decisiones quedan omitidas y no hay órd
   assert.equal(s.modo, "sin_objetivo"); assert.equal(s.ordenes.length, 0);
 });
 
-test("n · 40-decidir: planSha = sha256 del plan-ordenes.json escrito; pre-ejecución solo con órdenes reales", async () => {
+test("n · 40-decidir: planSha = sha256 del plan-ordenes.json escrito; ejecutar con órdenes reales y sin salida/ para db", async () => {
   const out = copia(OUT30);
   Object.assign(out.rows.find(r => r.symbol === "XLE"), { signal: 1, signalLabel: "Evitar", pct: 44 });
-  const sim = await prepararDia({ libro: libroLunes(), out });
+  const sim = await prepararDia({ out });
   const d = leerSalida(sim.dir, "trabajo/decisiones.json");
   assert.equal(d.planSha, crypto.createHash("sha256").update(fs.readFileSync(path.join(sim.dir, "trabajo/plan-ordenes.json"))).digest("hex"));
   assert.equal(sim.decidir.linea.accion, "simulacion");
-  assert.ok(!fs.existsSync(path.join(sim.dir, "salida/pre-ejecucion/_orden.json")));
-  const real = await prepararDia({ libro: libroLunes(), out, config: { operar: true, activadoEl: "2026-11-01T15:00:00Z" } });
+  assert.ok(!fs.existsSync(path.join(sim.dir, "salida/pre-ejecucion")));
+  const cfg = Object.assign(semilla()["rutina-config"], { operar: true, activadoEl: "2026-11-01T15:00:00Z" });
+  const real = await prepararDia({ out, dbExtra: { "rutina-config": cfg } });
   assert.equal(real.decidir.linea.accion, "ejecutar");
-  const pre = leerSalida(real.dir, "salida/pre-ejecucion/rutina-estado.json");
-  assert.equal(pre.estado, "en_curso"); assert.equal(pre.paso, "ejecutando");
-  assert.equal(pre.ejecucion.planSha, leerSalida(real.dir, "trabajo/decisiones.json").planSha);
-  assert.deepEqual(pre.ejecucion.plan, leerSalida(real.dir, "trabajo/plan-ordenes.json").ordenes);
-  const nada = await prepararDia({ libro: libroLunes() });
+  // 12b §C.1: 40-decidir no arma nada para db; el reclamo de envío (pre-ejecucion) lo arma 50-ejecutar --armar
+  assert.ok(!fs.existsSync(path.join(real.dir, "salida/pre-ejecucion")));
+  assert.equal(leerSalida(real.dir, "trabajo/decisiones.json").planSha, crypto.createHash("sha256").update(fs.readFileSync(path.join(real.dir, "trabajo/plan-ordenes.json"))).digest("hex"));
+  const nada = await prepararDia({});
   assert.equal(nada.decidir.linea.accion, "nada");
 });
 
@@ -146,4 +146,24 @@ test("configEfectiva: fuera de rango → defecto con alerta", () => {
   assert.equal(r.config.bandaPts, 5); assert.equal(r.config.perfil, "moderado"); assert.equal(r.config.operar, false);
   assert.equal(r.config.ventanaET.desde, "09:45"); assert.equal(r.config.ventanaET.hasta, "15:00"); assert.equal(r.config.maxOrdenesDia, 3);
   assert.equal(r.alertas.length, 4);
+});
+
+test("N7 · ETF de ETF_PAID sin fila en un análisis listo → dato faltante: omitida, alerta, contador fuera quieto; una acción sin fila sí cuenta", () => {
+  const out = copia(OUT30); out.rows = out.rows.filter(r => r.symbol !== "XLE" && r.symbol !== "AAPL");
+  const libro = libroLunes(); libro.fueraDelObjetivo = { XLE: { desde: "2026-10-29", dias: 2 } };
+  libro.posiciones.push({ sym: "AAPL", instrumentId: 1001, lotes: [{ positionId: 2600000103, orderId: null, unidades: 5, costoUSD: 1700, abiertaEl: "2026-10-20T15:00:00Z" }] });
+  const tasas = leerFix("etoro/lunes-tasas.json").rates.map(r => Object.assign({}, r, { date: new Date(T).toISOString() })).concat([{ instrumentID: 1001, bid: 340, ask: 340.1, date: new Date(T).toISOString() }]);
+  const valuacion = valuar({ libro, tasas, fx: { valor: 18.774, fuente: "radar" }, at: T });
+  const w = s => valuacion.posiciones.find(p => p.sym === s).valorUSD / valuacion.valorUSD;
+  const r = decidir({ C, analisis: { fuente: "rutina", parcial: false, out }, cartera: { estado: "listo", libro, valuacion, mapa: mapaDeDb(semilla()["etoro-mapa"]) }, eventos: [],
+    config: configEfectiva(copia(CONFIG_DEFECTO)).config, contexto: { fecha: F, mercadoAbierto: true, ventanaDentro: true, bloqueoLibro: false, cetesPct: null, nowMs: T },
+    objetivo: { pesos: { SPY: w("SPY"), DIA: w("DIA"), XLF: w("XLF") }, roles: {} } });
+  const xle = r.decisiones.find(d => d.sym === "XLE"), aapl = r.decisiones.find(d => d.sym === "AAPL");
+  assert.equal(xle.accion, "omitida"); assert.match(xle.razonOmision, /dato faltante/);
+  assert.ok(r.alertas.some(a => /^XLE falta en el análisis de hoy/.test(a)));
+  assert.ok(!r.ordenes.some(o => o.sym === "XLE"));
+  assert.deepEqual([aapl.accion, aapl.motivo], ["mantener", "Fuera del objetivo 1 de 3 días hábiles (sin fila en el análisis de hoy)"]);
+  const l = Object.assign(copia(libro), { ultimaRutina: "2026-11-01" });
+  const f = actualizarFuera({ libro: l, pesos: r.objetivo.pesos, completo: true, fecha: F, faltantes: ["XLE"] }).fueraDelObjetivo;
+  assert.deepEqual(f, { XLE: { desde: "2026-10-29", dias: 2 }, AAPL: { desde: F, dias: 1 } });
 });

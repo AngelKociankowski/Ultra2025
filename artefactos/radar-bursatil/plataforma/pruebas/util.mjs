@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { conH, importar as importarDb } from "../lib/db.mjs";
 
 export const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const FIX = path.join(RAIZ, "pruebas", "fixtures");
@@ -13,16 +14,24 @@ export function carpetaTemporal(prefijo = "radar-") {
 
 export const leerFix = rel => JSON.parse(fs.readFileSync(path.join(FIX, rel), "utf8"));
 
-// Carpeta de trabajo con documentos de db ya "leídos" por Claude
-export function carpetaConDb(docs = {}, fallos = null) {
+// Carpeta de trabajo con documentos de db "leídos" por Claude (líneas de entrada/lecturas.jsonl) e importados.
+// docs: { id: cuerpo } (a los documentos propios se les pone h); fallos: { id: código }; noExisten: ids con exists:false.
+export function carpetaConDb(docs = {}, fallos = null, { noExisten = [], versiones = {}, modo = "en_linea", importar: imp = true } = {}) {
   const dir = carpetaTemporal();
-  const db = path.join(dir, "entrada", "db");
-  fs.mkdirSync(db, { recursive: true });
-  fs.mkdirSync(path.join(dir, "trabajo"), { recursive: true });
-  fs.mkdirSync(path.join(dir, "salida"), { recursive: true });
-  for (const [id, doc] of Object.entries(docs)) fs.writeFileSync(path.join(db, id + ".json"), JSON.stringify(doc));
-  if (fallos) fs.writeFileSync(path.join(db, "_fallos.json"), JSON.stringify(fallos));
+  for (const d of ["entrada/db", "entrada/archivo", "trabajo", "salida"]) fs.mkdirSync(path.join(dir, d), { recursive: true });
+  const lineas = [];
+  for (const [id, doc] of Object.entries(docs)) lineas.push({ id, exists: true, version: versiones[id] || 1, data: doc && doc.kind && doc.kind !== "feriados" && !doc.h ? conH(doc) : doc });
+  for (const id of noExisten) lineas.push({ id, exists: false });
+  for (const [id, e] of Object.entries(fallos || {})) lineas.push({ id, error: e });
+  fs.writeFileSync(path.join(dir, "entrada", "lecturas.jsonl"), lineas.map(l => JSON.stringify(l)).join("\n") + (lineas.length ? "\n" : ""));
+  fs.writeFileSync(path.join(dir, "trabajo", "lista.json"), JSON.stringify({ modo, lecturas: [] }));
+  if (imp) importarDb(dir, { requeridos: [] });
   return dir;
+}
+// agrega lecturas (como hace Claude) y vuelve a importar
+export function agregarLecturas(dir, lineas) {
+  fs.appendFileSync(path.join(dir, "entrada", "lecturas.jsonl"), lineas.map(l => JSON.stringify(l)).join("\n") + "\n");
+  return importarDb(dir, { requeridos: [] });
 }
 
 export const leerSalida = (dir, rel) => JSON.parse(fs.readFileSync(path.join(dir, rel), "utf8"));

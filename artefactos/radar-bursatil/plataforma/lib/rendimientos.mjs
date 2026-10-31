@@ -1,62 +1,53 @@
-// Rendimientos y composición (12-plan §5.13.1–§5.13.2). Puro.
+// Rendimientos y composición (12-plan §5.13.1–§5.13.2, 12b §E.5.3). Puro.
 import { sumarDias, diasEntre } from "./tiempo.mjs";
 
 const isNum = v => typeof v === "number" && Number.isFinite(v);
 export const AVISO_ANUALIZADO = "Menos de un año de historia: el anualizado exagera el ruido.";
 
-// Serie P = [base, …puntos] ordenada por fecha; el punto de hoy reemplaza al de la misma fecha.
-export function puntosDe(serie, punto = null) {
-  const b = serie.base;
-  const base = { f: b.fecha, v: b.valorUSD, vMXN: isNum(b.valorMXN) ? b.valorMXN : b.valorUSD * b.fx, fx: b.fx, spy: b.spy, fl: 0 };
-  const pts = (serie.puntos || []).filter(p => !punto || p.f !== punto.f).concat(punto ? [punto] : []).filter(p => p.f > base.f);
-  pts.sort((a, b) => (a.f < b.f ? -1 : 1));
-  return [base].concat(pts.map(p => ({ f: p.f, v: p.v, vMXN: p.v * p.fx, fx: p.fx, spy: p.spy, fl: isNum(p.fl) ? p.fl : 0 })));
-}
-
+// Rendimientos por índices encadenados y referencias del libro (12b §E.5.3): sin leer la serie.
+// ref = [f, v, vm, spy, i, im]; i_t = i_{t−1} × (v_t − fl_t) / v_{t−1}; im igual con vm y el flujo en pesos.
 const diaSemana = f => new Date(f + "T12:00:00Z").getUTCDay();
 const lunesDe = f => sumarDias(f, -((diaSemana(f) + 6) % 7));
-const refAntes = (P, limite) => { let k = 0; for (let i = 0; i < P.length; i++) if (P[i].f < limite) k = i; return k; };
-
-function serieDe(P, valor, flujo) {
-  const r = [null];
-  for (let i = 1; i < P.length; i++) {
-    const a = valor(P[i - 1]), b = valor(P[i]);
-    r.push(isNum(a) && isNum(b) && a > 0 ? (b - flujo(P[i])) / a - 1 : null);
-  }
-  const desde = k => { // Π(1 + r_i) − 1 sobre los puntos posteriores a k
-    let g = 1;
-    for (let i = k + 1; i < P.length; i++) { if (r[i] === null) return null; g *= 1 + r[i]; }
-    return g - 1;
-  };
-  return desde;
-}
+const mismaSemana = (a, b) => lunesDe(a) === lunesDe(b);
 
 export function meta15({ base, v, vMXN, dias }) {
   const g = Math.pow(1.15, dias / 365.25);
   return { esperadoUSD: base.v * g, esperadoMXN: base.vMXN * g, difPtsUSD: (v / base.v - g) * 100, difPtsMXN: isNum(vMXN) ? (vMXN / base.vMXN - g) * 100 : null };
 }
 
-export function rendimientos({ serie, punto = null }) {
-  const P = puntosDe(serie, punto), n = P.length - 1, ult = P[n];
-  const dias = diasEntre(P[0].f, ult.f);
-  const refs = n === 0 ? null : {
-    dia: n - 1, semana: refAntes(P, lunesDe(ult.f)), mes: refAntes(P, ult.f.slice(0, 8) + "01"), anio: refAntes(P, ult.f.slice(0, 5) + "01-01"), inicio: 0,
+// Índices del punto de hoy a partir de refs.dia (el último punto guardado)
+export function indicesDelDia({ refs, v, fx, fl = 0 }) {
+  const d = refs.dia, vm = isNum(fx) ? v * fx : null;
+  const i = d[4] * (v - fl) / d[1];
+  const im = isNum(vm) && isNum(d[2]) && d[2] > 0 ? d[5] * (vm - fl * fx) / d[2] : null;
+  return { i, im, vm };
+}
+
+// punto = { f, v, vm, spy, i, im }. Devuelve [día, semana, mes, año, inicio, anualizado] por serie, meta y aviso.
+export function rendimientosRefs({ refs, punto }) {
+  const f = punto.f, d = refs.dia;
+  const ref = { dia: d, sem: mismaSemana(f, d[0]) ? refs.sem : d, mes: f.slice(0, 7) === d[0].slice(0, 7) ? refs.mes : d,
+    anio: f.slice(0, 4) === d[0].slice(0, 4) ? refs.anio : d, inicio: refs.base };
+  const dias = diasEntre(refs.base[0], f);
+  const serie = (ahora, k) => {
+    const r = ["dia", "sem", "mes", "anio", "inicio"].map(n => (isNum(ahora) && isNum(ref[n][k]) && ref[n][k] > 0 ? ahora / ref[n][k] - 1 : null));
+    r.push(dias >= 90 && r[4] !== null ? Math.pow(1 + r[4], 365.25 / dias) - 1 : null);
+    return r;
   };
-  const calc = desde => {
-    if (!refs) return { dia: null, semana: null, mes: null, anio: null, inicio: null, anualizado: null, avisoAnualizado: null };
-    const o = {};
-    for (const [k, i] of Object.entries(refs)) o[k] = desde(i);
-    o.anualizado = dias >= 90 && o.inicio !== null ? Math.pow(1 + o.inicio, 365.25 / dias) - 1 : null;
-    o.avisoAnualizado = dias >= 90 && dias < 365 ? AVISO_ANUALIZADO : null;
-    return o;
-  };
-  return {
-    f: ult.f, dias,
-    usd: calc(serieDe(P, p => p.v, p => p.fl)),
-    mxn: calc(serieDe(P, p => p.vMXN, p => p.fl * p.fx)),
-    spy: calc(serieDe(P, p => p.spy, () => 0)),
-    meta15: n === 0 ? null : meta15({ base: P[0], v: ult.v, vMXN: ult.vMXN, dias }),
-  };
+  const b = refs.base, m = meta15({ base: { v: b[1], vMXN: b[2] }, v: punto.v, vMXN: punto.vm, dias });
+  return { dias, usd: serie(punto.i, 4), mxn: serie(punto.im, 5), spy: serie(punto.spy, 3), meta: [m.esperadoUSD, m.difPtsUSD, m.esperadoMXN, m.difPtsMXN],
+    aviso: dias >= 90 && dias < 365 ? AVISO_ANUALIZADO : null };
+}
+
+// Al cerrar el día: si cambió la semana/mes/año respecto de refs.dia, esa referencia pasa a ser refs.dia; luego refs.dia = hoy
+export function actualizarRefs({ refs, punto }) {
+  const r = JSON.parse(JSON.stringify(refs)), d = r.dia, f = punto.f;
+  if (d[0] === f) { r.dia = [f, punto.v, punto.vm, punto.spy, punto.i, punto.im]; return r; }
+  if (!mismaSemana(f, d[0])) r.sem = d.slice();
+  if (f.slice(0, 7) !== d[0].slice(0, 7)) r.mes = d.slice();
+  if (f.slice(0, 4) !== d[0].slice(0, 4)) r.anio = d.slice();
+  r.dia = [f, punto.v, punto.vm, punto.spy, punto.i, punto.im];
+  return r;
 }
 
 // ---- Composición (§5.13.2) ----

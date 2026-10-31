@@ -1,6 +1,6 @@
 {
  "nombre": "h-noticias",
- "descripcion": "Evento confirmado en candidato → vetada; en acción en cartera → N2; ETF con fusion_pendiente → nada; con deslistado → N2",
+ "descripcion": "Evento confirmado (2 entradas de la tabla) en candidato → vetada; en acción en cartera → N2; ETF con fusion_pendiente → nada; con deslistado → N2",
  "efectivoUSD": 5000,
  "agregarLotes": [
   {
@@ -26,8 +26,8 @@
   {
    "id": "n1",
    "titulo": "IWM: quiebra",
-   "medio": "Reuters",
-   "url": "https://www.reuters.com/a1",
+   "medio": "CNBC",
+   "url": "https://www.cnbc.com/a1",
    "fecha": "2026-11-02",
    "tema": "empresa",
    "simbolos": [
@@ -44,8 +44,26 @@
   {
    "id": "n2",
    "titulo": "IWM: quiebra",
-   "medio": "WSJ",
-   "url": "https://www.wsj.com/a2",
+   "medio": "CNBC",
+   "url": "https://www.cnbc.com/a2",
+   "fecha": "2026-11-02",
+   "tema": "empresa",
+   "simbolos": [
+    "IWM"
+   ],
+   "resumen": "Según la nota.",
+   "evento": {
+    "categoria": "quiebra",
+    "simbolo": "IWM",
+    "magnitudPct": null,
+    "descripcion": "Lo dice la nota."
+   }
+  },
+  {
+   "id": "n2b",
+   "titulo": "IWM: quiebra",
+   "medio": "SEC",
+   "url": "https://www.sec.gov/a2b",
    "fecha": "2026-11-02",
    "tema": "empresa",
    "simbolos": [
@@ -62,8 +80,8 @@
   {
    "id": "n3",
    "titulo": "AAPL: fraude",
-   "medio": "Reuters",
-   "url": "https://www.reuters.com/a3",
+   "medio": "Bloomberg",
+   "url": "https://www.bloomberg.com/a3",
    "fecha": "2026-11-02",
    "tema": "empresa",
    "simbolos": [
@@ -98,8 +116,8 @@
   {
    "id": "n5",
    "titulo": "XLF: fusion_pendiente",
-   "medio": "Reuters",
-   "url": "https://www.reuters.com/a5",
+   "medio": "CNBC",
+   "url": "https://www.cnbc.com/a5",
    "fecha": "2026-11-02",
    "tema": "empresa",
    "simbolos": [
@@ -116,8 +134,8 @@
   {
    "id": "n6",
    "titulo": "XLF: fusion_pendiente",
-   "medio": "FT",
-   "url": "https://www.ft.com/a6",
+   "medio": "Yahoo Finanzas",
+   "url": "https://finance.yahoo.com/a6",
    "fecha": "2026-11-02",
    "tema": "empresa",
    "simbolos": [
@@ -134,8 +152,8 @@
   {
    "id": "n7",
    "titulo": "XLE: deslistado",
-   "medio": "Reuters",
-   "url": "https://www.reuters.com/a7",
+   "medio": "CNN",
+   "url": "https://www.cnn.com/a7",
    "fecha": "2026-11-02",
    "tema": "empresa",
    "simbolos": [
@@ -202,8 +220,8 @@
    ]
   },
   "motivos": {
-   "AAPL": "Evento confirmado: fraude (Reuters, CNBC)",
-   "XLE": "Evento confirmado: deslistado (Reuters, Bloomberg)"
+   "AAPL": "Evento confirmado: fraude (Bloomberg, CNBC)",
+   "XLE": "Evento confirmado: deslistado (CNN, Bloomberg)"
   }
  }
 }

@@ -1,203 +1,179 @@
-// T09 · Libro, semilla y conciliación
+// T09 / K2 / K5 / K9 · Libro v2, semilla, conciliación, valuación con precio válido y resultados del día
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { semilla, conciliar, valuar, unidadesAVender, aplicarEjecucion, aplicarEventosOps, bidsDe, MANDATO } from "../lib/libro.mjs";
+import { semilla, libroDeDb, libroADb, mapaDeDb, mapaADb, conciliar, valuar, unidadesAVender, aplicarEventosOps, aplicarResultados, bidsDe, opsNuevo, MANDATO, REF_BASE } from "../lib/libro.mjs";
+import { conH, importar, leerVersiones } from "../lib/db.mjs";
+import { validarDoc } from "../lib/esquemas.mjs";
+import { DB_RUTA } from "../lib/constantes.mjs";
 import { main as semillaCli } from "../bin/semilla.mjs";
-import { leerFix, carpetaConDb, existe, leerSalida } from "./util.mjs";
+import { leerFix, carpetaConDb, agregarLecturas } from "./util.mjs";
 
 const LUNES = Date.parse("2026-11-02T14:50:00Z");
-const cp = o => JSON.parse(JSON.stringify(o));
-
+const S = semilla({ ahora: () => Date.parse("2026-10-31T12:00:00Z") });
+const libroSemilla = () => libroDeDb(S["cartera-libro"]).libro;
+const tasasLunes = (t = LUNES) => leerFix("etoro/lunes-tasas.json").rates.map(r => Object.assign({}, r, { date: new Date(t).toISOString() }));
 function invariantes(libro) {
   assert.ok(libro.efectivoUSD >= -0.01, "efectivo ≥ −0.01");
   const ids = libro.posiciones.flatMap(p => p.lotes.map(l => l.positionId));
   assert.equal(new Set(ids).size, ids.length, "cada positionId en un solo lote");
   assert.deepEqual(libro.mandato, Object.assign({}, MANDATO));
 }
+const lunes = ({ sinOrderId = false } = {}) => { const pf = leerFix("etoro/lunes-ejecutado.json"); if (sinOrderId) for (const p of pf.clientPortfolio.positions) delete p.orderID; return pf; };
 
-test("semilla(): 6 documentos, efectivo 0.56 y Σ pendientes 31 958.53", () => {
-  const s = semilla({ ahora: () => 1 });
-  assert.deepEqual(Object.keys(s).sort(), ["config", "indiceBitacora", "libro", "mapa", "ops", "serie"]);
-  assert.equal(s.libro.efectivoUSD, 0.56);
-  assert.equal(Math.round(s.libro.pendientes.reduce((a, p) => a + p.montoUSD, 0) * 100) / 100, 31958.53);
-  assert.equal(s.libro.pendientes.length, 5);
-  assert.deepEqual(s.libro.pendientes.map(p => p.orderId), [391213449, 391187994, 391187995, 391213506, 391187996]);
-  assert.equal(s.ops["2026-10"].ops.length, 5);
-  assert.ok(s.ops["2026-10"].ops.every(o => o.regla === "INICIAL" && o.estado === "pendiente" && o.motivo.startsWith("Cartera inicial: buildPortfolio Moderado")));
-  assert.equal(s.ops["2026-10"].ops[0].hora, "17:08"); // 21:08 UTC = 17:08 ET (horario de verano hasta el 1-nov)
-  assert.deepEqual(s.serie.base, { fecha: "2026-10-30", valorUSD: 31959.09, valorMXN: 600000, fx: 18.774, spy: 755.26 });
-  assert.equal(s.mapa.instrumentos.DIA.instrumentId, 3026); assert.equal(s.mapa.instrumentos.DIA.simboloEToro, "DIA.US");
-  assert.equal(s.mapa.instrumentos.SPY.difPct, -0.01);
-  assert.equal(s.mapa.instrumentos.GLD.verificadoEl, null);
-  assert.equal(Object.keys(s.mapa.instrumentos).length, 13);
-  assert.equal(s.config.operar, false); assert.equal(s.config.kind, "rutinaConfig");
-  assert.deepEqual(s.indiceBitacora.dias, []);
-  for (const d of [s.libro, s.ops["2026-10"], s.serie, s.mapa, s.config, s.indiceBitacora]) assert.ok(typeof d.kind === "string" && d.v === 1);
-  invariantes(s.libro);
+test("semilla (12b §E.11): 5 documentos válidos; efectivo 0.56; Σ pend 31 958.53; refs = base", () => {
+  assert.deepEqual(Object.keys(S), ["rutina-config", "cartera-libro", "etoro-mapa", "ops-2026-10-30", "punto-2026-10-30"]);
+  for (const [id, d] of Object.entries(S)) assert.deepEqual(validarDoc(id, conH(d)), [], id);
+  const l = S["cartera-libro"];
+  assert.equal(l.efectivo, 0.56);
+  assert.equal(Math.round(l.pend.reduce((a, p) => a + p.usd, 0) * 100) / 100, 31958.53);
+  assert.deepEqual(l.pend.map(p => [p.o, p.est, p.dia, p.lado]), [[391213449, "aceptada", "2026-10-30", "c"], [391187994, "aceptada", "2026-10-30", "c"], [391187995, "aceptada", "2026-10-30", "c"],
+    [391213506, "aceptada", "2026-10-30", "c"], [391187996, "aceptada", "2026-10-30", "c"]]);
+  assert.equal(l.pend[0].env, "2026-10-30T21:08:20Z");
+  for (const k of ["base", "dia", "sem", "mes", "anio"]) assert.deepEqual(l.refs[k], REF_BASE.slice());
+  assert.ok(S["ops-2026-10-30"].ops.every(o => o.regla === "INICIAL" && o.est === "aceptada"));
+  assert.equal(S["punto-2026-10-30"].v_, 31959.09); assert.equal(S["punto-2026-10-30"].i, 1);
+  assert.deepEqual(S["etoro-mapa"].i.DIA, [3026, 6, "2026-10-30", 0]); assert.equal(S["etoro-mapa"].i.GLD[2], null);
+  assert.equal(S["rutina-config"].operar, false); assert.equal(S["rutina-config"].v, 2);
 });
 
-test("conciliar con port2.json: las 5 siguen pendientes y 0 alertas", () => {
-  const { libro } = semilla();
-  const r = conciliar({ libro, portafolio: leerFix("etoro/port2.json"), historial: [], ahora: Date.parse("2026-10-31T14:00:00Z") });
-  assert.equal(r.libro.pendientes.length, 5);
-  assert.deepEqual(r.alertas, []); assert.deepEqual(r.eventos, []);
-  assert.equal(r.libro.efectivoUSD, 0.56);
-  invariantes(r.libro);
+test("libro y mapa: db ↔ memoria sin pérdida; entradas malformadas se descartan con alerta (H15)", () => {
+  const { libro, alertas } = libroDeDb(S["cartera-libro"]);
+  assert.deepEqual(alertas, []);
+  const vuelta = libroADb(libro, Date.parse("2026-10-31T12:00:00Z"));
+  assert.deepEqual(vuelta, S["cartera-libro"]);
+  assert.deepEqual(mapaADb(mapaDeDb(S["etoro-mapa"]), Date.parse("2026-10-31T12:00:00Z")), S["etoro-mapa"]);
+  const sucio = Object.assign({}, S["cartera-libro"], { lotes: [["SPY", 3000, 1, null, 1, 700, "2026-11-02T14:30:00Z"], null, ["x"]], pend: S["cartera-libro"].pend.concat([{ id: 7 }, "x"]) });
+  const r = libroDeDb(sucio);
+  assert.equal(r.libro.posiciones.length, 1); assert.equal(r.libro.pendientes.length, 5); assert.equal(r.alertas.length, 4);
 });
-
-function lunes({ sinOrderId = false } = {}) {
-  const pf = leerFix("etoro/lunes-ejecutado.json");
-  if (sinOrderId) for (const p of pf.clientPortfolio.positions) delete p.orderID;
-  return pf;
-}
 
 for (const sinOrderId of [false, true]) {
-  test(`conciliar con lunes-ejecutado${sinOrderId ? " sin orderID (regla 3)" : ""}: 5 lotes (SPY con 2), 0 pendientes, AAPL ajena ignorada`, () => {
-    const { libro } = semilla();
-    const r = conciliar({ libro, portafolio: lunes({ sinOrderId }), historial: [], ahora: LUNES });
+  test(`K5 · lunes-ejecutado${sinOrderId ? " sin orderID (regla 3)" : ""}: las 5 aceptadas pasan a 5 lotes y ops-2026-10-30 queda en ejecutada`, () => {
+    const r = conciliar({ libro: libroSemilla(), portafolio: lunes({ sinOrderId }), historial: [], ahora: LUNES });
     assert.equal(r.libro.pendientes.length, 0);
-    const lotes = r.libro.posiciones.flatMap(p => p.lotes.map(l => [p.sym, l.positionId, l.orderId]));
-    assert.equal(lotes.length, 5);
     assert.deepEqual(r.libro.posiciones.map(p => [p.sym, p.lotes.length]).sort(), [["DIA", 1], ["SPY", 2], ["XLE", 1], ["XLF", 1]]);
-    assert.ok(!lotes.some(l => l[1] === 2500000099), "la posición de AAPL no es del mandato");
-    assert.ok(!r.libro.posiciones.some(p => p.sym === "AAPL"));
+    assert.ok(!r.libro.posiciones.some(p => p.sym === "AAPL"), "la posición de AAPL no es del mandato");
     assert.deepEqual(r.alertas, []);
-    assert.equal(r.libro.efectivoUSD, 0.56); // ya se descontó al enviar
-    const spy = r.libro.posiciones.find(p => p.sym === "SPY");
-    assert.deepEqual(spy.lotes.map(l => l.orderId).sort(), [391187994, 391213449]);
-    assert.equal(spy.lotes.find(l => l.orderId === 391187994).unidades, 26.777294);
-    assert.equal(r.eventos.filter(e => e.tipo === "ejecutada").length, 5);
+    assert.equal(r.libro.efectivoUSD, 0.56);
+    const o = aplicarEventosOps({ docs: { "2026-10-30": S["ops-2026-10-30"] }, eventos: r.eventos, ahora: LUNES });
+    assert.deepEqual(o.tocados, ["2026-10-30"]);
+    assert.ok(o.docs["2026-10-30"].ops.every(x => x.est === "ejecutada" && x.pos.length === 1 && x.uej > 0));
+    assert.deepEqual(validarDoc("ops-2026-10-30", conH(o.docs["2026-10-30"])), []);
+    assert.deepEqual(validarDoc("cartera-libro", conH(libroADb(r.libro, LUNES))), []);
+    assert.ok(!/"CID"|10000001/.test(JSON.stringify(r)));
     invariantes(r.libro);
-    // ninguna salida del libro ni de los eventos lleva el CID de la cuenta
-    assert.ok(!/"CID"/.test(JSON.stringify(r)));
-    // las operaciones INICIAL pasan a ejecutada
-    const s = semilla();
-    const o = aplicarEventosOps({ docs: s.ops, eventos: r.eventos, ahora: LUNES });
-    assert.deepEqual(o.tocados, ["2026-10"]);
-    assert.ok(o.docs["2026-10"].ops.every(x => x.estado === "ejecutada" && x.positionIds.length === 1 && x.ejecucion.unidades > 0));
   });
 }
 
+test("cola del 30-oct (port2): las 5 siguen aceptadas, con alerta de pendiente", () => {
+  const r = conciliar({ libro: libroSemilla(), portafolio: leerFix("etoro/port2.json"), historial: [], ahora: Date.parse("2026-10-31T14:00:00Z") });
+  assert.equal(r.libro.pendientes.length, 5); assert.deepEqual(r.eventos, []);
+  assert.equal(r.alertas.filter(a => a.startsWith("Pendiente de confirmar: ")).length, 5);
+});
+
 test("cierres total (historial) y parcial (bid): efectivo y realizado al centavo", () => {
-  const { libro } = semilla();
-  const base = conciliar({ libro, portafolio: lunes(), historial: [], ahora: LUNES }).libro;
-  base.pendientes.push({ opId: "2026-11-04-XLE-V1", orderId: null, sym: "XLE", instrumentId: 3008, lado: "venta", montoUSD: null, positionId: 2600000005, unidades: null, enviadaEl: "2026-11-04T14:55:00Z" });
-  base.pendientes.push({ opId: "2026-11-04-SPY-R1", orderId: null, sym: "SPY", instrumentId: 3000, lado: "venta", montoUSD: null, positionId: 2600000002, unidades: 10, enviadaEl: "2026-11-04T14:55:01Z" });
+  const base = conciliar({ libro: libroSemilla(), portafolio: lunes(), historial: [], ahora: LUNES }).libro;
+  base.pendientes.push({ opId: "2026-11-04-XLE-V1", dia: "2026-11-04", orderId: null, sym: "XLE", instrumentId: 3008, lado: "venta", montoUSD: null, positionId: 2600000005, unidades: null, enviadaEl: "2026-11-04T14:55:00Z", estado: "aceptada" });
+  base.pendientes.push({ opId: "2026-11-04-SPY-R1", dia: "2026-11-04", orderId: null, sym: "SPY", instrumentId: 3000, lado: "venta", montoUSD: null, positionId: 2600000002, unidades: 10, enviadaEl: "2026-11-04T14:55:01Z", estado: "aceptada" });
   const pf = lunes();
   pf.clientPortfolio.positions = pf.clientPortfolio.positions.filter(p => p.positionID !== 2600000005);
   pf.clientPortfolio.positions.find(p => p.positionID === 2600000002).units = 16.777294;
-  const historial = [{ positionId: 2600000005, instrumentId: 3008, closeRate: 71.00, openRate: 69.80, units: 27.059025, netProfit: 32.47, closeTimestamp: "2026-11-04T14:55:03Z" }];
-  const r = conciliar({ libro: base, portafolio: pf, historial, ahora: Date.parse("2026-11-05T14:50:00Z"), bids: bidsDe(leerFix("etoro/lunes-tasas.json")) });
+  const historial = [{ positionId: 2600000005, closeRate: 71.00, closeTimestamp: "2026-11-04T14:55:03Z" }];
+  const r = conciliar({ libro: base, portafolio: pf, historial, ahora: Date.parse("2026-11-05T14:50:00Z"), bids: bidsDe(tasasLunes()) });
   // XLE: 27.059025 × 71.00 = 1 921.19; costo 1 888.72 → +32.47. SPY: 10 × 758.20 = 7 582.00; costo 20 273.09 / 26.777294 × 10 = 7 571.00 → +11.00
-  assert.equal(r.libro.efectivoUSD, 9503.75);
-  assert.equal(r.libro.realizadoUSD, 43.47);
+  assert.equal(r.libro.efectivoUSD, 9503.75); assert.equal(r.libro.realizadoUSD, 43.47);
   assert.equal(r.libro.pendientes.length, 0);
-  assert.ok(!r.libro.posiciones.some(p => p.sym === "XLE"));
   const l = r.libro.posiciones.find(p => p.sym === "SPY").lotes.find(x => x.positionId === 2600000002);
   assert.equal(l.unidades, 16.777294); assert.equal(l.costoUSD, 12702.09);
-  assert.deepEqual(r.eventos.map(e => [e.tipo, e.sym, e.fuentePrecio]), [["ejecutada", "XLE", "historial"], ["ejecutada", "SPY", "bid"]]);
   invariantes(r.libro);
 });
 
-test("pendiente que desaparece: rechazada con errorCode (vuelve el efectivo); sin rastro → desconocida con alerta", () => {
-  const { libro } = semilla();
+test("compra que desaparece: errorCode → no_ejecutada y vuelve el efectivo; sin rastro → incierta", () => {
   const pf = leerFix("etoro/port2.json");
   pf.clientPortfolio.ordersForOpen = pf.clientPortfolio.ordersForOpen.filter(o => ![391187996, 391213506].includes(o.orderID));
-  const r = conciliar({ libro, portafolio: pf, historial: [], ahora: LUNES, ordenes: { 391187996: { orderID: 391187996, statusID: 4, errorCode: 720 } } });
-  assert.equal(r.libro.efectivoUSD, 0.56 + 1888.72);
-  assert.ok(r.libro.pendientes.some(p => p.orderId === 391213506 && p.estado === "desconocida"));
-  assert.equal(r.alertas.length, 1);
-  assert.deepEqual(r.eventos.map(e => e.tipo).sort(), ["desconocida", "rechazada"]);
+  const r = conciliar({ libro: libroSemilla(), portafolio: pf, historial: [], ahora: LUNES, ordenes: { 391187996: { orderID: 391187996, statusID: 4, errorCode: 720 } } });
+  assert.equal(r.libro.efectivoUSD, Math.round((0.56 + 1888.72) * 100) / 100);
+  assert.ok(r.libro.pendientes.some(p => p.orderId === 391213506 && p.estado === "incierta"));
+  assert.deepEqual(r.eventos.map(e => e.tipo).sort(), ["incierta", "no_ejecutada"]);
+  const o = aplicarEventosOps({ docs: { "2026-10-30": S["ops-2026-10-30"] }, eventos: r.eventos, ahora: LUNES }).docs["2026-10-30"].ops;
+  assert.equal(o.find(x => x.o === 391187996).est, "no_ejecutada"); assert.equal(o.find(x => x.o === 391213506).est, "incierta");
 });
 
-test("lote sin posición ni cierre pendiente → EXTERNA; unidades distintas → manda eToro", () => {
-  const { libro } = semilla();
-  const base = conciliar({ libro, portafolio: lunes(), historial: [], ahora: LUNES }).libro;
+test("lote sin posición ni cierre pendiente → EXTERNA en ops-<hoy>; unidades distintas → manda eToro", () => {
+  const base = conciliar({ libro: libroSemilla(), portafolio: lunes(), historial: [], ahora: LUNES }).libro;
   const pf = lunes();
   pf.clientPortfolio.positions = pf.clientPortfolio.positions.filter(p => p.positionID !== 2600000004);
   pf.clientPortfolio.positions.find(p => p.positionID === 2600000003).units = 11.5;
-  const r = conciliar({ libro: base, portafolio: pf, historial: [], ahora: LUNES + 86400000, bids: bidsDe(leerFix("etoro/lunes-tasas.json")) });
+  const r = conciliar({ libro: base, portafolio: pf, historial: [], ahora: LUNES + 86400000, bids: bidsDe(tasasLunes()) });
   assert.ok(r.eventos.some(e => e.tipo === "externa" && e.sym === "XLF"));
-  assert.equal(r.libro.efectivoUSD, Math.round((0.56 + 55.238271 * 56.80) * 100) / 100);
   assert.equal(r.libro.posiciones.find(p => p.sym === "DIA").lotes[0].unidades, 11.5);
-  assert.equal(r.alertas.length, 2);
   const o = aplicarEventosOps({ docs: {}, eventos: r.eventos, ahora: LUNES + 86400000 });
-  assert.equal(o.docs["2026-11"].ops[0].regla, "EXTERNA"); assert.equal(o.docs["2026-11"].ops[0].id, "2026-11-03-XLF-EXTERNA");
+  assert.equal(o.docs["2026-11-03"].ops[0].regla, "EXTERNA"); assert.equal(o.docs["2026-11-03"].ops[0].id, "2026-11-03-XLF-EXTERNA");
+  assert.deepEqual(validarDoc("ops-2026-11-03", conH(o.docs["2026-11-03"])), []);
 });
 
-test("recuperación: compras con orden nueva tras el inicio se adoptan y marcan operadoHoy", () => {
-  const { libro } = conciliar({ libro: semilla().libro, portafolio: lunes(), historial: [], ahora: LUNES });
-  const inicio = Date.parse("2026-11-04T14:58:00Z");
-  const pf = lunes();
-  pf.clientPortfolio.ordersForOpen = [{ instrumentID: 3006, amount: 3000, orderID: 391300001, statusID: 11, openDateTime: "2026-11-04T14:59:00Z" }];
-  const plan = [{ id: "2026-11-04-QQQ-C1", sym: "QQQ", instrumentId: 3006, lado: "compra", regla: "C1", montoUSD: 3000, cierres: null, motivo: "Entra al objetivo" },
-    { id: "2026-11-04-IWM-C1", sym: "IWM", instrumentId: 3005, lado: "compra", regla: "C1", montoUSD: 1000, cierres: null, motivo: "Entra al objetivo" }];
-  const r = conciliar({ libro, portafolio: pf, historial: [], ahora: Date.parse("2026-11-04T15:20:00Z"), planRecuperado: { de: "2026-11-04", inicio, plan } });
-  assert.equal(r.libro.pendientes.length, 1);
-  assert.equal(r.libro.pendientes[0].orderId, 391300001);
-  assert.equal(r.libro.efectivoUSD, Math.round((0.56 - 3000) * 100) / 100 + 0); // la compra adoptada descuenta al enviarse
-  assert.deepEqual(r.libro.operadoHoy, { fecha: "2026-11-04", syms: ["QQQ"] });
-  assert.ok(r.eventos.some(e => e.tipo === "adoptada" && e.opId === "2026-11-04-QQQ-C1"));
-});
-
-test("valuar: Σ unidades × bid + efectivo + pendientes; pesos suman con el efectivo", () => {
-  const { libro } = conciliar({ libro: semilla().libro, portafolio: lunes(), historial: [], ahora: LUNES });
-  const v = valuar({ libro, tasas: leerFix("etoro/lunes-tasas.json"), fx: { valor: 18.70, fuente: "etoro" }, at: LUNES });
-  const esperado = Math.round((0.660414 * 758.20 + 26.777294 * 758.20 + 11.891801 * 519.00 + 55.238271 * 56.80 + 27.059025 * 70.10) * 100) / 100;
-  assert.ok(Math.abs(v.valorUSD - (esperado + 0.56)) <= 0.03, `${v.valorUSD} vs ${esperado + 0.56}`);
-  assert.equal(v.spyUSD, 758.20);
-  assert.equal(v.posiciones.find(p => p.sym === "SPY").lotes, 2);
-  assert.ok(Math.abs(v.posiciones.reduce((a, p) => a + p.peso, 0) + v.efectivoUSD / v.valorUSD - 1) < 1e-6);
-  const v2 = valuar({ libro: semilla().libro, tasas: [], fx: { valor: 18.774, fuente: "radar" } });
-  assert.equal(v2.valorUSD, 31959.09); assert.equal(v2.pendientesUSD, 31958.53);
+test("valuar con precio válido (H8): bid 0 o viejo → precio guardado o costo, alerta y precioValido:false", () => {
+  const libro = conciliar({ libro: libroSemilla(), portafolio: lunes(), historial: [], ahora: LUNES }).libro;
+  const ok = valuar({ libro, tasas: tasasLunes(), fx: { valor: 18.7, fuente: "etoro" }, at: LUNES + 60000 });
+  assert.deepEqual(ok.alertas, []); assert.ok(ok.posiciones.every(p => p.precioValido));
+  assert.deepEqual(ok.precios.XLF, [56.80, "2026-11-02"]);
+  const malas = tasasLunes().map(r => (r.instrumentID === 3004 ? Object.assign({}, r, { bid: 0 }) : r.instrumentID === 3026 ? Object.assign({}, r, { date: "2026-11-02T13:00:00Z" }) : r));
+  libro.precios = { DIA: [518.5, "2026-10-30"] };
+  const v = valuar({ libro, tasas: malas, fx: { valor: 18.7, fuente: "etoro" }, at: LUNES + 60000 });
+  const xlf = v.posiciones.find(p => p.sym === "XLF"), dia = v.posiciones.find(p => p.sym === "DIA");
+  assert.equal(xlf.precioValido, false); assert.equal(xlf.valorUSD, 3132.01); // a costo
+  assert.equal(dia.precioValido, false); assert.equal(dia.precioUSD, 518.5);
+  assert.deepEqual(v.alertas, ["Precio inválido de eToro para DIA; se valúa con el de 2026-10-30", "Precio inválido de eToro para XLF; se valúa a costo"]);
+  assert.ok(Math.abs(v.valorUSD - ok.valorUSD) < 120, "el total no pierde la posición sin precio");
 });
 
 test("unidadesAVender: FIFO por fecha de apertura; ≥ 99 % → cierre total", () => {
-  const { libro } = conciliar({ libro: semilla().libro, portafolio: lunes(), historial: [], ahora: LUNES });
+  const libro = conciliar({ libro: libroSemilla(), portafolio: lunes(), historial: [], ahora: LUNES }).libro;
   assert.deepEqual(unidadesAVender({ libro, sym: "SPY", unidades: 5 }), [{ positionId: 2600000001, instrumentId: 3000, unidades: null }, { positionId: 2600000002, instrumentId: 3000, unidades: 4.339586 }]);
-  assert.deepEqual(unidadesAVender({ libro, sym: "SPY", unidades: 0.5 }), [{ positionId: 2600000001, instrumentId: 3000, unidades: 0.5 }]);
   assert.deepEqual(unidadesAVender({ libro, sym: "SPY", unidades: 27.2 }).map(c => c.unidades), [null, null]);
-  assert.deepEqual(unidadesAVender({ libro, sym: "SPY", unidades: null }).map(c => c.unidades), [null, null]);
   assert.deepEqual(unidadesAVender({ libro, sym: "QQQ", unidades: 1 }), []);
 });
 
-test("aplicarEjecucion: compra ejecutada crea lote y descuenta; venta total suma; simulada no toca el libro", () => {
-  const { libro } = conciliar({ libro: semilla().libro, portafolio: lunes(), historial: [], ahora: LUNES });
+test("aplicarResultados: simulación solo registra; real crea lote, pendiente, venta y deja fuera lo rechazado", () => {
+  const libro = conciliar({ libro: libroSemilla(), portafolio: lunes(), historial: [], ahora: LUNES }).libro;
   libro.efectivoUSD = 5000;
-  const t = Date.parse("2026-11-04T15:05:00Z");
-  const r = aplicarEjecucion({ libro, ops: { kind: "carteraOps", v: 1, mes: "2026-11", at: 0, ops: [] }, ahora: t, resultados: [
-    { id: "2026-11-04-XLE-V1", sym: "XLE", instrumentId: 3008, lado: "venta", regla: "V1", motivo: "Pasó a Evitar (44 %)", montoUSD: null, cierres: [{ positionId: 2600000005, unidades: null }],
-      estado: "ejecutada", orderId: 9001, positionIds: [2600000005], detalle: [{ positionId: 2600000005, unidades: null, estado: "ejecutada", precio: 70.00 }] },
-    { id: "2026-11-04-QQQ-C1", sym: "QQQ", instrumentId: 3006, lado: "compra", regla: "C1", motivo: "Entra", montoUSD: 3000, estado: "ejecutada", orderId: 9002, positionIds: [2600000100],
-      ejecucion: { precio: 690, unidades: 4.347826, montoUSD: 3000, at: "2026-11-04T15:01:00Z" } },
-    { id: "2026-11-04-IWM-C1", sym: "IWM", instrumentId: 3005, lado: "compra", regla: "C1", motivo: "Entra", montoUSD: 1000, estado: "pendiente", orderId: 9003, positionIds: [] },
-  ] });
-  assert.equal(r.libro.efectivoUSD, Math.round((5000 + 27.059025 * 70 - 3000 - 1000) * 100) / 100);
-  assert.equal(r.libro.realizadoUSD, Math.round((Math.round(27.059025 * 70 * 100) / 100 - 1888.72) * 100) / 100);
+  const F = "2026-11-04", t = Date.parse("2026-11-04T15:05:00Z");
+  const plan = [{ id: `${F}-XLE-V1`, sym: "XLE", instrumentId: 3008, lado: "venta", regla: "V1", motivo: "Pasó a Evitar (44 %)", montoUSD: null, cierres: [{ positionId: 2600000005, unidades: null }] },
+    { id: `${F}-QQQ-C1`, sym: "QQQ", instrumentId: 3006, lado: "compra", regla: "C1", motivo: "Entra", montoUSD: 3000, cierres: null },
+    { id: `${F}-IWM-C1`, sym: "IWM", instrumentId: 3005, lado: "compra", regla: "C1", motivo: "Entra", montoUSD: 1000, cierres: null },
+    { id: `${F}-VWO-C1`, sym: "VWO", instrumentId: 4252, lado: "compra", regla: "C1", motivo: "Entra", montoUSD: 500, cierres: null }];
+  const sim = aplicarResultados({ libro, opsHoy: opsNuevo(F), plan, simulacion: true, ahora: t });
+  assert.equal(sim.libro.efectivoUSD, 5000); assert.ok(sim.ops.ops.every(o => o.est === "simulada" && o.sim));
+  const res = [{ id: plan[0].id, k: 0, est: "ejecutada", env: "2026-11-04T15:01:00Z", o: 9001, px: 70 },
+    { id: plan[1].id, k: 0, est: "ejecutada", env: "2026-11-04T15:01:10Z", o: 9002, pos: [2600000100], px: 690, uej: 4.347826, usdej: 3000, abierta: "2026-11-04T15:01:12Z" },
+    { id: plan[2].id, k: 0, est: "aceptada", env: "2026-11-04T15:01:20Z", o: 9003 },
+    { id: plan[3].id, k: 0, est: "rechazada", env: "2026-11-04T15:01:30Z", err: "etoro_rechazo HTTP 400" }];
+  const r = aplicarResultados({ libro, opsHoy: opsNuevo(F), plan, res, simulacion: false, ahora: t });
+  assert.equal(r.libro.efectivoUSD, Math.round((5000 + Math.round(27.059025 * 70 * 100) / 100 - 3000 - 1000) * 100) / 100);
   assert.ok(r.libro.posiciones.find(p => p.sym === "QQQ").lotes[0].positionId === 2600000100);
-  assert.ok(r.libro.pendientes.some(p => p.sym === "IWM" && p.orderId === 9003));
-  assert.deepEqual(r.libro.operadoHoy, { fecha: "2026-11-04", syms: ["XLE", "QQQ", "IWM"] });
-  assert.deepEqual(r.ops.ops.map(o => [o.id, o.estado]), [["2026-11-04-XLE-V1", "ejecutada"], ["2026-11-04-QQQ-C1", "ejecutada"], ["2026-11-04-IWM-C1", "pendiente"]]);
-  const s = aplicarEjecucion({ libro, ops: { kind: "carteraOps", v: 1, mes: "2026-11", at: 0, ops: [] }, ahora: t, resultados: [
-    { id: "2026-11-04-QQQ-C1", sym: "QQQ", instrumentId: 3006, lado: "compra", regla: "C1", motivo: "Entra", montoUSD: 3000, estado: "simulada" }] });
-  assert.equal(s.libro.efectivoUSD, 5000); assert.deepEqual(s.libro.pendientes, libro.pendientes);
-  assert.equal(s.ops.ops[0].simulacion, true); assert.equal(s.ops.ops[0].estado, "simulada");
+  assert.deepEqual(r.libro.pendientes.map(p => [p.sym, p.estado, p.enviadaEl]), [["IWM", "aceptada", "2026-11-04T15:01:20Z"]]);
+  assert.deepEqual(r.ops.ops.map(o => [o.sym, o.est]), [["XLE", "ejecutada"], ["QQQ", "ejecutada"], ["IWM", "aceptada"], ["VWO", "rechazada"]]);
+  assert.deepEqual(validarDoc(`ops-${F}`, conH(r.ops)), []);
   invariantes(r.libro);
 });
 
-test("semilla CLI: escribe los 6 en orden; con cartera-libro existente o en _fallos → código 2 y nada en salida/", async () => {
-  const dir = carpetaConDb();
-  const r = await semillaCli(["--dir", dir], { ahora: () => 5 });
-  assert.equal(r.codigo, 0); assert.equal(r.linea.accion, "sembrar");
-  assert.deepEqual(leerSalida(dir, "salida/semilla/_orden.json").map(x => x.id), ["cartera-libro", "operaciones-2026-10", "cartera-serie-2026", "etoro-mapa", "rutina-config", "bitacora-indice"]);
-  assert.equal(leerSalida(dir, "salida/semilla/cartera-libro.json").efectivoUSD, 0.56);
-  for (const [docs, fallos] of [[{ "cartera-libro": { kind: "carteraLibro" } }, null], [{}, { "cartera-libro": "unavailable" }]]) {
-    const d = carpetaConDb(docs, fallos);
+test("K9 · semilla CLI: 5 set sin ifVersion con h válido; código 2 si cartera-libro está ok, falló o no se leyó", async () => {
+  const dir = carpetaConDb({}, null, { noExisten: ["cartera-libro"] });
+  const r = await semillaCli(["--dir", dir], { ahora: () => Date.parse("2026-11-01T18:00:00Z") });
+  assert.equal(r.codigo, 0); assert.equal(r.linea.accion, "sembrar"); assert.equal(r.linea.escribir, "salida/semilla/db_write.json");
+  const w = JSON.parse(fs.readFileSync(path.join(dir, "salida/semilla/db_write.json"), "utf8"));
+  assert.deepEqual(w.ops.map(o => o.path.replace(DB_RUTA + "/", "")), ["rutina-config", "cartera-libro", "etoro-mapa", "ops-2026-10-30", "punto-2026-10-30"]);
+  assert.ok(w.ops.every(o => o.op === "set" && o.ifVersion === undefined));
+  // lo que se escribiría lo acepta importar (h y forma)
+  agregarLecturas(dir, w.ops.map(o => ({ id: o.path.split("/").pop(), exists: true, version: 1, data: o.data })));
+  const v = leerVersiones(dir);
+  assert.ok(w.ops.every(o => v[o.path.split("/").pop()].estado === "ok"));
+  for (const [docs, fallos, opts] of [[{ "cartera-libro": S["cartera-libro"] }, null, {}], [{}, { "cartera-libro": "unavailable" }, {}], [{}, null, {}]]) {
+    const d = carpetaConDb(docs, fallos, opts);
     const x = await semillaCli(["--dir", d]);
     assert.equal(x.codigo, 2); assert.equal(x.linea.accion, "ya_existe");
-    assert.ok(!existe(d, "salida/semilla"));
     assert.deepEqual(fs.readdirSync(path.join(d, "salida")), []);
   }
 });

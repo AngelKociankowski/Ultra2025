@@ -1,4 +1,4 @@
-// T07 · 10-radar
+// T07 / K4 · 10-radar sin documentos de la página (12b §E.5.6)
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -6,93 +6,68 @@ import path from "node:path";
 import { main as radar } from "../bin/10-radar.mjs";
 import { escribirTrabajo } from "../lib/archivos.mjs";
 import { CONFIG_DEFECTO } from "../lib/constantes.mjs";
-import { carpetaConDb, leerSalida, existe, leerFix, dia30 } from "./util.mjs";
+import { conH } from "../lib/db.mjs";
+import { validarDoc } from "../lib/esquemas.mjs";
+import { carpetaConDb, leerSalida, existe } from "./util.mjs";
 import { PAGINA, fmpSintetico, NOW_SINT } from "./sintetico.mjs";
-import { transporteFalso } from "../lib/http.mjs";
+import { libroLunesDb } from "./escenario.mjs";
 import { crearValidador } from "./validar-salida.mjs";
 
 const { C } = PAGINA;
-const RUN = `drutina0001-rutina-${NOW_SINT}`;
-function carpeta(docs = {}, fecha = "2026-11-02") {
-  const dir = carpetaConDb(docs);
-  escribirTrabajo(dir, "preparar.json", { fechaET: fecha, ahora: NOW_SINT, radar: { accion: "correr", runId: RUN, startedAt: NOW_SINT, esperas: 0 }, config: JSON.parse(JSON.stringify(CONFIG_DEFECTO)) });
+function carpeta(previo = null) {
+  const est = { kind: "rutinaEstado", v: 2, fecha: "2026-10-30", estado: "hecha", paso: "cerrar", sesion: "s-1", inicio: "2026-10-30T14:47:00Z", latido: "2026-10-30T15:00:00Z",
+    fin: "2026-10-30T15:00:00Z", commit: null, modo: "en_linea", ejecucionesAbiertas: [], previo, escritos: {}, motivo: null };
+  const dir = carpetaConDb({ "rutina-estado": est, "cartera-libro": libroLunesDb() });
+  escribirTrabajo(dir, "preparar.json", { fechaET: "2026-11-02", ahora: NOW_SINT, modo: "en_linea", radar: { accion: "correr", motivo: null }, config: JSON.parse(JSON.stringify(CONFIG_DEFECTO)) });
   return dir;
 }
-const orden = dir => leerSalida(dir, "salida/radar/_orden.json");
-const indice = dias => ({ kind: "indice", v: 1, at: 1, dias });
 
-test("correr: dia-*, manifiesto, indice, corrida, contador y luego los borrar de días podados", async () => {
-  const dir = carpeta({ indice: indice([{ dateET: "2026-11-02", parts: 3 }, { dateET: "2026-10-30", parts: 4 }, { dateET: "2026-10-16", parts: 4 }]) });
-  const { transporte, ahora } = fmpSintetico();
-  const r = await radar(["--dir", dir, "--modo", "correr"], { transporteFmp: transporte, ahora, pagina: PAGINA });
-  assert.equal(r.codigo, 0); assert.equal(r.linea.accion, "listo"); assert.equal(r.linea.escribir, "salida/radar/_orden.json");
-  const ids = orden(dir).map(x => `${x.accion[0]}:${x.id}`);
-  const man = leerSalida(dir, "salida/radar/dia-2026-11-02.json"), n = man.parts.length;
-  assert.deepEqual(ids, [...Array.from({ length: n }, (_, k) => `e:dia-2026-11-02-p${k}`), "e:dia-2026-11-02", "e:indice", "e:corrida", "e:contador-drutina0001",
-    "b:dia-2026-10-16-p0", "b:dia-2026-10-16-p1", "b:dia-2026-10-16-p2", "b:dia-2026-10-16-p3", "b:dia-2026-10-16"]);
-  assert.deepEqual(leerSalida(dir, "salida/radar/indice.json").dias, [{ dateET: "2026-11-02", parts: n }, { dateET: "2026-10-30", parts: 4 }]);
-  const cor = leerSalida(dir, "salida/radar/corrida.json");
-  assert.equal(cor.state, "done"); assert.equal(cor.runId, RUN); assert.ok(Number.isFinite(cor.finishedAt)); assert.equal(cor.dev, "drutina0001"); assert.equal(cor.startedAt, NOW_SINT);
-  assert.equal(man.runId, RUN); assert.equal(man.dev, "drutina0001"); assert.equal(man.kind, "dia");
-  const c = leerSalida(dir, "salida/radar/contador-drutina0001.json");
-  assert.deepEqual(c.byCat, { sonda: 2, arranque: 0, franja: 13, tabla: 0, mercado: 0, macro: 2, corrida: 609, detalle: 0, manual: 0 }); assert.equal(c.used, 626);
-  // lo que escribió la rutina lo une la página igual
-  const partes = Array.from({ length: n }, (_, k) => leerSalida(dir, `salida/radar/dia-2026-11-02-p${k}.json`));
-  const out = C.joinDay(man, partes);
-  assert.equal(crearValidador(C)(out), true);
+test("correr con el sintético: analisis.json completo y radar-resumen ≤ 4 000 B, ≤ 30 filas, s con todas, cambios contra previo", async () => {
+  // previo de prueba: la primera fila tenía otra señal, el objetivo traía QQQ y el régimen era NEUTRAL
+  const sint = fmpSintetico();
+  const dir0 = carpeta(null);
+  await radar(["--dir", dir0, "--modo", "correr"], { transporteFmp: sint.transporte, ahora: sint.ahora, pagina: PAGINA });
+  const base = leerSalida(dir0, "trabajo/radar-resumen.json");
+  const fila0 = base.s.split("|")[0].split(":");
+  const otra = fila0[1] === "3" ? 1 : 3;
+  const previo = { f: "2026-10-30", reg: "NEUTRAL", s: [`${fila0[0]}:${otra}:50`].concat(base.s.split("|").slice(1)).join("|"), obj: "SPY:6500|QQQ:1000" };
+  const dir = carpeta(previo), s2 = fmpSintetico();
+  const r = await radar(["--dir", dir, "--modo", "correr"], { transporteFmp: s2.transporte, ahora: s2.ahora, pagina: PAGINA });
+  assert.equal(r.codigo, 0); assert.equal(r.linea.accion, "listo"); assert.equal(r.linea.modo, "en_linea");
   const an = leerSalida(dir, "trabajo/analisis.json");
-  assert.equal(an.fuente, "rutina"); assert.deepEqual(an.out, out); assert.equal(an.llamadas.total, 626);
-});
-
-test("error del corredor → solo corrida (error, reason) y contador; código 3 sin_radar", async () => {
-  const dir = carpeta();
-  const { transporte, ahora } = fmpSintetico({ falla: () => ({ http: 401, texto: "" }) });
-  const r = await radar(["--dir", dir, "--modo", "correr"], { transporteFmp: transporte, ahora, pagina: PAGINA });
-  assert.equal(r.codigo, 3); assert.equal(r.linea.accion, "sin_radar");
-  assert.deepEqual(orden(dir).map(x => x.id), ["corrida", "contador-drutina0001"]);
-  const cor = leerSalida(dir, "salida/radar/corrida.json");
-  assert.equal(cor.state, "error"); assert.equal(cor.reason, "auth"); assert.equal(cor.runId, RUN);
-  assert.equal(leerSalida(dir, "trabajo/analisis.json").fuente, "ninguna");
-});
-
-test("navegador con el volcado del 30-oct: analisis.json = joinDay del volcado y nada en salida/radar", async () => {
-  const { man, partes, out } = dia30(C);
-  const docs = { "dia-2026-10-30": man }; partes.forEach((p, k) => { docs[`dia-2026-10-30-p${k}`] = p; });
-  const dir = carpeta(docs, "2026-10-30");
-  const r = await radar(["--dir", dir, "--modo", "navegador"], { transporteFmp: transporteFalso(() => { throw new Error("sin FMP"); }), pagina: PAGINA });
-  assert.equal(r.codigo, 0); assert.equal(r.linea.accion, "listo");
-  const an = leerSalida(dir, "trabajo/analisis.json");
-  assert.equal(an.fuente, "navegador"); assert.deepEqual(an.out, out); assert.equal(an.runId, man.runId);
+  assert.equal(an.fuente, "rutina"); assert.equal(an.llamadas.total, 626); assert.equal(crearValidador(C)(an.out), true);
+  const res = leerSalida(dir, "trabajo/radar-resumen.json"), conh = conH(res);
+  assert.deepEqual(validarDoc("radar-2026-11-02", conh), []);
+  assert.ok(Buffer.byteLength(JSON.stringify(conh)) <= 4000, `${Buffer.byteLength(JSON.stringify(conh))} B`);
+  assert.ok(res.filas.length <= 30 && res.filas.length >= 10);
+  assert.equal(res.s.split("|").length, an.out.rows.length);
+  assert.equal(res.llamadas, 626); assert.equal(res.asOf, "2026-11-02");
+  assert.ok(res.obj.length > 0 && res.obj.every(x => Number.isInteger(x[1]) && (x[2] === "N" || x[2] === "S")));
+  const tipos = res.cambios.map(c => c[0] + ":" + c[1]);
+  assert.ok(tipos.includes(`reg:regimen`), JSON.stringify(res.cambios));
+  assert.ok(tipos.includes(`${fila0[0]}:senal`));
+  assert.ok(tipos.includes("QQQ:sale_objetivo") || res.obj.some(x => x[0] === "QQQ"));
+  assert.ok(res.filas.some(f => f[0] === fila0[0]), "la fila que cambió de señal va en filas");
+  for (const f of res.filas) { assert.equal(f.length, 8); assert.ok(Number.isInteger(f[4])); }
   assert.ok(!existe(dir, "salida/radar"));
-  // ninguno → código 3
+});
+
+test("403 del proxy en la 1.ª llamada → 1 llamada, sin_radar motivo policy; nada en salida/", async () => {
+  const dir = carpeta(null);
+  const s = fmpSintetico({ falla: () => ({ http: 0, conectar: 403, texto: "", errorRed: "curl 56" }) });
+  const r = await radar(["--dir", dir, "--modo", "correr"], { transporteFmp: s.transporte, ahora: s.ahora, pagina: PAGINA });
+  assert.equal(r.codigo, 3); assert.equal(r.linea.accion, "sin_radar");
+  assert.equal(s.transporte.llamadas.length, 1);
+  const res = leerSalida(dir, "trabajo/radar-resumen.json");
+  assert.deepEqual([res.estado, res.motivo], ["sin_radar", "policy"]);
+  assert.deepEqual(validarDoc("radar-2026-11-02", conH(res)), []);
+  assert.ok(Buffer.byteLength(JSON.stringify(conH(res))) < 250);
+  assert.deepEqual(fs.readdirSync(path.join(dir, "salida")), []);
+  // modo ninguno
   const n = await radar(["--dir", dir, "--modo", "ninguno"], { pagina: PAGINA });
   assert.equal(n.codigo, 3); assert.equal(leerSalida(dir, "trabajo/analisis.json").out, null);
-});
-
-test("día del navegador parcial y corrida propia peor → no emite dia-*, usa el del navegador", async () => {
-  const { man, partes } = dia30(C);
-  const hoy = Object.assign({}, man, { dateET: "2026-11-02", partial: true, partialReason: "por minuto", meta: Object.assign({}, man.meta, { partial: true, partialReason: "por minuto" }),
-    parts: man.parts.map((p, i) => Object.assign({}, p, { id: `dia-2026-11-02-p${i}` })) });
-  const docs = { "dia-2026-11-02": hoy }; partes.forEach((p, k) => { docs[`dia-2026-11-02-p${k}`] = p; });
-  const dir = carpeta(docs);
-  const { transporte, ahora } = fmpSintetico({ falla: (req, n) => (n >= 120 && n < 126 ? { http: 429, texto: '{"Error Message":"Limit Reach"}' } : null) });
-  const r = await radar(["--dir", dir, "--modo", "correr"], { transporteFmp: transporte, ahora, pagina: PAGINA });
-  assert.equal(r.codigo, 0);
-  assert.deepEqual(orden(dir).map(x => x.id), ["corrida", "contador-drutina0001"]);
-  assert.equal(leerSalida(dir, "salida/radar/corrida.json").state, "partial");
-  const an = leerSalida(dir, "trabajo/analisis.json");
-  assert.equal(an.fuente, "navegador"); assert.equal(an.out.rows.length, 66); assert.equal(an.parcial, true);
-});
-
-test("contador previo del mismo día se suma (otro día no)", async () => {
-  const previo = { kind: "contador", v: 1, dev: "drutina0001", dateET: "2026-11-02", used: 10, byCat: { sonda: 2, arranque: 0, franja: 0, tabla: 0, mercado: 0, macro: 2, corrida: 6, detalle: 0, manual: 0 }, limitHit: false, suspect: null, at: 1 };
-  const dir = carpeta({ "contador-drutina0001": previo });
-  const { transporte, ahora } = fmpSintetico();
-  await radar(["--dir", dir, "--modo", "correr"], { transporteFmp: transporte, ahora, pagina: PAGINA });
-  const c = leerSalida(dir, "salida/radar/contador-drutina0001.json");
-  assert.equal(c.used, 636); assert.equal(c.byCat.corrida, 615); assert.equal(c.byCat.sonda, 4);
-  const dir2 = carpeta({ "contador-drutina0001": Object.assign({}, previo, { dateET: "2026-10-30" }) });
-  const s2 = fmpSintetico();
-  await radar(["--dir", dir2, "--modo", "correr"], { transporteFmp: s2.transporte, ahora: s2.ahora, pagina: PAGINA });
-  assert.equal(leerSalida(dir2, "salida/radar/contador-drutina0001.json").used, 626);
+  // la página cambió → sin_radar pagina_cambio sin llamadas
+  const t = fmpSintetico();
+  const p = await radar(["--dir", dir, "--modo", "correr"], { transporteFmp: t.transporte, ahora: t.ahora, pagina: Object.assign({}, PAGINA, { compatible: false }) });
+  assert.equal(p.codigo, 3); assert.equal(leerSalida(dir, "trabajo/radar-resumen.json").motivo, "pagina_cambio"); assert.equal(t.transporte.llamadas.length, 0);
 });

@@ -3,10 +3,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { leerDoc, escribirDoc, borrarDoc, ordenDe, ErrorArchivo, leerArgs } from "../lib/archivos.mjs";
+import { leerDoc, ErrorArchivo, leerArgs } from "../lib/archivos.mjs";
 import { crearHttp, transporteFalso, ErrorHttp } from "../lib/http.mjs";
 import { crearRegistro } from "../lib/registro.mjs";
-import { DOC_MAX, CONFIG_DEFECTO } from "../lib/constantes.mjs";
+import { CONFIG_DEFECTO } from "../lib/constantes.mjs";
 import { main as esperar } from "../bin/esperar.mjs";
 import { RAIZ, carpetaConDb, archivosBajo } from "./util.mjs";
 
@@ -17,38 +17,17 @@ test("package.json sin dependencias", () => {
   assert.equal(p.type, "module");
 });
 
-test("leerDoc distingue no_existe, fallo (_fallos) y ok", () => {
-  const dir = carpetaConDb({ corrida: { kind: "corrida", v: 1 }, "cartera-libro": { kind: "carteraLibro" } }, { "cartera-libro": "resource_exhausted", "rutina-estado": "unavailable" });
-  assert.deepEqual(leerDoc(dir, "corrida"), { estado: "ok", doc: { kind: "corrida", v: 1 }, codigo: null });
-  assert.equal(leerDoc(dir, "indice").estado, "no_existe");
-  const f = leerDoc(dir, "rutina-estado");
-  assert.equal(f.estado, "fallo"); assert.equal(f.codigo, "unavailable");
-  // en _fallos aunque haya archivo: nunca "existe" ni "no existe"
-  assert.equal(leerDoc(dir, "cartera-libro").estado, "fallo");
-  fs.writeFileSync(path.join(dir, "entrada", "db", "plan.json"), "{roto");
-  assert.equal(leerDoc(dir, "plan").estado, "fallo");
+test("leerDoc distingue ok, no_existe, fallo, corrupto y sin_leer (12b §E.2)", () => {
+  const dir = carpetaConDb({ "rutina-config": { kind: "rutinaConfig", v: 2, at: "2026-10-31T12:00:00Z", operar: false, perfil: "moderado", bandaPts: 5, minOrdenUSD: 100, nuevoSatelitePct: 3,
+    diasSalida: 3, maxOrdenesDia: 12, ventanaET: { desde: "09:45", hasta: "15:30" }, noticiasVentanaH: 72, tolPrecioPct: 2, activadoEl: null, podar: true } },
+  { "cartera-libro": "resource_exhausted" }, { noExisten: ["etoro-mapa"] });
+  const ok = leerDoc(dir, "rutina-config");
+  assert.equal(ok.estado, "ok"); assert.equal(ok.version, 1); assert.equal(ok.doc.kind, "rutinaConfig");
+  assert.equal(leerDoc(dir, "etoro-mapa").estado, "no_existe");
+  const f = leerDoc(dir, "cartera-libro");
+  assert.equal(f.estado, "fallo"); assert.equal(f.codigo, "resource_exhausted");
+  assert.equal(leerDoc(dir, "rutina-estado").estado, "sin_leer");
   assert.throws(() => leerDoc(dir, "../x"), ErrorArchivo);
-});
-
-test("escribirDoc: tope de 150 000 B compactos, kind obligatorio, _orden en orden de llamada", () => {
-  const dir = carpetaConDb();
-  const grande = { kind: "x", s: "a".repeat(DOC_MAX - 18) }; // compacto = DOC_MAX + 1
-  assert.equal(Buffer.byteLength(JSON.stringify(grande)), DOC_MAX + 1);
-  assert.throws(() => escribirDoc(dir, "final", "grande", grande), e => e.codigo === "doc_grande");
-  const justo = { kind: "x", s: "a".repeat(DOC_MAX - 19) };
-  assert.equal(escribirDoc(dir, "final", "justo", justo).bytes, DOC_MAX);
-  assert.throws(() => escribirDoc(dir, "final", "sinkind", { v: 1 }), e => e.codigo === "sin_kind");
-  escribirDoc(dir, "final", "b-doc", { kind: "b" });
-  borrarDoc(dir, "final", "viejo");
-  escribirDoc(dir, "final", "a-doc", { kind: "a" });
-  assert.deepEqual(ordenDe(dir, "final"), [
-    { id: "justo", archivo: "salida/final/justo.json", accion: "escribir" },
-    { id: "b-doc", archivo: "salida/final/b-doc.json", accion: "escribir" },
-    { id: "viejo", accion: "borrar" },
-    { id: "a-doc", archivo: "salida/final/a-doc.json", accion: "escribir" },
-  ]);
-  // el archivo es JSON compacto
-  assert.equal(fs.readFileSync(path.join(dir, "salida/final/a-doc.json"), "utf8"), '{"kind":"a"}');
 });
 
 test("http rechaza POST sin /demo/ antes de invocar el transporte", async () => {

@@ -1,172 +1,151 @@
-// T06 · 00-preparar y tiempo (tabla de casos con reloj inyectado)
+// T06 / K3 / H13 / H14 · 00-preparar nuevo (12b §D.2): lista sin documentos de la página y las 8 reglas en orden
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { main as preparar, listaLectura } from "../bin/00-preparar.mjs";
+import { main as preparar } from "../bin/00-preparar.mjs";
 import { cargarPagina } from "../lib/cargar-pagina.mjs";
-import { semilla } from "../lib/libro.mjs";
-import { feriadosAnio } from "../lib/tiempo.mjs";
-import { carpetaConDb, carpetaTemporal, leerSalida, existe, leerFix } from "./util.mjs";
+import { semilla, libroADb, libroDeDb } from "../lib/libro.mjs";
+import { conH } from "../lib/db.mjs";
+import { DB_RUTA } from "../lib/constantes.mjs";
+import { carpetaConDb, carpetaTemporal, leerSalida, existe, RAIZ, archivosBajo } from "./util.mjs";
 
 const pag = cargarPagina();
-const s = semilla({ ahora: () => 1 });
-const LUN = "2026-11-02T14:47:00Z"; // 9:47 ET
-const T = Date.parse(LUN);
-const base = (extra = {}) => Object.assign({ "cartera-libro": s.libro, "rutina-config": s.config, "etoro-mapa": s.mapa, "bitacora-indice": s.indiceBitacora,
-  "feriados-2026": leerFix("dia-2026-10-30/feriados-2026.json") }, extra);
-function diaHoy(fecha, { parcial = false } = {}) {
-  const m = leerFix("dia-2026-10-30/dia-2026-10-30.json");
-  return Object.assign({}, m, { dateET: fecha, partial: parcial, parts: m.parts.map((p, i) => Object.assign({}, p, { id: `dia-${fecha}-p${i}` })) });
+const S = semilla({ ahora: () => Date.parse("2026-10-31T12:00:00Z") });
+const OBL = ["rutina-estado", "rutina-config", "cartera-libro", "etoro-mapa"];
+const T = iso => Date.parse(iso);
+const estado = (o = {}) => Object.assign({ kind: "rutinaEstado", v: 2, fecha: "2026-11-02", estado: "hecha", paso: "cerrar", sesion: "s-viejo", inicio: "2026-11-02T14:47:00Z", latido: "2026-11-02T14:47:00Z",
+  fin: "2026-11-02T15:00:00Z", commit: null, modo: "en_linea", ejecucionesAbiertas: [], previo: null, escritos: {}, motivo: null }, o);
+// carpeta con los obligatorios leídos (los que no se dan, como exists:false) y bitacora-mes del mes
+function carpeta(iso, docs = {}, { fallos = null, versiones = {}, extraNo = [] } = {}) {
+  const mes = new Date(T(iso) - 5 * 3600000).toISOString().slice(0, 7);
+  const base = Object.assign({ "rutina-config": S["rutina-config"], "cartera-libro": S["cartera-libro"], "etoro-mapa": S["etoro-mapa"] }, docs);
+  const no = OBL.concat([`bitacora-mes-${mes}`], extraNo).filter(id => !(id in base) && !(fallos && id in fallos));
+  for (const [k, v] of Object.entries(base)) if (v === null) { delete base[k]; no.push(k); }
+  return carpetaConDb(base, fallos, { noExisten: no, versiones });
 }
-async function correr(docs, iso, { fallos = null, pagina = pag } = {}) {
-  const dir = carpetaConDb(docs, fallos);
-  const r = await preparar(["--dir", dir, "--fase", "decidir"], { ahora: () => Date.parse(iso), pagina });
+async function correr(iso, docs, opts = {}) {
+  const dir = carpeta(iso, docs, opts);
+  const r = await preparar(["--dir", dir, "--fase", "decidir"], { ahora: () => T(iso), pagina: opts.pagina || pag, sesion: "s-nuevo" });
   const p = existe(dir, "trabajo/preparar.json") ? leerSalida(dir, "trabajo/preparar.json") : null;
-  const orden = existe(dir, "salida/ahora/_orden.json") ? leerSalida(dir, "salida/ahora/_orden.json").map(x => x.id) : [];
+  const w = existe(dir, "salida/ahora/db_write.json") ? leerSalida(dir, "salida/ahora/db_write.json") : null;
   const aviso = existe(dir, "salida/aviso.txt") ? fs.readFileSync(path.join(dir, "salida/aviso.txt"), "utf8") : null;
-  return { dir, r, p, orden, aviso };
+  const lm = existe(dir, "trabajo/leer-mas.json") ? leerSalida(dir, "trabajo/leer-mas.json").lecturas.map(l => l.id) : null;
+  return { dir, r, p, w, aviso, lm };
 }
+const LUN = "2026-11-02T14:47:00Z";
 
-test("--fase lista: crea la carpeta del día y lista los 14 documentos con fechas resueltas", async () => {
+test("--fase lista: obligatorios sin documentos de la página; .trabajo/hoy apunta a la fecha ET (H14)", async () => {
   const raiz = carpetaTemporal();
-  const r = await preparar(["--fase", "lista"], { ahora: () => T, raiz });
-  assert.equal(r.codigo, 0); assert.equal(r.linea.accion, "leer");
-  assert.equal(r.linea.dir, ".trabajo/2026-11-02");
-  assert.deepEqual(r.linea.leer, ["rutina-estado", "rutina-config", "cartera-libro", "cartera-serie-2026", "operaciones-2026-11", "etoro-mapa", "bitacora-indice", "corrida", "indice",
-    "dia-2026-11-02", "feriados-2026", "plan", "contador-drutina0001", "preferencias"]);
-  assert.ok(fs.existsSync(path.join(raiz, ".trabajo/2026-11-02/entrada/db")));
-  assert.deepEqual(listaLectura("2027-01-05").slice(3, 5), ["cartera-serie-2027", "operaciones-2027-01"]);
+  const r = await preparar(["--fase", "lista", "--modo", "en_linea"], { ahora: () => T("2026-11-03T02:30:00Z"), raiz }); // 21:30 ET del 2-nov
+  assert.equal(r.codigo, 0); assert.equal(r.linea.modo, "en_linea"); assert.equal(r.linea.dir, ".trabajo/hoy");
+  assert.deepEqual(r.linea.lecturas.map(l => [l.id, l.obligatoria]), [["rutina-estado", true], ["rutina-config", true], ["cartera-libro", true], ["etoro-mapa", true], ["bitacora-mes-2026-11", true]]);
+  const l = r.linea.lecturas[0];
+  assert.deepEqual(l.en_linea, { herramienta: "mcp__claude-artifacts__db_get", args: { slug: "776fd979-e792-4459-ae2f-00814ef68cde", path: `${DB_RUTA}/rutina-estado` } });
+  assert.equal(l.archivo.args.collection, "data/users/me"); assert.ok(path.isAbsolute(l.archivo.args.out_dir));
+  assert.equal(fs.readlinkSync(path.join(raiz, ".trabajo/hoy")), "2026-11-02");
+  assert.ok(fs.existsSync(path.join(raiz, ".trabajo/hoy/entrada/archivo")));
+  // sin calendario en el repo para 2028: se pide feriados-2028 de la página (solo lectura, no obligatorio)
+  const r28 = await preparar(["--fase", "lista", "--modo", "en_linea"], { ahora: () => T("2028-01-17T14:47:00Z"), raiz: carpetaTemporal() });
+  assert.deepEqual(r28.linea.lecturas.slice(-1).map(x => [x.id, x.obligatoria]), [["feriados-2028", false]]);
+  // ningún paso lee ni escribe documentos de la página (comentarios aparte; `cat: "corrida"` es la categoría del contador
+  // de llamadas que usa la capa de datos de la página, no un documento)
+  const usos = [];
+  for (const f of archivosBajo(path.join(RAIZ, "bin")).concat(archivosBajo(path.join(RAIZ, "lib")))) {
+    fs.readFileSync(f, "utf8").split("\n").forEach((x, i) => { const c = x.replace(/\/\/.*$/, ""); if (/"corrida"|dia-\$\{|"indice"|contador-/.test(c) && !/esDePagina|\^\(dia-|cat: "corrida"/.test(c)) usos.push(`${path.relative(RAIZ, f)}:${i + 1}`); });
+  }
+  assert.deepEqual(usos, []);
 });
 
 test("--ahora solo con RADAR_PRUEBAS=1", async () => {
   delete process.env.RADAR_PRUEBAS;
-  await assert.rejects(() => preparar(["--fase", "lista", "--ahora", LUN], { raiz: carpetaTemporal() }), e => e.codigo === "args");
+  await assert.rejects(() => preparar(["--fase", "lista", "--modo", "en_linea", "--ahora", LUN], { raiz: carpetaTemporal() }), e => e.codigo === "args");
   process.env.RADAR_PRUEBAS = "1";
-  const r = await preparar(["--fase", "lista", "--ahora", "2026-11-03T14:47:00Z"], { raiz: carpetaTemporal() });
-  assert.equal(r.linea.dir, ".trabajo/2026-11-03");
+  const r = await preparar(["--fase", "lista", "--modo", "en_linea", "--ahora", "2026-11-03T14:47:00Z"], { raiz: carpetaTemporal() });
+  assert.equal(r.linea.fecha, "2026-11-03");
   delete process.env.RADAR_PRUEBAS;
 });
 
-test("sábado → salir/fin_de_semana con rutina-estado sin_mercado y aviso", async () => {
-  const x = await correr(base(), "2026-10-31T13:47:00Z");
-  assert.equal(x.r.codigo, 2); assert.equal(x.p.rutina.motivoSalida, "fin_de_semana");
-  assert.deepEqual(x.orden, ["rutina-estado"]);
-  assert.equal(leerSalida(x.dir, "salida/ahora/rutina-estado.json").estado, "sin_mercado");
-  assert.equal(x.aviso, "Radar · sáb 31-oct · Fin de semana: sin operación.");
+test("regla 1 · documento obligatorio dañado o en fallo → salir/integridad sin escribir", async () => {
+  const dir = carpeta(LUN, {}, {});
+  // un carácter cambiado en la copia de cartera-libro
+  const malo = conH(S["cartera-libro"]); malo.efectivo = 0.57;
+  fs.appendFileSync(path.join(dir, "entrada/lecturas.jsonl"), JSON.stringify({ id: "cartera-libro", exists: true, version: 2, data: malo }) + "\n");
+  await (await import("../lib/db.mjs")).importar(dir, { requeridos: [] });
+  const r = await preparar(["--dir", dir, "--fase", "decidir"], { ahora: () => T(LUN), pagina: pag });
+  assert.equal(r.codigo, 2); assert.equal(leerSalida(dir, "trabajo/preparar.json").rutina.motivoSalida, "integridad");
+  assert.ok(!existe(dir, "salida/ahora/db_write.json"));
+  assert.equal(fs.readFileSync(path.join(dir, "salida/aviso.txt"), "utf8"), "Radar · lun 2-nov · Falla: el documento cartera-libro llegó dañado desde db; hoy no se operó.");
+  const f = await correr(LUN, {}, { fallos: { "etoro-mapa": "unavailable" } });
+  assert.equal(f.p.rutina.motivoSalida, "integridad"); assert.equal(f.w, null);
 });
 
-test("2026-11-26 9:47 → feriado (Thanksgiving)", async () => {
-  const x = await correr(base(), "2026-11-26T14:47:00Z");
-  assert.equal(x.r.codigo, 2); assert.equal(x.p.rutina.motivoSalida, "feriado");
-  assert.equal(x.aviso, "Radar · jue 26-nov · Feriado NYSE (Thanksgiving Day): sin operación.");
-  assert.deepEqual(x.orden, ["rutina-estado"]);
+test("regla 2 · sábado → fin_de_semana sin escribir; Thanksgiving → feriado con rutina-estado sin_mercado (ifVersion)", async () => {
+  const a = await correr("2026-10-31T13:47:00Z", {});
+  assert.equal(a.r.codigo, 2); assert.equal(a.p.rutina.motivoSalida, "fin_de_semana"); assert.equal(a.w, null);
+  assert.equal(a.aviso, "Radar · sáb 31-oct · Fin de semana: sin operación.");
+  const b = await correr("2026-11-26T14:47:00Z", { "rutina-estado": estado({ fecha: "2026-11-25" }) }, { versiones: { "rutina-estado": 8 } });
+  assert.equal(b.p.rutina.motivoSalida, "feriado"); assert.equal(b.r.linea.escribir, "salida/ahora/db_write.json");
+  assert.equal(b.w.ops.length, 1); assert.equal(b.w.ops[0].ifVersion, 8); assert.equal(b.w.ops[0].data.estado, "sin_mercado");
+  assert.equal(b.aviso, "Radar · jue 26-nov · Feriado NYSE (Thanksgiving Day): sin operación.");
 });
 
-test("2026-11-27 9:47 → continuar con ventana.hasta 12:30 (cierre 13:00)", async () => {
-  const x = await correr(base(), "2026-11-27T14:47:00Z");
-  assert.equal(x.r.codigo, 0); assert.equal(x.p.rutina.accion, "continuar");
-  assert.deepEqual(x.p.ventana, { desde: "09:45", hasta: "12:30", dentro: true });
-  assert.equal(x.p.mercado.cierreAnticipado, true);
-});
-
-test("8:47 ET → temprano (sin escrituras en db); 15:40 ET → continuar con ventana.dentro false", async () => {
-  const a = await correr(base(), "2026-11-02T13:47:00Z");
-  assert.equal(a.r.codigo, 2); assert.equal(a.p.rutina.motivoSalida, "temprano"); assert.deepEqual(a.orden, []);
-  assert.equal(a.aviso, "Radar · fuera de horario; corre a las 9:47 ET.");
-  const b = await correr(base(), "2026-11-02T20:40:00Z");
-  assert.equal(b.r.codigo, 0); assert.equal(b.p.rutina.accion, "continuar"); assert.equal(b.p.ventana.dentro, false); assert.equal(b.p.ventana.hasta, "15:30");
-});
-
-test("rutina-estado hecha hoy → ya_hecha; en_curso hoy → recuperar", async () => {
-  const a = await correr(base({ "rutina-estado": { kind: "rutinaEstado", v: 1, fecha: "2026-11-02", estado: "hecha", paso: "cerrar", inicio: 1, fin: 2, intentos: 1 } }), LUN);
-  assert.equal(a.r.codigo, 2); assert.equal(a.p.rutina.motivoSalida, "ya_hecha"); assert.deepEqual(a.orden, []);
-  assert.equal(a.aviso, "Radar · la rutina de hoy ya corrió.");
-  const b = await correr(base({ "rutina-estado": { kind: "rutinaEstado", v: 1, fecha: "2026-11-02", estado: "en_curso", paso: "radar", inicio: 1, fin: null, intentos: 1, ejecucion: { inicio: null, plan: [] } } }), LUN);
-  assert.equal(b.r.codigo, 0); assert.equal(b.p.rutina.accion, "recuperar"); assert.equal(b.p.rutina.intentos, 2); assert.equal(b.p.recuperacion, null);
-});
-
-test("candado: corrida viva → esperar; done + día válido → usar_navegador; día parcial → correr", async () => {
-  const viva = { kind: "corrida", v: 1, dateET: "2026-11-02", state: "running", startedAt: T - 60000, beatAt: T - 10000, runId: "dx-1", dev: "dx", auto: true };
-  const a = await correr(base({ corrida: viva }), LUN);
-  assert.equal(a.p.radar.accion, "esperar"); assert.deepEqual(a.orden, ["rutina-estado"]);
-  const hecha = Object.assign({}, viva, { state: "done", finishedAt: T - 5000 });
-  const b = await correr(base({ corrida: hecha, "dia-2026-11-02": diaHoy("2026-11-02") }), LUN);
-  assert.equal(b.p.radar.accion, "usar_navegador"); assert.deepEqual(b.orden, ["rutina-estado"]);
-  assert.deepEqual(leerSalida(b.dir, "trabajo/leer-mas.json").leer.slice(0, 4), ["dia-2026-11-02-p0", "dia-2026-11-02-p1", "dia-2026-11-02-p2", "dia-2026-11-02-p3"]);
-  const c = await correr(base({ corrida: Object.assign({}, hecha, { state: "partial" }), "dia-2026-11-02": diaHoy("2026-11-02", { parcial: true }) }), LUN);
-  assert.equal(c.p.radar.accion, "correr");
-  // con correr: rutina-estado y luego el reclamo de corrida; corrida-error preparado con el mismo runId
-  assert.deepEqual(c.orden, ["rutina-estado", "corrida"]);
-  const rec = leerSalida(c.dir, "salida/ahora/corrida.json"), err = leerSalida(c.dir, "trabajo/corrida-error.json");
-  assert.equal(rec.state, "running"); assert.equal(rec.dev, "drutina0001"); assert.equal(rec.runId, `drutina0001-rutina-${T}`); assert.equal(rec.auto, true);
-  assert.equal(err.runId, rec.runId); assert.equal(err.state, "error"); assert.equal(err.reason, "rutina_sin_salida");
-  const d = await correr(base(), LUN);
-  assert.equal(d.p.radar.accion, "correr");
-});
-
-test("compat falso → usar_navegador si hay día del navegador; si no, sin_radar", async () => {
-  const inc = Object.assign({}, pag, { compatible: false, diferencias: ["ui"] });
-  const hecha = { kind: "corrida", v: 1, dateET: "2026-11-02", state: "done", startedAt: T - 600000, beatAt: T - 500000, runId: "dx-1", dev: "dx" };
-  const a = await correr(base({ corrida: hecha, "dia-2026-11-02": diaHoy("2026-11-02") }), LUN, { pagina: inc });
-  assert.equal(a.p.radar.accion, "usar_navegador"); assert.equal(a.p.compat.ok, false);
-  const b = await correr(base(), LUN, { pagina: inc });
-  assert.equal(b.p.radar.accion, "sin_radar"); assert.equal(b.p.radar.motivo, "pagina_cambio"); assert.deepEqual(b.orden, ["rutina-estado"]);
-});
-
-test("cartera-libro en _fallos → bloqueos.libro; sin cartera-libro → sin_semilla", async () => {
-  const a = await correr(base(), LUN, { fallos: { "cartera-libro": "unavailable" } });
-  assert.equal(a.r.codigo, 0); assert.equal(a.p.bloqueos.libro, true);
-  const docs = base(); delete docs["cartera-libro"];
-  const b = await correr(docs, LUN);
-  assert.equal(b.r.codigo, 2); assert.equal(b.p.rutina.motivoSalida, "sin_semilla"); assert.deepEqual(b.orden, []);
-  assert.equal(b.aviso, "Radar · Falta sembrar la Cartera Radar en db (T18); sin operaciones.");
-});
-
-test("rutina-estado de ayer en_curso con plan → continuar y recuperacion.de = ayer (se conserva en el nuevo estado)", async () => {
-  const plan = [{ id: "2026-10-30-QQQ-C1", sym: "QQQ", instrumentId: 3006, lado: "compra", regla: "C1", montoUSD: 3000, cierres: null, motivo: "x" }];
-  const ayer = { kind: "rutinaEstado", v: 1, fecha: "2026-10-30", estado: "en_curso", paso: "ejecutando", inicio: 5, fin: null, intentos: 1, ejecucion: { inicio: 10, simulacion: false, planSha: "x", plan } };
-  const x = await correr(base({ "rutina-estado": ayer }), LUN);
-  assert.equal(x.p.rutina.accion, "continuar");
-  assert.deepEqual(x.p.recuperacion, { de: "2026-10-30", inicio: 10, plan });
-  const est = leerSalida(x.dir, "salida/ahora/rutina-estado.json");
-  assert.equal(est.estado, "en_curso"); assert.deepEqual(est.recuperacion.plan, plan);
-});
-
-test("leer-mas: bitácora del último día, operaciones del mes de los pendientes, serie del año anterior en enero", async () => {
-  const bi = { kind: "bitacoraIndice", v: 1, at: 1, dias: [{ f: "2026-10-30", estado: "completa" }] };
-  const x = await correr(base({ "bitacora-indice": bi }), LUN);
-  assert.deepEqual(leerSalida(x.dir, "trabajo/leer-mas.json").leer, ["bitacora-2026-10-30", "operaciones-2026-10"]);
-  const y = await correr(base(), "2027-01-05T14:47:00Z");
-  assert.ok(leerSalida(y.dir, "trabajo/leer-mas.json").leer.includes("cartera-serie-2026"));
-});
-
-test("--fase radar: tras 3 esperas con la corrida viva → sin_radar; si terminó → usar_navegador (con partes)", async () => {
-  const viva = { kind: "corrida", v: 1, dateET: "2026-11-02", state: "running", startedAt: T - 60000, beatAt: T - 10000, runId: "dx-1", dev: "dx" };
-  const x = await correr(base({ corrida: viva }), LUN);
-  let r;
-  for (let i = 1; i <= 3; i++) {
-    const viva2 = Object.assign({}, viva, { beatAt: T + i * 120000 - 5000 });
-    fs.writeFileSync(path.join(x.dir, "entrada/db/corrida.json"), JSON.stringify(viva2));
-    r = await preparar(["--dir", x.dir, "--fase", "radar"], { ahora: () => T + i * 120000, pagina: pag });
-    assert.equal(r.linea.accion, i < 3 ? "esperar" : "sin_radar", `espera ${i}`);
+test("H13 · sin calendario de 2028: continuar con ventana cerrada y alerta; con feriados-2028 en db → feriado", async () => {
+  for (const iso of ["2028-01-17T14:47:00Z", "2028-07-04T13:47:00Z", "2028-12-25T14:47:00Z"]) {
+    const x = await correr(iso, {});
+    assert.equal(x.r.codigo, 0, iso); assert.equal(x.p.mercado.calendario, "ausente"); assert.equal(x.p.ventana.dentro, false);
+    assert.ok(x.p.alertas.includes("Falta el calendario NYSE de 2028: hoy no se opera"), iso);
   }
-  assert.equal(leerSalida(x.dir, "trabajo/preparar.json").radar.esperas, 3);
-  // otra carpeta: tras una espera, la corrida terminó y el día (con partes) es válido
-  const y = await correr(base({ corrida: viva }), LUN);
-  const man = diaHoy("2026-11-02"), partes = [0, 1, 2, 3].map(k => Object.assign(leerFix(`dia-2026-10-30/dia-2026-10-30-p${k}.json`), {}));
-  fs.writeFileSync(path.join(y.dir, "entrada/db/dia-2026-11-02.json"), JSON.stringify(man));
-  partes.forEach((p, k) => fs.writeFileSync(path.join(y.dir, `entrada/db/dia-2026-11-02-p${k}.json`), JSON.stringify(p)));
-  fs.writeFileSync(path.join(y.dir, "entrada/db/corrida.json"), JSON.stringify(Object.assign({}, viva, { state: "done", finishedAt: T + 60000 })));
-  r = await preparar(["--dir", y.dir, "--fase", "radar"], { ahora: () => T + 120000, pagina: pag });
-  assert.equal(r.linea.accion, "usar_navegador");
+  const fer = { kind: "feriados", v: 1, year: "2028", rows: [{ date: "2028-01-17", name: "Martin Luther King, Jr. Day", isClosed: true, adjOpenTime: null, adjCloseTime: null }] };
+  const y = await correr("2028-01-17T14:47:00Z", { "feriados-2028": fer });
+  assert.equal(y.p.rutina.motivoSalida, "feriado");
 });
 
-test("feriados: db → repo; 2027 desde feriados-nyse.json", () => {
-  assert.equal(feriadosAnio({ anio: 2026, docDb: leerFix("dia-2026-10-30/feriados-2026.json") }).fuente, "db");
-  const r = feriadosAnio({ anio: 2026 });
-  assert.equal(r.fuente, "repo"); assert.equal(r.filas.length, 11);
-  const r27 = feriadosAnio({ anio: 2027 });
-  assert.ok(r27.filas.some(f => f.date === "2027-03-26" && f.isClosed));
-  assert.equal(pag.C.marketState(Date.parse("2027-11-26T15:00:00Z"), r27.filas).earlyClose, true);
+test("27-nov 9:47 → ventana hasta 12:30; 8:47 → temprano (nada en db); 15:40 → continuar fuera de ventana", async () => {
+  const a = await correr("2026-11-27T14:47:00Z", {});
+  assert.deepEqual(a.p.ventana, { desde: "09:45", hasta: "12:30", dentro: true });
+  const b = await correr("2026-11-02T13:47:00Z", {});
+  assert.equal(b.p.rutina.motivoSalida, "temprano"); assert.equal(b.w, null); assert.equal(b.aviso, "Radar · fuera de horario; corre a las 9:47 ET.");
+  const c = await correr("2026-11-02T20:40:00Z", {});
+  assert.equal(c.p.rutina.accion, "continuar"); assert.equal(c.p.ventana.dentro, false);
+});
+
+test("reglas 4–6 · hecha hoy → ya_hecha; en_curso con latido < 30 min → otra_sesion_viva; ≥ 30 min o de ayer → recuperar", async () => {
+  const a = await correr(LUN, { "rutina-estado": estado() });
+  assert.equal(a.p.rutina.motivoSalida, "ya_hecha"); assert.equal(a.w, null);
+  const vivo = estado({ estado: "en_curso", paso: "radar", fin: null, latido: "2026-11-02T14:40:00Z" });
+  const b = await correr(LUN, { "rutina-estado": vivo });
+  assert.equal(b.p.rutina.motivoSalida, "otra_sesion_viva"); assert.equal(b.w, null);
+  assert.equal(b.aviso, "Radar · lun 2-nov · Otra sesión está corriendo la rutina de hoy; esta se detuvo.");
+  const viejo = estado({ estado: "en_curso", paso: "radar", fin: null, latido: "2026-11-02T14:10:00Z", ejecucionesAbiertas: ["2026-10-30"] });
+  const c = await correr(LUN, { "rutina-estado": viejo }, { versiones: { "rutina-estado": 5 } });
+  assert.equal(c.r.codigo, 0); assert.equal(c.p.rutina.accion, "recuperar");
+  assert.deepEqual(c.p.recuperacion, { ejecuciones: ["2026-10-30"] });
+  assert.deepEqual(c.lm, ["ejecucion-2026-10-30", "ops-2026-10-30", "punto-2026-11-02", "radar-2026-11-02", "bitacora-2026-11-02", "ops-2026-11-02", "ejecucion-2026-11-02"]);
+  assert.equal(c.w.ops[0].ifVersion, 5); assert.equal(c.w.ops[0].data.sesion, "s-nuevo");
+  const ayer = await correr(LUN, { "rutina-estado": estado({ fecha: "2026-10-30", estado: "en_curso", fin: null }) });
+  assert.equal(ayer.p.rutina.accion, "recuperar");
+  assert.deepEqual(ayer.lm, ["ops-2026-10-30"]); // los pendientes del 30-oct; nada del día porque la sesión caída no era de hoy
+});
+
+test("regla 7 · sin cartera-libro → sin_semilla; regla 8 · continuar con un solo set de rutina-estado", async () => {
+  const a = await correr(LUN, { "cartera-libro": null });
+  assert.equal(a.p.rutina.motivoSalida, "sin_semilla"); assert.equal(a.w, null);
+  const b = await correr(LUN, {});
+  assert.equal(b.r.codigo, 0); assert.equal(b.p.rutina.accion, "continuar");
+  assert.equal(b.w.ops.length, 1); assert.equal(b.w.ops[0].ifVersion, undefined); // rutina-estado no existía
+  const e = b.w.ops[0].data;
+  assert.deepEqual([e.estado, e.paso, e.sesion, e.modo, e.latido], ["en_curso", "preparar", "s-nuevo", "en_linea", "2026-11-02T14:47:00Z"]);
+  assert.deepEqual(b.lm, ["ops-2026-10-30"]);
+  const c = await correr(LUN, { "rutina-estado": estado({ fecha: "2026-10-30" }) }, { versiones: { "rutina-estado": 3 } });
+  assert.equal(c.w.ops[0].ifVersion, 3);
+  // con la cartera ya ejecutada (sin pendientes) no hay nada más que leer
+  const libro = libroDeDb(S["cartera-libro"]).libro; libro.pendientes = [];
+  const d = await correr(LUN, { "cartera-libro": libroADb(libro, T(LUN)) });
+  assert.deepEqual(d.lm, []);
+});
+
+test("compat falso → radar ninguno (pagina_cambio)", async () => {
+  const x = await correr(LUN, {}, { pagina: Object.assign({}, pag, { compatible: false, diferencias: ["ui"] }) });
+  assert.deepEqual(x.p.radar, { accion: "ninguno", motivo: "pagina_cambio" });
 });

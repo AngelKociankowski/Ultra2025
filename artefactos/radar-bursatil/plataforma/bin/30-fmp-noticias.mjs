@@ -10,26 +10,28 @@ import { cargarPagina } from "../lib/cargar-pagina.mjs";
 import { decidir, configEfectiva } from "../lib/reglas.mjs";
 import { sumarDias, fechaHoraET } from "../lib/tiempo.mjs";
 import { DOMINIOS } from "../lib/constantes.mjs";
+import { nombreDeUrl } from "../lib/noticias.mjs";
 
 const PASO = "30-fmp-noticias";
 const AYUDA = "Uso: node bin/30-fmp-noticias.mjs --dir <carpeta>";
 const MAX_CONSULTAS = 12, MAX_SIMBOLOS = 20, POR_SIMBOLO = 10;
 const FIJAS = [
-  { id: "q1", texto: "Federal Reserve interest rate decision this week", tema: "macro" },
+  { id: "q1", texto: "Federal Reserve rates inflation this week", tema: "macro" },
   { id: "q2", texto: "stock market today S&P 500", tema: "mercado" },
-  { id: "q3", texto: "Banxico tipo de cambio peso dólar", tema: "mexico" },
+  { id: "q3", texto: "peso dólar Banxico tipo de cambio", tema: "mexico" },
 ];
 const texto = (s, n = 300) => String(s == null ? "" : s).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, n);
 const urlOk = u => { try { return new URL(u).protocol === "https:" ? String(u).slice(0, 500) : null; } catch (e) { return null; } };
 const fechaIso = f => (typeof f === "string" ? f.trim().replace(" ", "T").slice(0, 19) : null);
-const nota = r => { const url = urlOk(r.url); return url ? { fecha: fechaIso(r.publishedDate), titulo: texto(r.title), medio: texto(r.site, 80), url } : null; };
+// 12b §G: una nota de FMP solo vale si la URL de su artículo cae en la tabla de fuentes; el medio sale de la tabla
+const nota = r => { const url = urlOk(r.url), nombre = url ? nombreDeUrl(url) : null; return nombre ? { fecha: fechaIso(r.publishedDate), titulo: texto(r.title), medio: nombre, url } : null; };
 
 // Símbolos y consultas (§5.11.4): candidatos a compra = compras que decidir produciría sin noticias
 export function temasDelDia({ C, analisis, cartera, config, fecha, nowMs }) {
   const out = analisis && analisis.out ? analisis.out : null;
   const fila = s => (out ? out.rows.find(r => r.symbol === s) : null);
   const mapa = (cartera && cartera.mapa && cartera.mapa.instrumentos) || {};
-  const nombre = s => texto((fila(s) && fila(s).name) || (mapa[s] && mapa[s].nombre) || s, 80);
+  const nombre = s => texto((fila(s) && fila(s).name) || s, 80);
   const clase = s => { const r = fila(s); if (r) return r.cls === "stock" ? "stock" : "etf"; return mapa[s] && mapa[s].clase === 5 ? "stock" : "etf"; };
   const enCartera = cartera && cartera.libro ? [...new Set(cartera.libro.posiciones.filter(p => p.lotes.length).map(p => p.sym).concat(cartera.libro.pendientes.filter(p => p.lado === "compra").map(p => p.sym)))] : [];
   let candidatos = [], objetivo = [];
@@ -93,7 +95,7 @@ export async function main(argv, { transporteFmp = null, ahora = Date.now, pagin
   escribirTrabajo(dir, "noticias-fmp.json", res);
   const sinFmp = res.errores.length >= intentos;
   reg.info("noticias de FMP", { llamadas: res.llamadas, errores: res.errores.length, consultas: tm.consultas.length });
-  return { codigo: sinFmp ? 3 : 0, linea: lineaPaso({ paso: PASO, ok: !sinFmp, accion: sinFmp ? "sin_fmp" : "listo",
+  return { codigo: sinFmp ? 3 : 0, linea: lineaPaso({ paso: PASO, ok: !sinFmp, accion: sinFmp ? "sin_fmp" : "listo", modo: prep.modo || null,
     resumen: { llamadas: res.llamadas, errores: res.errores.length, consultas: tm.consultas.length, simbolos: tm.simbolos.length } }) };
 }
 

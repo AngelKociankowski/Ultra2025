@@ -1,26 +1,43 @@
-// Constantes de la plataforma (12-plan §5.1). Todo congelado.
+// Constantes de la plataforma (12-plan §5.1, 12b §C.1, §E). Todo congelado.
 const congelar = o => {
   if (o && typeof o === "object") { Object.values(o).forEach(congelar); Object.freeze(o); }
   return o;
 };
 
-export const DEV = "drutina0001";
-export const COLECCION = "data/users/me";
-// Las 9 categorías del contador de la página (data.js CATS)
-export const CATS = congelar(["sonda", "arranque", "franja", "tabla", "mercado", "macro", "corrida", "detalle", "manual"]);
 export const DOC_MAX = 150000;
 export const FMP_POR_MIN = 200;
 export const ET_ZONA = "America/New_York";
-export const VERSION = "1.0.0";
+export const VERSION = "2.0.0";
 
-// §5.11.5: dominios fidedignos (registrables). gob.mx solo con ruta /shcp (se valida en noticias.mjs).
-export const DOMINIOS = congelar([
-  "reuters.com", "apnews.com", "bloomberg.com", "wsj.com", "ft.com", "cnbc.com", "marketwatch.com", "barrons.com",
-  "federalreserve.gov", "bls.gov", "bea.gov", "treasury.gov", "sec.gov", "banxico.org.mx", "inegi.org.mx", "gob.mx",
+// db del artefacto (12b §E.1). No son secretos.
+export const DB_SLUG = "776fd979-e792-4459-ae2f-00814ef68cde";
+export const DB_UID = "u_Np_5cFP3Ho2rFiXosc9ZPw";
+export const DB_RUTA = "data/users/" + DB_UID;
+export const ARTEFACTO_URL = "https://claude.ai/artifact/FkRDmR1kpgQTQq7t1eLodw";
+export const COLECCION_ARCHIVO = "data/users/me";
+// Acción de ArtifactData que reemplaza un documento completo desde file_path: la fija D7 con el esquema real.
+// Mientras sea null, el modo archivo está desactivado (00m §2).
+export const ACCION_REEMPLAZO = null;
+export const PRESUPUESTO_DIA = 40000;
+// Topes por kind en bytes compactos (12b §E.5)
+export const DOC_TOPES = congelar({
+  rutinaEstado: 1600, rutinaConfig: 600, carteraLibro: 2500, etoroMapa: 800, bitacoraMes: 1400, carteraPunto: 250,
+  radarResumen: 4000, bitacora: 6000, carteraOps: 3000, ejecucion: 3000,
+});
+// Decimales por magnitud (12b §E.3)
+export const PRECISION = congelar({ usd: 2, unidades: 6, precioMayor: 2, precioMenor: 4, fx: 4, peso: 4, rend: 6 });
+
+// 12b §G: fuentes de noticias comprobadas con WebSearch (15). [entrada, nombre que se muestra, tipo]
+export const FUENTES = congelar([
+  ["bloomberg.com", "Bloomberg", "medio"], ["cnbc.com", "CNBC", "medio"], ["cnn.com", "CNN", "medio"],
+  ["finance.yahoo.com", "Yahoo Finanzas", "medio"], ["elfinanciero.com.mx", "El Financiero", "medio"],
+  ["federalreserve.gov", "Reserva Federal", "oficial"], ["bls.gov", "BLS", "oficial"], ["bea.gov", "BEA", "oficial"],
+  ["sec.gov", "SEC", "oficial"], ["banxico.org.mx", "Banxico", "oficial"], ["inegi.org.mx", "INEGI", "oficial"],
 ]);
+export const DOMINIOS = congelar(FUENTES.map(f => f[0]));
 export const CATEGORIAS_EVENTO = congelar(["fraude", "quiebra", "suspension", "deslistado", "fusion_pendiente", "recorte_guia"]);
 
-// §5.9.6: rutina-config (sin kind/v/at, que pone quien escribe el documento)
+// §5.9.6: rutina-config (sin kind/v/at/h, que pone quien escribe el documento)
 export const CONFIG_DEFECTO = congelar({
   operar: false, perfil: "moderado", bandaPts: 5, minOrdenUSD: 100, nuevoSatelitePct: 3, diasSalida: 3, maxOrdenesDia: 12,
   ventanaET: { desde: "09:45", hasta: "15:30" }, noticiasVentanaH: 72, tolPrecioPct: 2, activadoEl: null, podar: true,

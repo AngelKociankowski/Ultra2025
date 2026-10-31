@@ -1,191 +1,229 @@
-// Paso 9 · Cerrar (12-plan §5.9, §5.12): libro, operaciones, serie, mapa, contador, bitácora, índice, rutina-estado y aviso.
+// Paso 9 · Cerrar (12b §E.6 grupo final, §E.5, §H): ops, ejecución, libro, mapa, punto, radar, bitácora, bitácora del mes,
+// rutina-estado (último) y aviso. Nunca lanza por datos de db (H15): ante un error de datos cierra en modo degradado.
 // Uso: node bin/60-cerrar.mjs --dir <carpeta> [--degradado <paso>]
-import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { leerArgs, lineaPaso, correrCli, leerDoc, leerTrabajo, leerJson, limpiarGrupo, escribirDoc, borrarDoc, escribirAviso, rutas, bytesDe } from "../lib/archivos.mjs";
+import { leerArgs, lineaPaso, correrCli, leerDoc, leerTrabajo, leerJson, escribirAviso, escribirTrabajo, rutas } from "../lib/archivos.mjs";
 import { crearRegistro } from "../lib/registro.mjs";
-import { aplicarEjecucion, aplicarEventosOps } from "../lib/libro.mjs";
+import { aplicarResultados, libroADb, mapaADb, opsNuevo, opsValidas } from "../lib/libro.mjs";
 import { actualizarFuera, configEfectiva } from "../lib/reglas.mjs";
+import { actualizarRefs } from "../lib/rendimientos.mjs";
 import { validarNoticias } from "../lib/noticias.mjs";
+import { resumenRadar, previoDe } from "../lib/radar-resumen.mjs";
 import { armarAviso } from "../lib/aviso.mjs";
-import { fechaHoraET, mesDe } from "../lib/tiempo.mjs";
-import { CATS, DEV, DOC_MAX, VERSION } from "../lib/constantes.mjs";
+import { armarGrupo, leerVersiones, conH, lectura, presupuesto, bytes, usd, u6, p4, r6, precio, ts } from "../lib/db.mjs";
+import { fechaHoraET } from "../lib/tiempo.mjs";
+import { esFecha } from "../lib/esquemas.mjs";
+import { DOC_TOPES, PRESUPUESTO_DIA } from "../lib/constantes.mjs";
 
 const PASO = "60-cerrar";
 const AYUDA = "Uso: node bin/60-cerrar.mjs --dir <carpeta> [--degradado <paso>]";
 export const TEXTO_FALLA = {
   preparar: "la preparación del día falló", radar: "el Radar no corrió; sin análisis de hoy", cartera: "sin datos de eToro; sin órdenes hoy",
-  noticias: "no se juntaron noticias", decidir: "no se calcularon decisiones; sin órdenes", ejecucion: "no se guardó el plan en db; no se ejecutó nada",
-  ejecutar: "la ejecución no terminó; se concilia mañana", cerrar: "el cierre falló",
+  noticias: "no se juntaron noticias", decidir: "no se calcularon decisiones; sin órdenes", ejecucion: "no se guardó el reclamo de envío; no se ejecutó nada",
+  ejecutar: "la ejecución no terminó; se concilia mañana", cerrar: "el cierre falló", db: "otra escritura cambió un documento; la rutina se detuvo",
 };
+// --degradado acepta cualquier nombre de paso: el cierre no puede fallar por cómo se llamó al paso que falló
+export const pasoDegradado = x => (/^[a-z0-9-]{1,20}$/.test(String(x)) ? String(x) : "otro");
+const textoFalla = paso => TEXTO_FALLA[paso] || `falló el paso ${paso}`;
 const isNum = v => typeof v === "number" && Number.isFinite(v);
 const ETQ = { 1: "Evitar", 2: "Mantener", 3: "Compra" };
-const MAX_INDICE = 400, OPS_MAX = 140000;
+const corto = (s, n) => (String(s).length > n ? String(s).slice(0, n - 1) + "…" : String(s));
 
 function seguro(dir, nombre, errores) {
-  try { return leerTrabajo(dir, nombre); } catch (e) { errores.push({ paso: "cerrar", codigo: e.codigo || "lectura", texto: `${nombre} ilegible` }); return null; }
+  try { return leerTrabajo(dir, nombre); } catch (e) { errores.push(["cerrar", `${nombre} ilegible`]); return null; }
+}
+const frase = c => (c[1] === "entra_objetivo" ? `${c[0]} entra al objetivo` : c[1] === "sale_objetivo" ? `${c[0]} sale del objetivo` : c[1] === "regimen" ? null : `${c[0]} pasa a ${ETQ[c[4]]}`);
+
+// Bitácora ≤ 6 000 B: se recortan notas (8 → 4), resúmenes (→ 120), decisiones "mantener", comp.sector (§E.5.7). Si aun así
+// no cabe (caso extremo, fuera de §E.5.7): alertas a 5, motivos de dec a 60 y notas a 2.
+export function recortarBitacora(b) {
+  const tope = DOC_TOPES.bitacora - 40, cabe = () => bytes(conH(b)) <= tope;
+  if (!cabe()) b.notas = b.notas.slice(0, 4);
+  if (!cabe()) b.notas = b.notas.map(n => n.slice(0, 5).concat([corto(n[5] || "", 120)]));
+  if (!cabe()) b.dec = b.dec.filter(d => d[2] !== "mantener");
+  if (!cabe()) delete b.comp.sector;
+  if (!cabe()) b.alertas = b.alertas.slice(0, 5);
+  if (!cabe()) b.dec = b.dec.map(d => d.slice(0, 7).concat([corto(d[7] || "", 60)]));
+  if (!cabe()) b.notas = b.notas.slice(0, 2);
+  return b;
 }
 
-// §5.9.5 cambios: contra senales/objetivo de la bitácora anterior, más el régimen
-export function cambiosRadar({ senales, objetivo, prev }) {
-  if (!prev) return [];
-  const antes = new Map((prev.senales || []).map(s => [s[0], s])), obj0 = new Set((prev.objetivo || []).map(o => o.id)), obj1 = new Set(objetivo.map(o => o.id));
-  const out = [];
-  for (const o of objetivo) if (!obj0.has(o.id)) out.push({ sym: o.id, tipo: "entra_objetivo", antes: null, ahora: { peso: o.peso } });
-  for (const id of obj0) if (!obj1.has(id)) out.push({ sym: id, tipo: "sale_objetivo", antes: { peso: (prev.objetivo.find(o => o.id === id) || {}).peso }, ahora: null });
-  for (const s of senales) { const a = antes.get(s[0]); if (a && a[1] !== s[1]) out.push({ sym: s[0], tipo: "senal", antes: { senal: a[1], pct: a[2] }, ahora: { senal: s[1], pct: s[2] } }); }
-  return out;
-}
+function cerrar({ dir, a, t, reg }) {
+  const errores = [], alertas = [];
+  const prep = seguro(dir, "preparar.json", errores) || {};
+  const fecha = prep.fechaET || fechaHoraET(t).fecha, mes = fecha.slice(0, 7), modo = prep.modo || "en_linea";
+  const config = prep.config || configEfectiva(null).config;
+  const analisis = seguro(dir, "analisis.json", errores), resumen0 = seguro(dir, "radar-resumen.json", errores), cartera = seguro(dir, "cartera.json", errores);
+  const decis = seguro(dir, "decisiones.json", errores), planDoc = seguro(dir, "plan-ordenes.json", errores), ejec = seguro(dir, "ejecucion.json", errores);
+  const nfmp = seguro(dir, "noticias-fmp.json", errores), temas = seguro(dir, "temas-noticias.json", errores);
+  let notasDoc = null;
+  try { notasDoc = leerJson(path.join(rutas(dir).entrada, "noticias.json")); } catch (e) { errores.push(["noticias", "json_invalido"]); }
+  const out = analisis && analisis.out ? analisis.out : null;
+  const fallas = [];
+  if (a.degradado) { fallas.push({ paso: a.degradado, texto: textoFalla(a.degradado) }); errores.push([a.degradado, "degradado"]); }
+  const carteraOk = !!(cartera && cartera.estado === "listo" && cartera.libro && cartera.valuacion);
+  if (cartera && !carteraOk && a.degradado !== "cartera") fallas.push({ paso: "cartera", texto: cartera.estado === "sin_libro" ? "no se pudo leer cartera-libro; sin órdenes hoy" : TEXTO_FALLA.cartera });
+  if (nfmp && Array.isArray(nfmp.errores) && nfmp.errores.length) errores.push(["30-fmp-noticias", "sin_fmp"]);
+  if (!out) errores.push(["10-radar", (analisis && analisis.motivo) || "sin_radar"]);
+  if (!notasDoc) errores.push(["noticias", "sin_notas"]);
+  const re = leerDoc(dir, "rutina-estado"), estadoPrevio = re.estado === "ok" ? re.doc : null;
+  const ver = leerVersiones(dir);
+  const simulacion = decis ? decis.simulacion : !config.operar;
+  const plan = planDoc && Array.isArray(planDoc.ordenes) ? planDoc.ordenes : [];
+  // ejecución de hoy: escrita en pre-ejecución por esta sesión y sin ejecucion.json → queda abierta (F.5)
+  const ejecHoy = ver[`ejecucion-${fecha}`] && ver[`ejecucion-${fecha}`].escritoEn === "pre-ejecucion";
+  const abierta = ejecHoy && !(ejec && Array.isArray(ejec.res));
+  const docs = [];
+  const poner = (id, data) => docs.push({ id, data });
 
-const frase = c => (c.tipo === "entra_objetivo" ? `${c.sym} entra al objetivo` : c.tipo === "sale_objetivo" ? `${c.sym} sale del objetivo` : `${c.sym} pasa a ${ETQ[c.ahora.senal]}`);
+  // ---- operaciones y libro ----
+  let libro = carteraOk ? cartera.libro : null, opsIds = [], resultadosOps = [];
+  if (carteraOk) {
+    for (const [f, d] of Object.entries(cartera.ops || {})) if (f !== fecha) poner(`ops-${f}`, d);
+    const hoyLeido = leerDoc(dir, `ops-${fecha}`);
+    let opsHoy = (cartera.ops && cartera.ops[fecha]) || (hoyLeido.estado === "ok" ? hoyLeido.doc : opsNuevo(fecha));
+    opsHoy = Object.assign({}, opsHoy, { ops: opsValidas(opsHoy, alertas) });
+    const res = ejec && Array.isArray(ejec.res) ? ejec.res : [];
+    if (plan.length && (simulacion || res.length)) {
+      const r = aplicarResultados({ libro, opsHoy, plan, res, simulacion, ahora: t });
+      libro = r.libro; opsHoy = r.ops;
+      opsIds = plan.map(o => o.id);
+      resultadosOps = r.ops.ops.filter(o => opsIds.includes(o.id));
+    }
+    if (opsHoy.ops.length) poner(`ops-${fecha}`, opsHoy);
+    if (ejecHoy && ejec && Array.isArray(ejec.res) && ejec.doc) poner(`ejecucion-${fecha}`, Object.assign({}, ejec.doc, { res: ejec.res, fin: ts(t) }));
+    const faltantes = decis ? decis.decisiones.filter(d => /dato faltante/.test(d.razonOmision || "")).map(d => d.sym) : [];
+    const completo = !!(out && !out.partial && decis && decis.objetivo && decis.objetivo.estado === "ok");
+    libro = actualizarFuera({ libro, pesos: decis && decis.objetivo ? decis.objetivo.pesos : {}, completo, fecha, faltantes });
+    const p = cartera.punto;
+    if (p) libro.refs = actualizarRefs({ refs: libro.refs, punto: { f: p.f, v: p.v_, vm: p.vm, spy: p.spy, i: p.i, im: p.im } });
+    poner("cartera-libro", libroADb(libro, t));
+    if (cartera.mapaCambio && !(cartera.bloqueos && cartera.bloqueos.mapa)) poner("etoro-mapa", mapaADb(cartera.mapa, t));
+    if (p) poner(`punto-${fecha}`, p);
+  }
+  // ---- radar del día (con el objetivo definitivo de 40-decidir si lo hay) ----
+  const tenidos = libro ? [...new Set(libro.posiciones.filter(x => x.lotes.length).map(x => x.sym).concat(libro.pendientes.map(x => x.sym)))] : [];
+  const radar = out ? resumenRadar({ out, estado: analisis.estado, motivo: analisis.motivo, llamadas: analisis.llamadas, t, f: fecha,
+    objetivo: decis && decis.objetivo && decis.objetivo.estado === "ok" ? { pesos: decis.objetivo.pesos, roles: decis.roles || {} } : null, previo: estadoPrevio ? estadoPrevio.previo : null, tenidos })
+    : Object.assign({}, resumen0 || resumenRadar({ estado: "sin_radar", motivo: (analisis && analisis.motivo) || "sin_radar", t, f: fecha }), { t: ts(t) });
+  poner(`radar-${fecha}`, radar);
+
+  // ---- noticias ----
+  const simbolos = new Set([...(out ? out.rows.map(r => r.symbol) : []), ...tenidos, ...((temas && temas.simbolos) || []).map(x => x.sym)]);
+  const nv = notasDoc ? validarNoticias({ doc: notasDoc, ahoraMs: t, ventanaH: config.noticiasVentanaH, simbolos: [...simbolos] }) : { validas: [], descartadas: [], eventos: [] };
+
+  // ---- qué se puede escribir (sin lectura registrada no se escribe: H24) ----
+  const delDia = [`punto-${fecha}`, `radar-${fecha}`, `bitacora-${fecha}`, `ops-${fecha}`, `ejecucion-${fecha}`];
+  const accionDia = prep.rutina ? prep.rutina.accion : null;
+  const escribible = id => { const v = ver[id]; return (v && (v.estado === "ok" || v.estado === "no_existe")) || (!v && delDia.includes(id) && accionDia === "continuar"); };
+  const bmId = `bitacora-mes-${mes}`;
+  for (const id of docs.map(d => d.id).concat([`bitacora-${fecha}`, bmId])) if (!escribible(id)) alertas.push(`no se leyó ${id}; no se escribe`);
+
+  // ---- aviso ----
+  const v = carteraOk ? cartera.valuacion : null, rend = carteraOk ? cartera.rendimientos : null;
+  const opsAviso = simulacion ? plan.map(o => ({ sym: o.sym, lado: o.lado, regla: o.regla, est: "simulada" }))
+    : resultadosOps.map(o => ({ sym: o.sym, lado: o.lado === "c" ? "compra" : "venta", regla: o.regla, est: o.est, motivo: o.err || (o.est === "no_enviada" ? "no enviada" : o.est) }));
+  if (!simulacion && !resultadosOps.length && plan.length && !ejec) for (const o of plan) opsAviso.push({ sym: o.sym, lado: o.lado, regla: o.regla, est: "no_enviada", motivo: abierta ? "sin confirmar" : "no enviada" });
+  const pri = c => (c[1] !== "senal" ? 0 : (radar.obj || []).some(x => x[0] === c[0]) || tenidos.includes(c[0]) ? 1 : 2);
+  const notasAviso = nv.eventos.filter(e => e.confirmado).map(e => nv.validas.find(n => n.evento && n.evento.simbolo === e.simbolo && n.evento.categoria === e.categoria))
+    .concat(nv.validas.filter(n => n.tema === "macro" || n.tema === "mercado").sort((x, y) => (x.fecha < y.fecha ? 1 : -1))).filter(Boolean);
+  const alertasTodas = [...new Set([...(prep.alertas || []), ...((cartera && cartera.alertas) || []), ...((decis && decis.alertas) || []), ...alertas])];
+  if (abierta) alertasTodas.push(`La ejecución de hoy quedó abierta (sin resultado): se concilia mañana.`);
+  // H15: entradas malas de db (descartadas con alerta) dejan el día degradado; la entrada mala no se reescribe
+  let malos = (cartera && cartera.datosMalos) || 0;
+  const bmLeido = leerDoc(dir, bmId);
+  const previas = bmLeido.estado === "ok" ? bmLeido.doc.d.filter(x => {
+    const ok = Array.isArray(x) && esFecha(x[0]) && x[0].slice(0, 7) === mes;
+    if (!ok) { malos++; const txt = `Entrada mala en ${bmId}: ${String(JSON.stringify(x)).slice(0, 40)}; se descarta.`; if (!alertasTodas.includes(txt)) alertasTodas.push(txt); }
+    return ok;
+  }) : [];
+  malos += alertas.filter(x => /^Operación mal formada/.test(x)).length;
+  const degradada = !!a.degradado || !carteraOk || !decis || abierta || malos > 0;
+  const estado = degradada ? "degradada" : (!out || out.partial || errores.some(e => e[0] === "30-fmp-noticias" || e[0] === "noticias")) ? "parcial" : "completa";
+  const aviso = armarAviso({
+    fecha, hora: fechaHoraET(t).hora, simulacion, cartera: v ? { valorUSD: v.valorUSD, valorMXN: v.valorMXN } : null, rend,
+    radar: out ? { regimen: radar.reg && radar.reg.l, cambios: (radar.cambios || []).slice().sort((x, y) => pri(x) - pri(y)).map(frase).filter(Boolean) } : { sinRadar: true, motivo: radar.motivo },
+    notas: [...new Set(notasAviso)].slice(0, 2).map(n => ({ titulo: n.titulo, medio: n.medio })), operaciones: opsAviso, alertas: alertasTodas, fallas,
+  });
+
+  // ---- bitácora ----
+  const dec = decis ? decis.decisiones.map(d => [d.sym, d.regla, d.accion, p4(d.pesoActual), p4(d.pesoObjetivo), red2(d.desvPts), d.montoUSD === null ? null : usd(d.montoUSD), corto(d.motivo || d.razonOmision || "", 120)]) : [];
+  const comp = c => Object.entries(c || {}).map(([k, w]) => [k, p4(w)]);
+  const vetos = decis ? decis.decisiones.filter(d => d.accion === "vetada" || d.regla === "N2").map(d => {
+    const e = nv.eventos.find(x => x.confirmado && x.simbolo === d.sym);
+    return [d.sym, e ? e.categoria : null, d.accion === "vetada" ? "veto_compra" : "N2", (d.noticias || []).slice(0, 2)];
+  }) : [];
+  const bit = recortarBitacora({
+    kind: "bitacora", v: 2, f: fecha, t: ts(t), estado, sim: simulacion, commit: prep.commit || null, modo,
+    mercado: { abierto: !!(prep.mercado && prep.mercado.abierto), cal: (prep.mercado && prep.mercado.calendario) || null, horaET: prep.horaET || null },
+    radar: { estado: radar.estado, motivo: radar.motivo || null },
+    cartera: v ? { v_: usd(v.valorUSD), vm: usd(v.valorMXN), fx: v.fx, fxFuente: v.fxFuente, e: usd(v.efectivoUSD),
+      pos: v.posiciones.map(x => [x.sym, u6(x.unidades), usd(x.costoUSD), precio(x.precioUSD), usd(x.valorUSD), p4(x.peso)]) } : {},
+    rend: rend ? { usd: rend.usd.map(r6), mxn: rend.mxn.map(r6), spy: rend.spy.map(r6), meta: [usd(rend.meta[0]), red2(rend.meta[1]), usd(rend.meta[2]), red2(rend.meta[3])], aviso: rend.aviso } : {},
+    comp: carteraOk ? { clase: comp(cartera.composicion.clase), sector: comp(cartera.composicion.sector), region: comp(cartera.composicion.region) } : {},
+    notas: nv.validas.slice(0, 8).map(n => [corto(n.titulo, 160), n.medio, n.url, n.fecha, n.tema, corto(n.resumen, 200)]),
+    eventos: ((nfmp && nfmp.economico) || []).slice(0, 6).map(e => [String(e.fecha || "").slice(0, 10), e.pais, corto(e.evento, 60)]),
+    vetos, dec, ops: opsIds, alertas: alertasTodas.slice(0, 10).map(x => corto(x, 160)), errores: errores.slice(0, 8), aviso, presupuesto: 0,
+  });
+  // bitácora del mes: entradas válidas (filtradas arriba) + la de hoy
+  const nReales = simulacion ? 0 : resultadosOps.filter(o => ["ejecutada", "aceptada", "incierta"].includes(o.est)).length;
+  const bm = { kind: "bitacoraMes", v: 1, mes, d: previas.filter(x => x[0] !== fecha).concat([[fecha, estado, v ? usd(v.valorUSD) : null, rend && isNum(rend.usd[0]) ? r6(rend.usd[0]) : null, nReales, simulacion ? 1 : 0]]).sort((x, y) => (x[0] < y[0] ? -1 : 1)) };
+  docs.push({ id: `bitacora-${fecha}`, data: bit }, { id: bmId, data: bm });
+  for (const d of docs.slice()) if (!escribible(d.id)) docs.splice(docs.indexOf(d), 1);
+  // presupuesto estimado del día (lecturas + grupos anteriores + este grupo)
+  const p0 = presupuesto(dir), finalBytes = docs.reduce((s, d) => s + bytes(conH(d.data)), 0) + 1600;
+  // §E.10/§O: la bitácora lleva el presupuesto estimado del día (lo medido después lo da db.mjs presupuesto)
+  bit.presupuesto = p0.total + finalBytes;
+  if (bit.presupuesto > PRESUPUESTO_DIA) { bit.alertas.unshift(`Presupuesto de copia del día ≈ ${bit.presupuesto} B (> ${PRESUPUESTO_DIA})`); recortarBitacora(bit); }
+  // ---- rutina-estado (último) ----
+  let abiertas = (estadoPrevio && Array.isArray(estadoPrevio.ejecucionesAbiertas) ? estadoPrevio.ejecucionesAbiertas : []).filter(f => f !== fecha || abierta);
+  if (abierta && !abiertas.includes(fecha)) abiertas.push(fecha);
+  const escritos = Object.fromEntries(docs.map(d => [d.id, conH(d.data).h]));
+  const estadoFin = { kind: "rutinaEstado", v: 2, fecha, estado: degradada ? "degradada" : "hecha", paso: "cerrar", sesion: (prep.rutina && prep.rutina.sesion) || "s-desconocida",
+    inicio: (prep.rutina && prep.rutina.inicio) || ts(t), latido: ts(t), fin: ts(t), commit: prep.commit || null, modo, ejecucionesAbiertas: abiertas,
+    previo: previoDe(radar) || (estadoPrevio ? estadoPrevio.previo || null : null), escritos, motivo: a.degradado ? `degradado: ${a.degradado}` : null };
+  docs.push({ id: "rutina-estado", data: estadoFin });
+  const g = armarGrupo({ dir, grupo: "final", docs, modo, delDia, accionDia });
+  escribirAviso(dir, aviso);
+  escribirTrabajo(dir, "verificar.json", { lecturas: [lectura("rutina-estado", { obligatoria: true, dirAbs: path.resolve(dir) })] });
+  reg.info("cierre listo", { estado, docs: docs.map(d => d.id), omitidos: g.omitidos });
+  return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "listo", modo, resumen: { estado, docs: g.ops, omitidos: g.omitidos.map(o => o.id), aviso: aviso.length }, escribir: g.escribir }) };
+}
+const red2 = x => (isNum(x) ? Math.round(x * 100) / 100 : null);
+
+// Cierre mínimo si el normal falla por datos (H15): bitácora degradada, bitácora del mes y rutina-estado
+function cerrarMinimo({ dir, t, error, a }) {
+  const prep = (() => { try { return leerTrabajo(dir, "preparar.json") || {}; } catch (e) { return {}; } })();
+  const fecha = prep.fechaET || fechaHoraET(t).fecha, mes = fecha.slice(0, 7), modo = prep.modo || "en_linea";
+  const aviso = armarAviso({ fecha, hora: fechaHoraET(t).hora, simulacion: true, cartera: null, rend: null, radar: null, notas: [], operaciones: [], alertas: [],
+    fallas: [{ paso: a.degradado || "cerrar", texto: a.degradado ? textoFalla(a.degradado) : TEXTO_FALLA.cerrar }, ...(a.degradado && a.degradado !== "cerrar" ? [{ paso: "cerrar", texto: TEXTO_FALLA.cerrar }] : [])] });
+  const re = leerDoc(dir, "rutina-estado"), previo = re.estado === "ok" ? re.doc : null;
+  const bit = { kind: "bitacora", v: 2, f: fecha, t: ts(t), estado: "degradada", sim: true, commit: prep.commit || null, modo, mercado: {}, radar: { estado: "sin_radar", motivo: null },
+    cartera: {}, rend: {}, comp: {}, notas: [], eventos: [], vetos: [], dec: [], ops: [], alertas: [corto(`Cierre mínimo: ${error}`, 160)], errores: [["cerrar", "datos"]], aviso };
+  const bmLeido = leerDoc(dir, `bitacora-mes-${mes}`);
+  const previas = bmLeido.estado === "ok" ? bmLeido.doc.d.filter(x => Array.isArray(x) && esFecha(x[0]) && x[0].slice(0, 7) === mes && x[0] !== fecha) : [];
+  const docs = [{ id: `bitacora-${fecha}`, data: bit }, { id: `bitacora-mes-${mes}`, data: { kind: "bitacoraMes", v: 1, mes, d: previas.concat([[fecha, "degradada", null, null, 0, 1]]) } }];
+  docs.push({ id: "rutina-estado", data: { kind: "rutinaEstado", v: 2, fecha, estado: "degradada", paso: "cerrar", sesion: (prep.rutina && prep.rutina.sesion) || "s-desconocida", inicio: (prep.rutina && prep.rutina.inicio) || ts(t),
+    latido: ts(t), fin: ts(t), commit: prep.commit || null, modo, ejecucionesAbiertas: previo && Array.isArray(previo.ejecucionesAbiertas) ? previo.ejecucionesAbiertas.filter(esFecha) : [],
+    previo: previo ? previo.previo || null : null, escritos: {}, motivo: corto(`cierre mínimo: ${error}`, 120) } });
+  const g = armarGrupo({ dir, grupo: "final", docs, modo, delDia: [`bitacora-${fecha}`], accionDia: prep.rutina ? prep.rutina.accion : null });
+  escribirAviso(dir, aviso);
+  escribirTrabajo(dir, "verificar.json", { lecturas: [lectura("rutina-estado", { obligatoria: true, dirAbs: path.resolve(dir) })] });
+  return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "listo", modo, resumen: { estado: "degradada", minimo: true, docs: g.ops }, escribir: g.escribir }) };
+}
 
 export async function main(argv, { ahora = Date.now } = {}) {
   const a = leerArgs(argv, { valores: ["--dir", "--degradado"] });
   if (a.ayuda) { process.stdout.write(AYUDA + "\n"); return { codigo: 0, linea: null }; }
   if (!a.dir) return { codigo: 1, linea: lineaPaso({ paso: PASO, ok: false, accion: "error", resumen: { texto: AYUDA } }) };
-  if (a.degradado !== undefined && !TEXTO_FALLA[a.degradado]) return { codigo: 1, linea: lineaPaso({ paso: PASO, ok: false, accion: "error", resumen: { texto: `paso desconocido: ${a.degradado}` } }) };
-  const dir = path.resolve(a.dir), reg = crearRegistro({ dir, paso: PASO, ahora });
-  const t = ahora(), errores = [], alertas = [];
-  const prep = seguro(dir, "preparar.json", errores) || {};
-  const fecha = prep.fechaET || fechaHoraET(t).fecha, mes = mesDe(fecha), anio = fecha.slice(0, 4);
-  const config = prep.config || configEfectiva(leerDoc(dir, "rutina-config").doc).config;
-  const analisis = seguro(dir, "analisis.json", errores), cartera = seguro(dir, "cartera.json", errores);
-  const decis = seguro(dir, "decisiones.json", errores), planDoc = seguro(dir, "plan-ordenes.json", errores), ejec = seguro(dir, "ejecucion.json", errores);
-  const nfmp = seguro(dir, "noticias-fmp.json", errores), temas = seguro(dir, "temas-noticias.json", errores);
-  let notasDoc = null;
-  try { notasDoc = leerJson(path.join(rutas(dir).entrada, "noticias.json")); } catch (e) { errores.push({ paso: "noticias", codigo: "json_invalido", texto: "entrada/noticias.json ilegible" }); }
-  const out = analisis && analisis.out ? analisis.out : null;
-  const fallas = [];
-  if (a.degradado) { fallas.push({ paso: a.degradado, texto: TEXTO_FALLA[a.degradado] }); errores.push({ paso: a.degradado, codigo: "degradado", texto: TEXTO_FALLA[a.degradado] }); }
-  if (cartera && cartera.estado !== "listo" && a.degradado !== "cartera") fallas.push({ paso: "cartera", texto: cartera.estado === "sin_libro" ? "no se pudo leer cartera-libro; sin órdenes hoy" : TEXTO_FALLA.cartera });
-  if (nfmp && Array.isArray(nfmp.errores) && nfmp.errores.length) errores.push({ paso: "30-fmp-noticias", codigo: "sin_fmp", texto: "FMP no dio noticias ni calendarios" });
-  if (analisis && !out) errores.push({ paso: "10-radar", codigo: analisis.motivo || "sin_radar", texto: "sin análisis de hoy" });
-
-  limpiarGrupo(dir, "final");
-  const simulacion = decis ? decis.simulacion : !config.operar;
-  const carteraOk = !!(cartera && cartera.estado === "listo" && cartera.libro && cartera.valuacion);
-
-  // ---- operaciones y libro ----
-  const opsDocs = {};
-  const dbDir = rutas(dir).entradaDb;
-  for (const f of fs.existsSync(dbDir) ? fs.readdirSync(dbDir) : []) {
-    const m = f.match(/^operaciones-(\d{4}-\d{2})\.json$/);
-    if (m) { const r = leerDoc(dir, f.slice(0, -5)); if (r.estado === "ok") opsDocs[m[1]] = r.doc; }
+  if (a.degradado !== undefined) a.degradado = pasoDegradado(a.degradado);
+  const dir = path.resolve(a.dir), reg = crearRegistro({ dir, paso: PASO, ahora }), t = ahora();
+  try { return cerrar({ dir, a, t, reg }); }
+  catch (e) {
+    reg.error("cierre normal falló; cierre mínimo", { error: String(e.message || e).slice(0, 200) });
+    return cerrarMinimo({ dir, t, error: String(e.message || e), a });
   }
-  const opsFallo = !!(prep.bloqueos && prep.bloqueos.ops) || leerDoc(dir, `operaciones-${mes}`).estado === "fallo";
-  let libro = carteraOk ? cartera.libro : null, tocados = new Set(), idsOps = [];
-  if (carteraOk) {
-    const ev = aplicarEventosOps({ docs: opsDocs, eventos: cartera.eventos || [], ahora: t });
-    Object.assign(opsDocs, ev.docs); ev.tocados.forEach(m => tocados.add(m)); alertas.push(...ev.alertas);
-    const plan = planDoc && Array.isArray(planDoc.ordenes) ? planDoc.ordenes : [];
-    let resultados = null;
-    if (ejec && Array.isArray(ejec.resultados)) resultados = ejec.resultados.map(r => Object.assign({}, plan.find(o => o.id === r.id) || {}, r));
-    else if (simulacion && plan.length) resultados = plan.map(o => Object.assign({}, o, { estado: "simulada" }));
-    if (resultados && resultados.length) {
-      const docMes = opsDocs[mes] || { kind: "carteraOps", v: 1, mes, at: t, ops: [] };
-      const r = aplicarEjecucion({ libro, ops: docMes, resultados, ahora: t });
-      libro = r.libro; opsDocs[mes] = r.ops; tocados.add(mes); idsOps = resultados.map(x => x.id);
-    }
-    const completo = !!(out && !out.partial && decis && decis.objetivo && decis.objetivo.estado === "ok");
-    libro = actualizarFuera({ libro, pesos: decis && decis.objetivo ? decis.objetivo.pesos : {}, completo, fecha });
-    const v = cartera.valuacion;
-    libro.ultimaValuacion = { at: t, valorUSD: v.valorUSD, valorMXN: v.valorMXN, fx: v.fx };
-    libro.ultimaRutina = fecha; libro.at = t;
-  }
-  const escritos = [];
-  const escribir = (id, doc) => { escribirDoc(dir, "final", id, doc); escritos.push(id); };
-  for (const m of [...tocados].sort()) {
-    if (m === mes && opsFallo) { alertas.push(`operaciones-${mes} no se pudo leer: las operaciones de hoy no se guardan.`); continue; }
-    const d = opsDocs[m];
-    if (bytesDe(d) > OPS_MAX && m === mes) { // el mes pasó de 140 000 B: lo nuevo va a operaciones-<mes>-2
-      const leidos = (leerDoc(dir, `operaciones-${m}`).doc || { ops: [] }).ops.map(o => o.id);
-      const dos = leerDoc(dir, `operaciones-${m}-2`).doc || { kind: "carteraOps", v: 1, mes: m, at: t, ops: [] };
-      const nuevas = d.ops.filter(o => !leidos.includes(o.id));
-      dos.ops = dos.ops.filter(o => !nuevas.some(n => n.id === o.id)).concat(nuevas); dos.at = t;
-      d.ops = d.ops.filter(o => leidos.includes(o.id));
-      escribir(`operaciones-${m}`, d); escribir(`operaciones-${m}-2`, dos);
-    } else escribir(`operaciones-${m}`, d);
-  }
-  if (carteraOk && !(prep.bloqueos && prep.bloqueos.libro)) escribir("cartera-libro", libro);
-  if (carteraOk && cartera.serie && !(cartera.bloqueos && cartera.bloqueos.serie)) escribir(`cartera-serie-${anio}`, cartera.serie);
-  if (carteraOk && cartera.mapa && !(cartera.bloqueos && cartera.bloqueos.mapa)) escribir("etoro-mapa", cartera.mapa);
-
-  // ---- contador: llamadas a FMP después del Radar (byCat.manual) ----
-  const llamadasDespues = (cartera && cartera.llamadasFmp || 0) + (nfmp && nfmp.llamadas || 0);
-  if (llamadasDespues > 0) {
-    let c = null;
-    try { c = leerJson(path.join(rutas(dir).salida, "radar", `contador-${DEV}.json`)); } catch (e) { c = null; }
-    if (!c) { const e = leerDoc(dir, `contador-${DEV}`); c = e.estado === "ok" && e.doc.dateET === fecha ? e.doc : null; }
-    const byCat = Object.fromEntries(CATS.map(k => [k, c && c.byCat && Number.isInteger(c.byCat[k]) ? c.byCat[k] : 0]));
-    byCat.manual += llamadasDespues;
-    escribir(`contador-${DEV}`, { kind: "contador", v: 1, dev: DEV, dateET: fecha, used: CATS.reduce((s, k) => s + byCat[k], 0), byCat, limitHit: false, suspect: null, at: t });
-  }
-
-  // ---- noticias ----
-  const simbolos = new Set([...(out ? out.rows.map(r => r.symbol) : []), ...((libro || (cartera && cartera.libro) || { posiciones: [] }).posiciones.map(p => p.sym)), ...((temas && temas.simbolos) || []).map(s => s.sym)]);
-  const nv = notasDoc ? validarNoticias({ doc: notasDoc, ahoraMs: t, ventanaH: config.noticiasVentanaH, simbolos: [...simbolos] }) : { validas: [], descartadas: [], eventos: [] };
-  if (!notasDoc) errores.push({ paso: "noticias", codigo: "sin_notas", texto: "no se escribió entrada/noticias.json" });
-
-  // ---- bitácora ----
-  const bi = leerDoc(dir, "bitacora-indice");
-  const idx = bi.estado === "ok" && Array.isArray(bi.doc.dias) ? bi.doc : { kind: "bitacoraIndice", v: 1, at: t, dias: [] };
-  const prevF = (idx.dias.find(d => d.f < fecha) || {}).f, prevB = prevF ? leerDoc(dir, `bitacora-${prevF}`).doc : null;
-  const senales = out ? out.rows.map(r => [r.symbol, r.signal, r.pct]) : [];
-  const roles = (decis && decis.roles) || {};
-  const objetivo = decis && decis.objetivo ? Object.entries(decis.objetivo.pesos).map(([id, peso]) => ({ id, peso, rol: roles[id] || null })) : [];
-  const regimen = out && out.regime ? { estado: out.regime.state, etiqueta: out.regime.label } : null;
-  const cambios = out ? cambiosRadar({ senales, objetivo, prev: prevB }) : [];
-  const decisiones = decis ? decis.decisiones.map(d => ({ sym: d.sym, regla: d.regla, accion: d.accion, pesoActual: d.pesoActual, pesoObjetivo: d.pesoObjetivo, desvPts: d.desvPts, montoUSD: d.montoUSD, motivo: d.motivo, noticias: d.noticias, razonOmision: d.razonOmision })) : [];
-  const alertasTodas = [...new Set([...(prep.alertas || []), ...((cartera && cartera.alertas) || []), ...((decis && decis.alertas) || []), ...alertas])];
-  const resultadosEj = ejec && Array.isArray(ejec.resultados) ? ejec.resultados : [];
-  for (const r of resultadosEj) if (r.estado === "rechazada" || r.estado === "desconocida") alertasTodas.push(`Orden ${r.id} ${r.estado}${r.error ? ": " + String(r.error).slice(0, 80) : ""}`);
-  const degradada = !!a.degradado || !carteraOk || !out || !decis;
-  const estado = degradada ? "degradada" : (out.partial || errores.some(e => e.paso === "30-fmp-noticias" || e.paso === "noticias")) ? "parcial" : "completa";
-  // aviso
-  const plan = planDoc && Array.isArray(planDoc.ordenes) ? planDoc.ordenes : [];
-  const opsAviso = simulacion ? plan.map(o => ({ sym: o.sym, lado: o.lado, regla: o.regla }))
-    : resultadosEj.filter(r => !["rechazada", "desconocida"].includes(r.estado)).map(r => { const o = plan.find(x => x.id === r.id) || {}; return { sym: o.sym, lado: o.lado, regla: o.regla }; });
-  const pri = c => (c.tipo !== "senal" ? 0 : objetivo.some(o => o.id === c.sym) || (libro && libro.posiciones.some(p => p.sym === c.sym)) ? 1 : 2);
-  const notasAviso = nv.eventos.filter(e => e.confirmado).map(e => nv.validas.find(n => n.evento && n.evento.simbolo === e.simbolo && n.evento.categoria === e.categoria))
-    .concat(nv.validas.filter(n => n.tema === "macro" || n.tema === "mercado").sort((x, y) => (x.fecha < y.fecha ? 1 : -1))).filter(Boolean);
-  const v = carteraOk ? cartera.valuacion : null;
-  const horaAviso = fechaHoraET(t).hora;
-  const aviso = armarAviso({
-    fecha, hora: horaAviso, simulacion, cartera: v ? { valorUSD: v.valorUSD, valorMXN: v.valorMXN } : null, rend: carteraOk ? cartera.rendimientos : null,
-    radar: out ? { regimen: regimen && regimen.etiqueta, cambios: cambios.slice().sort((x, y) => pri(x) - pri(y)).slice(0, 3).map(frase) } : { motivoSin: (analisis && analisis.motivo) || "sin análisis" },
-    notas: [...new Set(notasAviso)].slice(0, 2).map(n => ({ titulo: n.titulo, medio: n.medio })), operaciones: opsAviso, alertas: alertasTodas, fallas,
-  });
-  const bit = {
-    kind: "bitacora", v: 1, fecha, at: t,
-    sesion: { inicio: prep.ahora || null, fin: t, version: VERSION, pagina: prep.compat ? (prep.compat.ok ? prep.compat.pagina || null : "cambió") : null, simulacion },
-    estado, mercado: { abierto: !!(prep.mercado && prep.mercado.abierto), feriado: (prep.mercado && prep.mercado.feriado) || null, cierreAnticipado: !!(prep.mercado && prep.mercado.cierreAnticipado), horaET: prep.horaET || null },
-    radar: { fuente: analisis ? analisis.fuente : "ninguna", runId: analisis ? analisis.runId || null : null, asOf: out ? out.asOf : null, parcial: !!(out && out.partial), motivo: analisis ? analisis.motivo || null : "sin_radar",
-      llamadasFMP: analisis && analisis.llamadas ? analisis.llamadas.total || 0 : 0, regimen, regimenAntes: prevB && prevB.radar ? prevB.radar.regimen : null, cambios },
-    senales, objetivo, objetivoEfectivo: decis && decis.objetivo ? decis.objetivo.efectivo : null,
-    cartera: v ? { valorUSD: v.valorUSD, valorMXN: v.valorMXN, fx: v.fx, efectivoUSD: v.efectivoUSD, posiciones: v.posiciones, composicion: cartera.composicion } : { valorUSD: null, valorMXN: null, fx: null, efectivoUSD: null, posiciones: [], composicion: {} },
-    rendimientos: carteraOk && cartera.rendimientos ? { usd: cartera.rendimientos.usd, mxn: cartera.rendimientos.mxn, spy: cartera.rendimientos.spy, meta15: cartera.rendimientos.meta15 } : { usd: {}, mxn: {}, spy: {}, meta15: {} },
-    noticias: { notas: nv.validas.map(n => ({ id: n.id, titulo: n.titulo, medio: n.medio, url: n.url, fecha: n.fecha, tema: n.tema, simbolos: n.simbolos, resumen: n.resumen, evento: n.evento })),
-      eventos: nv.eventos, vetos: decisiones.filter(d => d.accion === "vetada").map(d => d.sym), descartadas: nv.descartadas.length },
-    decisiones, operaciones: idsOps, alertas: alertasTodas, errores, aviso,
-  };
-  while (bytesDe(bit) > DOC_MAX && bit.noticias.notas.length) bit.noticias.notas.pop();
-  escribir(`bitacora-${fecha}`, bit);
-  // índice (≤ 400, descendente); lo que sale se borra
-  const fila = { f: fecha, estado, vUSD: v ? v.valorUSD : null, rDia: carteraOk && cartera.rendimientos ? cartera.rendimientos.usd.dia : null, nOps: idsOps.length, sim: simulacion };
-  const dias = idx.dias.filter(d => d.f !== fecha).concat([fila]).sort((x, y) => (x.f < y.f ? 1 : -1));
-  const quedan = config.podar ? dias.slice(0, MAX_INDICE) : dias, salen = config.podar ? dias.slice(MAX_INDICE) : [];
-  if (bi.estado !== "fallo") {
-    escribir("bitacora-indice", { kind: "bitacoraIndice", v: 1, at: t, dias: quedan });
-    for (const d of salen) borrarDoc(dir, "final", `bitacora-${d.f}`);
-  } else alertasTodas.push("bitacora-indice no se pudo leer: hoy no se actualiza.");
-  // rutina-estado (último)
-  const ejecucion = decis ? { inicio: ejec ? ejec.inicio || null : null, simulacion, planSha: decis.planSha || null, plan } : { inicio: null, simulacion, planSha: null, plan: [] };
-  escribir("rutina-estado", { kind: "rutinaEstado", v: 1, fecha, estado: degradada ? "degradada" : "hecha", paso: "cerrar", inicio: prep.ahora || t, fin: t,
-    intentos: (prep.rutina && prep.rutina.intentos) || 1, ejecucion, motivo: a.degradado ? `degradado: ${a.degradado}` : null });
-  escribirAviso(dir, aviso);
-  reg.info("cierre listo", { estado, escritos });
-  return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "listo", resumen: { estado, docs: escritos.length, aviso: aviso.length }, escribir: "salida/final/_orden.json" }) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) correrCli(main, PASO);

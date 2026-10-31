@@ -1,10 +1,8 @@
-// Carpeta de trabajo del día (12-plan §5.2): entrada/db/, trabajo/, salida/<grupo>/, registro.jsonl.
+// Carpeta de trabajo del día (12b §D.1): entrada/ (lecturas.jsonl, db/, archivo/, noticias.json), trabajo/, salida/<grupo>/, registro.jsonl.
 import fs from "node:fs";
 import path from "node:path";
-import { DOC_MAX } from "./constantes.mjs";
 
 const ID_OK = /^[a-z0-9][a-z0-9-]{0,80}$/;
-const GRUPO_OK = /^[a-z0-9-]{1,40}$/;
 const NOMBRE_OK = /^[a-z0-9][a-z0-9.-]{0,80}$/;
 
 export class ErrorArchivo extends Error {
@@ -22,7 +20,7 @@ export function rutas(dir) {
 
 export function crearCarpeta(dir) {
   const r = rutas(dir);
-  for (const d of [r.entradaDb, r.trabajo, r.salida]) fs.mkdirSync(d, { recursive: true });
+  for (const d of [r.entradaDb, path.join(r.entrada, "archivo"), r.trabajo, r.salida]) fs.mkdirSync(d, { recursive: true });
   return r;
 }
 
@@ -42,23 +40,20 @@ export function escribirJson(ruta, obj, { compacto = false } = {}) {
   fs.writeFileSync(ruta, compacto ? JSON.stringify(obj) : JSON.stringify(obj, null, 1) + "\n");
 }
 
-export function leerFallos(dir) {
-  const f = leerJson(path.join(rutas(dir).entradaDb, "_fallos.json"));
-  return f && typeof f === "object" && !Array.isArray(f) ? f : {};
-}
-
-// Documento de db leído por Claude. "no_existe" solo si no hay archivo y el id no está en _fallos.
+// Documento de db ya importado (lib/db.mjs importar). estado: ok | no_existe | fallo | corrupto | sin_leer
 export function leerDoc(dir, id) {
   validarId(id);
-  const fallos = leerFallos(dir);
-  if (Object.prototype.hasOwnProperty.call(fallos, id)) return { estado: "fallo", doc: null, codigo: String(fallos[id]).slice(0, 80) };
+  let ver;
+  try { ver = leerJson(path.join(rutas(dir).entradaDb, "_versiones.json")) || {}; } catch (e) { return { estado: "fallo", doc: null, version: null, codigo: "versiones" }; }
+  const v = ver[id];
+  if (!v) return { estado: "sin_leer", doc: null, version: null, codigo: null };
+  if (v.estado !== "ok") return { estado: v.estado, doc: null, version: v.version ?? null, codigo: v.codigo || null };
   try {
     const doc = leerJson(path.join(rutas(dir).entradaDb, id + ".json"));
-    if (doc === null) return { estado: "no_existe", doc: null, codigo: null };
-    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return { estado: "fallo", doc: null, codigo: "forma" };
-    return { estado: "ok", doc, codigo: null };
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return { estado: "fallo", doc: null, version: v.version, codigo: "sin_cuerpo" };
+    return { estado: "ok", doc, version: v.version, codigo: null };
   } catch (e) {
-    return { estado: "fallo", doc: null, codigo: e.codigo || "lectura" };
+    return { estado: "fallo", doc: null, version: v.version, codigo: e.codigo || "lectura" };
   }
 }
 
@@ -66,44 +61,6 @@ const validarNombre = n => { if (typeof n !== "string" || !NOMBRE_OK.test(n)) th
 
 export function leerTrabajo(dir, nombre) { validarNombre(nombre); return leerJson(path.join(rutas(dir).trabajo, nombre)); }
 export function escribirTrabajo(dir, nombre, obj) { validarNombre(nombre); escribirJson(path.join(rutas(dir).trabajo, nombre), obj); }
-
-// salida/<grupo>/: se vacía al empezar el paso que la produce (una corrida repetida no duplica órdenes de escritura)
-export function limpiarGrupo(dir, grupo) {
-  if (!GRUPO_OK.test(grupo)) throw new ErrorArchivo("grupo_invalido", `grupo inválido: ${grupo}`);
-  const g = path.join(rutas(dir).salida, grupo);
-  fs.rmSync(g, { recursive: true, force: true });
-  fs.mkdirSync(g, { recursive: true });
-  return g;
-}
-
-function agregarOrden(dir, grupo, entrada) {
-  if (!GRUPO_OK.test(grupo)) throw new ErrorArchivo("grupo_invalido", `grupo inválido: ${grupo}`);
-  const g = path.join(rutas(dir).salida, grupo), ruta = path.join(g, "_orden.json");
-  const orden = leerJson(ruta) || [];
-  orden.push(entrada);
-  escribirJson(ruta, orden);
-  return ruta;
-}
-
-// Escribe salida/<grupo>/<id>.json (JSON compacto) y lo agrega al final de _orden.json.
-export function escribirDoc(dir, grupo, id, cuerpo) {
-  validarId(id);
-  if (!cuerpo || typeof cuerpo !== "object" || Array.isArray(cuerpo)) throw new ErrorArchivo("forma", `${id}: el cuerpo no es un objeto`);
-  if (typeof cuerpo.kind !== "string" || !cuerpo.kind) throw new ErrorArchivo("sin_kind", `${id}: falta kind`);
-  const n = bytesDe(cuerpo);
-  if (n > DOC_MAX) throw new ErrorArchivo("doc_grande", `${id}: ${n} B > ${DOC_MAX} B`);
-  const archivo = path.join("salida", grupo, id + ".json");
-  escribirJson(path.join(dir, archivo), cuerpo, { compacto: true });
-  agregarOrden(dir, grupo, { id, archivo, accion: "escribir" });
-  return { id, archivo, bytes: n };
-}
-
-export function borrarDoc(dir, grupo, id) {
-  validarId(id);
-  agregarOrden(dir, grupo, { id, accion: "borrar" });
-}
-
-export function ordenDe(dir, grupo) { return leerJson(path.join(rutas(dir).salida, grupo, "_orden.json")) || []; }
 
 export function escribirAviso(dir, texto) { fs.mkdirSync(rutas(dir).salida, { recursive: true }); fs.writeFileSync(path.join(rutas(dir).salida, "aviso.txt"), texto); }
 
@@ -126,8 +83,13 @@ export function leerArgs(argv, { valores = [], banderas = [], posicionales = 0 }
   return out;
 }
 
-export const lineaPaso = ({ paso, ok, accion, resumen = {}, escribir = null, extra = {} }) =>
-  Object.assign({ paso, ok, accion, resumen, escribir }, extra);
+export const lineaPaso = ({ paso, ok, accion, resumen = {}, escribir = null, modo = null, extra = {} }) =>
+  Object.assign({ paso, ok, accion, resumen, escribir }, modo ? { modo } : {}, extra);
+
+// modo de db del día (lo fija 00-preparar --fase lista en trabajo/lista.json)
+export function modoDe(dir) {
+  try { const l = leerJson(path.join(rutas(dir).trabajo, "lista.json")); return l && l.modo ? l.modo : null; } catch (e) { return null; }
+}
 
 // Envoltura de CLI: main(argv) → { codigo, linea }; imprime la línea y sale con el código.
 export async function correrCli(main, paso) {

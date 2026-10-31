@@ -8,7 +8,8 @@ const copia = o => JSON.parse(JSON.stringify(o));
 const piso = x => Math.floor(x * 100 + 1e-7) / 100;
 const seis = x => Math.floor(x * 1e6 + 1e-6) / 1e6;
 const p1 = x => (Math.round(x * 10) / 10).toFixed(1);
-const signo = x => { const r = Math.round(x * 10) / 10; return (r < 0 ? "−" : "+") + Math.abs(r).toFixed(1); };
+// desviaciones con la cifra redondeada a centésimas, la misma que compara la banda (H10)
+const signo = x => { const r = Math.round(x * 100) / 100; return (r < 0 ? "−" : "+") + Math.abs(r).toFixed(2); };
 const ETIQUETA = { 1: "Evitar", 2: "Mantener", 3: "Compra" };
 
 // ---- rutina-config efectiva (§5.9.6): fuera de rango → defecto + alerta ----
@@ -61,7 +62,7 @@ const PRIORIDAD = { V1: 0, N2: 0, V2: 1, R1: 2, C1: 3 };
 
 // Entradas:
 //  analisis: trabajo/analisis.json · cartera: trabajo/cartera.json · eventos: eventos validados de noticias (con `confirmado`)
-//  config: configEfectiva · contexto: { fecha, mercadoAbierto, ventanaDentro, bloqueoLibro, cetesPct, nowMs }
+//  config: configEfectiva · contexto: { fecha, mercadoAbierto, ventanaDentro, bloqueoLibro, calendarioAusente, cetesPct, nowMs }
 // objetivo: solo pruebas (escenarios con pesos fijos); en la rutina siempre sale de buildPortfolio
 export function decidir({ C, analisis, cartera, eventos = [], config, contexto, objetivo: objetivoFijo = null }) {
   const alertas = [], decisiones = [];
@@ -84,6 +85,7 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
   let bloqueo = null;
   if (!cartera || cartera.estado !== "listo" || !libro || !val) bloqueo = "sin datos de eToro o del libro";
   else if (contexto.bloqueoLibro) bloqueo = "cartera-libro no se pudo leer";
+  else if (contexto.calendarioAusente) bloqueo = "falta el calendario NYSE del año";
   else if (!contexto.mercadoAbierto) bloqueo = "mercado cerrado";
   else if (!contexto.ventanaDentro) bloqueo = "fuera de la ventana de órdenes";
   const modo = bloqueo ? "bloqueado" : base;
@@ -94,28 +96,35 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
   if (!libro || !val) return res;
 
   const fila = sym => (out ? (out.rows || []).find(r => r.symbol === sym) || null : null);
-  const valorDe = {}, pendDe = {}, unidadesDe = {}, bidDe = {};
-  for (const p of val.posiciones) { valorDe[p.sym] = p.valorUSD; unidadesDe[p.sym] = p.unidades; bidDe[p.sym] = p.precioUSD; }
-  for (const x of libro.pendientes) if (x.lado === "compra") pendDe[x.sym] = (pendDe[x.sym] || 0) + x.montoUSD;
-  const ventaPend = new Set(libro.pendientes.filter(x => x.lado === "venta").map(x => x.sym));
-  const enCartera = sym => (valorDe[sym] || 0) > 0 || (pendDe[sym] || 0) > 0;
+  const valorDe = {}, pendDe = {}, unidadesDe = {}, bidDe = {}, sinPrecio = new Set();
+  for (const p of val.posiciones) { valorDe[p.sym] = p.valorUSD; unidadesDe[p.sym] = p.unidades; bidDe[p.sym] = p.precioValido === false ? null : p.precioUSD; if (p.precioValido === false) sinPrecio.add(p.sym); }
+  for (const x of libro.pendientes) if (x.lado === "compra") pendDe[x.sym] = (pendDe[x.sym] || 0) + (x.montoUSD || 0);
+  // §I: un cierre pendiente solo frena otra venta del mismo símbolo el mismo día; una compra pendiente frena otra compra
+  const ventaPendHoy = new Set(libro.pendientes.filter(x => x.lado === "venta" && x.dia === fecha).map(x => x.sym));
+  const compraPend = new Set(libro.pendientes.filter(x => x.lado === "compra").map(x => x.sym));
+  // "en cartera" por unidades del libro, nunca por valor (H8)
+  const enCartera = sym => libro.posiciones.some(p => p.sym === sym && p.lotes.reduce((a, l) => a + l.unidades, 0) > 0) || compraPend.has(sym);
   const conLotes = sym => libro.posiciones.some(p => p.sym === sym && p.lotes.length);
+  // N7: ETF que el corredor siempre pide y que falta en un análisis listo → dato faltante (sin órdenes, contador quieto)
+  const faltante = sym => !!out && !fila(sym) && C.ETF_PAID.includes(sym);
   const peso = sym => (valorUSD > 0 ? ((valorDe[sym] || 0) + (pendDe[sym] || 0)) / valorUSD : 0);
   const pesos = objetivo.pesos;
   const confirmados = eventos.filter(e => e.confirmado);
   const claseDe = sym => { const m = mapa.instrumentos[sym]; if (m && isNum(m.clase)) return m.clase; const r = fila(sym); return r ? (r.cls === "stock" ? 5 : 6) : null; };
-  const operadoHoy = libro.operadoHoy && libro.operadoHoy.fecha === fecha ? new Set(libro.operadoHoy.syms) : new Set();
   const fuera = libro.fueraDelObjetivo || {};
   const senalTxt = r => (r ? `señal ${r.signalLabel || ETIQUETA[r.signal]}, ${r.pct} %` : "sin fila en el análisis de hoy");
 
   const syms = [...new Set(libro.posiciones.filter(p => p.lotes.length).map(p => p.sym).concat(Object.keys(pendDe), Object.keys(pesos)))];
   for (const sym of syms) {
-    const a = peso(sym), w = pesos[sym] || 0, desv = (a - w) * 100, r = fila(sym);
+    const a = peso(sym), w = pesos[sym] || 0, desv = (a - w) * 100, desv2 = Math.round(Math.abs(desv) * 100) / 100, r = fila(sym);
     const d = { sym, regla: null, accion: "mantener", lado: null, pesoActual: a, pesoObjetivo: w, desvPts: Math.round(desv * 100) / 100, montoUSD: null, motivo: "", noticias: [], razonOmision: null };
     const evs = confirmados.filter(e => e.simbolo === sym);
     d.noticias = evs.flatMap(e => e.fuentes);
     const venderTodo = (regla, motivo) => Object.assign(d, { regla, accion: "vender", lado: "venta", montoUSD: valorDe[sym] || 0, motivo, total: true });
-    if (enCartera(sym)) {
+    if (enCartera(sym) && faltante(sym)) {
+      Object.assign(d, { accion: "omitida", razonOmision: "Sin fila en el análisis de hoy (dato faltante)", motivo: "El análisis de hoy no trae este ETF; no se decide nada" });
+      alertas.push(`${sym} falta en el análisis de hoy: sin órdenes y su contador fuera del objetivo no cambia.`);
+    } else if (enCartera(sym)) {
       const etf = claseDe(sym) === 6;
       const ev = evs.find(e => !etf || ["suspension", "deslistado"].includes(e.categoria));
       if (out && r && r.signal === 1 && permitidas.has("V1")) venderTodo("V1", `Pasó a Evitar (${r.pct} %)`);
@@ -124,12 +133,12 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
         const n = (fuera[sym] ? fuera[sym].dias : 0) + 1;
         if (permitidas.has("V2") && n >= config.diasSalida) venderTodo("V2", `Fuera del objetivo ${n} días hábiles seguidos (${senalTxt(r)})`);
         else d.motivo = permitidas.has("V2") ? `Fuera del objetivo ${n} de ${config.diasSalida} días hábiles (${senalTxt(r)})` : `Fuera del objetivo; hoy no se cuenta (${motivoModo || "modo " + base})`;
-      } else if (Math.abs(desv) > config.bandaPts && permitidas.has("R1")) {
+      } else if (desv2 > config.bandaPts && permitidas.has("R1")) {
         const monto = (w - a) * valorUSD;
         Object.assign(d, { regla: "R1", accion: monto > 0 ? "comprar" : "vender", lado: monto > 0 ? "compra" : "venta", montoUSD: Math.abs(monto),
           motivo: `Desviación de ${signo(desv)} pts contra el objetivo (${p1(a * 100)} % → ${p1(w * 100)} %)` });
       } else d.motivo = `Dentro de la banda (desviación ${signo(desv)} pts)`;
-    } else if (w >= config.nuevoSatelitePct / 100 && permitidas.has("C1")) {
+    } else if (Math.round(w * 10000) / 100 >= config.nuevoSatelitePct && permitidas.has("C1")) {
       const rol = objetivo.roles[sym] || "Satélite", rf = objetivo.filas[sym];
       Object.assign(d, { regla: "C1", accion: "comprar", lado: "compra", montoUSD: w * valorUSD, motivo: `Entra al objetivo con ${p1(w * 100)} % (${rol}, ${rf ? `señal ${rf.signalLabel || ETIQUETA[rf.signal]} ${rf.pct} %` : "sin señal"})` });
     } else if (w > 0) d.motivo = permitidas.has("C1") ? `Peso ${p1(w * 100)} % menor al mínimo de ${config.nuevoSatelitePct} % para abrir posición` : `Entraría al objetivo con ${p1(w * 100)} %; hoy solo se permiten ventas (${motivoModo || base})`;
@@ -141,9 +150,10 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
   const omitir = (d, razon) => { d.accion = "omitida"; d.razonOmision = razon; };
   const activas = () => decisiones.filter(d => d.accion === "comprar" || d.accion === "vender");
   for (const d of activas()) {
-    if (operadoHoy.has(d.sym)) { omitir(d, "Ya recibió una orden hoy (recuperación)"); continue; }
-    if (ventaPend.has(d.sym)) { omitir(d, "Tiene un cierre pendiente de confirmar"); continue; }
+    if (sinPrecio.has(d.sym)) { omitir(d, "Sin precio válido de eToro hoy"); alertas.push(`${d.sym}: sin precio válido de eToro hoy; no recibe órdenes.`); continue; }
+    if (d.lado === "venta" && ventaPendHoy.has(d.sym)) { omitir(d, "Ya tiene un cierre enviado hoy"); continue; }
     if (d.lado === "venta" && !conLotes(d.sym)) { omitir(d, "Solo tiene una compra pendiente; no hay posición que cerrar"); continue; }
+    if (d.lado === "compra" && compraPend.has(d.sym)) { omitir(d, "Tiene una compra pendiente de confirmar"); continue; }
     if (d.lado === "compra") {
       if (confirmados.some(e => e.simbolo === d.sym)) { d.accion = "vetada"; d.razonOmision = "Evento material confirmado en noticias: se pospone"; continue; }
       const m = mapa.instrumentos[d.sym];
@@ -176,8 +186,9 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
     const id = `${fecha}-${d.sym}-${d.regla}`, instrumentId = d.lado === "venta" ? (libro.posiciones.find(p => p.sym === d.sym) || {}).instrumentId : mapa.instrumentos[d.sym].instrumentId;
     let cierres = null;
     if (d.lado === "venta") {
+      // cierre total solo para V1/N2/V2 o si, con bid válido, lo que se vende es ≥ 99 % de las unidades (H7)
       const bid = bidDe[d.sym], total = unidadesDe[d.sym] || 0;
-      const u = d.total || !isNum(bid) || bid <= 0 ? null : seis(d.montoUSD / bid);
+      const u = d.total ? null : seis(d.montoUSD / bid);
       cierres = unidadesAVender({ libro, sym: d.sym, unidades: u !== null && u >= 0.99 * total ? null : u }).map(c => ({ positionId: c.positionId, unidades: c.unidades }));
     }
     const nK = d.lado === "venta" ? cierres.length : 1;
@@ -189,11 +200,12 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
 }
 
 // Al cerrar el día (§6.3): días hábiles seguidos fuera del objetivo, solo con análisis completo y una vez por día.
-export function actualizarFuera({ libro, pesos, completo, fecha }) {
+// faltantes: símbolos sin fila en el análisis por dato faltante (N7): su contador no cambia.
+export function actualizarFuera({ libro, pesos, completo, fecha, faltantes = [] }) {
   const L = copia(libro), prev = L.fueraDelObjetivo || {}, next = {};
   const tenidos = [...new Set(L.posiciones.filter(p => p.lotes.length).map(p => p.sym))];
   for (const sym of tenidos) {
-    if (!completo || L.ultimaRutina === fecha) { if (prev[sym]) next[sym] = prev[sym]; continue; }
+    if (!completo || L.ultimaRutina === fecha || faltantes.includes(sym)) { if (prev[sym]) next[sym] = prev[sym]; continue; }
     if (!(pesos[sym] > 0)) next[sym] = prev[sym] ? { desde: prev[sym].desde, dias: prev[sym].dias + 1 } : { desde: fecha, dias: 1 };
   }
   L.fueraDelObjetivo = next;

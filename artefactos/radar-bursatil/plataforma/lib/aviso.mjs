@@ -22,33 +22,36 @@ export const AVISO_YA_HECHA = "Radar · la rutina de hoy ya corrió.";
 export const AVISO_TEMPRANO = "Radar · fuera de horario; corre a las 9:47 ET.";
 export const AVISO_SIN_SEMILLA = "Radar · Falta sembrar la Cartera Radar en db (T18); sin operaciones.";
 
-const VERBO = { real: { compra: "compré", venta: "vendí" }, sim: { compra: "comprar", venta: "vender" } };
+const PASADO = { compra: "compré", venta: "vendí" }, INFIN = { compra: "comprar", venta: "vender" };
 
-// d: { fecha, hora, simulacion, cartera: {valorUSD, valorMXN} | null, rend: §5.13.1 | null, radar: {regimen, cambios, motivoSin} ,
-//      notas: [{titulo, medio}], operaciones: [{sym, lado, regla}], alertas: [string], fallas: [{paso, texto}] }
+// d: { fecha, hora, simulacion, cartera: {valorUSD, valorMXN} | null, rend: {usd:[…], mxn:[…], spy:[…], meta:[…]} | null,
+//      radar: {regimen, cambios} | {sinRadar, motivo}, notas: [{titulo, medio}], operaciones: [{sym, lado, regla, est, motivo}],
+//      alertas: [string], fallas: [{paso, texto}] }
 export function armarAviso(d) {
   const L = [];
   L.push(`Radar · ${fechaCorta(d.fecha)} · ${horaCorta(d.hora)} ET${d.simulacion ? " · SIMULACIÓN" : ""}`);
   if (d.cartera && isNum(d.cartera.valorUSD)) {
-    const r = d.rend || {}, u = r.usd || {}, m = r.mxn || {};
-    let l = `Cartera: US$ ${miles(d.cartera.valorUSD)} (${pct(u.dia)} hoy · ${pct(u.inicio)} desde inicio)`;
-    if (isNum(d.cartera.valorMXN)) l += ` · MXN $ ${miles(d.cartera.valorMXN)} (${pct(m.dia)})`;
+    const r = d.rend || {}, u = r.usd || [], m = r.mxn || [], sp = r.spy || [];
+    let l = `Cartera: US$ ${miles(d.cartera.valorUSD)} (${pct(u[0])} hoy · ${pct(u[4])} desde inicio)`;
+    if (isNum(d.cartera.valorMXN)) l += ` · MXN $ ${miles(d.cartera.valorMXN)} (${pct(m[0])})`;
     L.push(l);
-    if (r.spy && isNum(u.inicio) && isNum(r.spy.inicio)) L.push(`vs SPY desde inicio: ${pct(u.inicio - r.spy.inicio)} · meta 15 % anual: ${pts(r.meta15 && r.meta15.difPtsUSD)}`);
+    if (isNum(u[4]) && isNum(sp[4])) L.push(`vs SPY desde inicio: ${pct(u[4] - sp[4])} · meta 15 % anual: ${pts(r.meta && r.meta[1])}`);
   }
   if (d.radar) {
-    if (d.radar.motivoSin) L.push(`Radar: sin análisis de hoy (${d.radar.motivoSin})`);
-    else {
-      const partes = [`régimen ${d.radar.regimen || "—"}`].concat((d.radar.cambios || []).slice(0, 3));
-      L.push(`Radar: ${partes.join("; ")}`);
-    }
+    if (d.radar.sinRadar) L.push(d.radar.motivo === "pagina_cambio" ? "Radar: la página del Radar cambió; sin Radar no se opera." : "Radar: sin datos de FMP hoy; sin Radar no se opera.");
+    else L.push(`Radar: ${[`régimen ${d.radar.regimen || "—"}`].concat((d.radar.cambios || []).slice(0, 3)).join("; ")}`);
   }
   if (d.notas && d.notas.length) L.push(`Noticias: ${d.notas.slice(0, 2).map(n => `${recorta(n.titulo, 60)} (${n.medio})`).join("; ")}`);
   const ops = d.operaciones || [];
-  if (!ops.length) L.push("Operaciones: ninguna");
+  if (d.simulacion && ops.length) L.push(`Operaciones: ${ops.length} ${ops.length > 1 ? "simuladas" : "simulada"} — ${ops.map(o => `${INFIN[o.lado]} ${o.sym} (${o.regla})`).join(", ")}`);
+  else if (d.simulacion) L.push("Operaciones: ninguna");
   else {
-    const v = d.simulacion ? VERBO.sim : VERBO.real;
-    L.push(`Operaciones: ${ops.length}${d.simulacion ? (ops.length > 1 ? " simuladas" : " simulada") : ""} — ${ops.map(o => `${v[o.lado]} ${o.sym} (${o.regla})`).join(", ")}`);
+    // H12: solo lo que llegó a eToro se cuenta como hecho; lo rechazado o no enviado va aparte
+    const hechas = ops.filter(o => ["ejecutada", "aceptada", "incierta"].includes(o.est)).map(o => o.est === "ejecutada" ? `${PASADO[o.lado]} ${o.sym} (${o.regla})`
+      : o.est === "aceptada" ? `${o.lado} ${o.sym} enviada, sin ejecutar aún` : `${o.lado} ${o.sym} sin confirmar`);
+    L.push(hechas.length ? `Operaciones: ${hechas.length} — ${hechas.join(", ")}` : "Operaciones: ninguna");
+    const no = ops.filter(o => o.est === "rechazada" || o.est === "no_enviada");
+    if (no.length) L.push(`No se ejecutaron: ${no.map(o => `${o.sym} (${recorta(String(o.motivo || o.est), 40)})`).join(", ")}`);
   }
   if (d.alertas && d.alertas.length) L.push(`Alertas: ${d.alertas.slice(0, 3).join("; ")}`);
   for (const f of d.fallas || []) L.push(`Falla: ${f.paso} — ${f.texto}`);

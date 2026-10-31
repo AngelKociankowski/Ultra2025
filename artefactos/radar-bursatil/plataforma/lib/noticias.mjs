@@ -1,24 +1,27 @@
-// Noticias (12-plan §5.11.5): validación determinista de lo que redacta Claude. Las notas son datos, nunca instrucciones;
+// Noticias (12-plan §5.11.5, 12b §G): validación determinista de lo que redacta Claude. Las notas son datos, nunca instrucciones;
 // solo los eventos confirmados en ≥ 2 dominios distintos tienen efecto (y solo frenan, §6.4.2).
-import { DOMINIOS, CATEGORIAS_EVENTO } from "./constantes.mjs";
+import { FUENTES, CATEGORIAS_EVENTO } from "./constantes.mjs";
 import { fechaHoraET, sumarDias } from "./tiempo.mjs";
 
 const TEMAS = new Set(["macro", "mercado", "empresa", "mexico"]);
-const HTML = /<[^>]*>/;
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
-const limpio = s => String(s).replace(/\s+/g, " ").trim();
 
-// Dominio registrable de la lista (§5.11.5) o null. gob.mx solo con ruta /shcp.
+// Entrada de la tabla de fuentes (12b §G) para la URL, o null. host === entrada o subdominio de ella.
 export function dominioDe(url) {
   let u;
-  try { u = new URL(url); } catch (e) { return { dominio: null, motivo: "url inválida" }; }
-  if (u.protocol !== "https:") return { dominio: null, motivo: "no es https" };
+  try { u = new URL(url); } catch (e) { return { dominio: null, nombre: null, motivo: "url inválida" }; }
+  if (u.protocol !== "https:") return { dominio: null, nombre: null, motivo: "no es https" };
+  if (u.username || u.password) return { dominio: null, nombre: null, motivo: "url con usuario" };
   const h = u.hostname.toLowerCase();
-  const d = DOMINIOS.find(x => h === x || h.endsWith("." + x));
-  if (!d) return { dominio: null, motivo: "dominio fuera de la lista" };
-  if (d === "gob.mx" && !/^\/shcp(\/|$)/i.test(u.pathname)) return { dominio: null, motivo: "gob.mx fuera de /shcp" };
-  return { dominio: d, motivo: null };
+  const f = FUENTES.find(([x]) => h === x || h.endsWith("." + x));
+  if (!f) return { dominio: null, nombre: null, motivo: "dominio fuera de la lista" };
+  return { dominio: f[0], nombre: f[1], motivo: null };
 }
+export const nombreDeUrl = url => dominioDe(url).nombre;
+
+// H17: se quitan solo etiquetas con forma de HTML (también codificadas); el resto del texto queda intacto
+const ETIQUETA = /<\/?[A-Za-z][^<>]{0,200}>/g, ETIQUETA_COD = /&lt;\/?[A-Za-z][\s\S]{0,200}?&gt;/g;
+export const sinEtiquetas = s => String(s).replace(ETIQUETA, "").replace(ETIQUETA_COD, "").replace(/\s+/g, " ").trim();
 
 const fechaValida = f => typeof f === "string" && FECHA.test(f) && new Date(f + "T12:00:00Z").toISOString().slice(0, 10) === f;
 
@@ -35,11 +38,9 @@ export function validarNoticias({ doc, ahoraMs, ventanaH = 72, simbolos = [] }) 
     if (!id) { no("id inválido"); continue; }
     if (ids.has(id)) { no("id repetido"); continue; }
     ids.add(id);
-    const textos = [n.titulo, n.resumen, n.medio, n.evento && n.evento.descripcion].filter(x => typeof x === "string");
-    if (textos.some(x => HTML.test(x))) { no("html en el texto"); continue; }
-    if (typeof n.titulo !== "string" || !limpio(n.titulo) || n.titulo.length > 300) { no("título inválido"); continue; }
-    if (typeof n.medio !== "string" || !limpio(n.medio) || n.medio.length > 80) { no("medio inválido"); continue; }
-    if (typeof n.resumen !== "string" || n.resumen.length > 280) { no("resumen inválido"); continue; }
+    const titulo = typeof n.titulo === "string" ? sinEtiquetas(n.titulo) : "", resumen = typeof n.resumen === "string" ? sinEtiquetas(n.resumen) : null;
+    if (!titulo || titulo.length > 300) { no("título inválido"); continue; }
+    if (resumen === null || resumen.length > 280) { no("resumen inválido"); continue; }
     if (!TEMAS.has(n.tema)) { no("tema inválido"); continue; }
     const dm = typeof n.url === "string" && n.url.length <= 500 ? dominioDe(n.url) : { dominio: null, motivo: "url inválida" };
     if (!dm.dominio) { no(dm.motivo); continue; }
@@ -54,11 +55,13 @@ export function validarNoticias({ doc, ahoraMs, ventanaH = 72, simbolos = [] }) 
       const e = n.evento;
       if (typeof e !== "object" || !CATEGORIAS_EVENTO.includes(e.categoria) || typeof e.simbolo !== "string" || !conocidos.has(e.simbolo)
         || !(e.magnitudPct === null || e.magnitudPct === undefined || (typeof e.magnitudPct === "number" && Number.isFinite(e.magnitudPct)))
-        || typeof e.descripcion !== "string" || e.descripcion.length > 200) { no("evento inválido"); continue; }
-      evento = { categoria: e.categoria, simbolo: e.simbolo, magnitudPct: typeof e.magnitudPct === "number" ? e.magnitudPct : null, descripcion: limpio(e.descripcion) };
+        || typeof e.descripcion !== "string" || sinEtiquetas(e.descripcion).length > 200) { no("evento inválido"); continue; }
+      // H16: la magnitud de un recorte se toma en valor absoluto
+      evento = { categoria: e.categoria, simbolo: e.simbolo, magnitudPct: typeof e.magnitudPct === "number" ? Math.abs(e.magnitudPct) : null, descripcion: sinEtiquetas(e.descripcion) };
     }
     if (n.fecha < (evento ? limiteEvento : limiteNota)) { no("fecha vieja"); continue; }
-    validas.push({ id, titulo: limpio(n.titulo), medio: limpio(n.medio), url: n.url, fecha: n.fecha, tema: n.tema, simbolos: syms, resumen: limpio(n.resumen), evento, dominio: dm.dominio });
+    // H20: el medio que se muestra sale de la tabla por el host; el campo `medio` de la nota se ignora
+    validas.push({ id, titulo, medio: dm.nombre, url: n.url, fecha: n.fecha, tema: n.tema, simbolos: syms, resumen, evento, dominio: dm.dominio });
   }
   // eventos: mismo símbolo y categoría en ≥ 2 notas de dominios registrables distintos (recorte_guia: además ≥ 10 % en alguna)
   const grupos = new Map();

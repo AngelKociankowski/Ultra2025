@@ -1,10 +1,10 @@
-// Paso 7 · Decidir (12-plan §6, §5.11.6–§5.11.8): reglas deterministas → decisiones.json, plan-ordenes.json con su huella
-// y, si hay órdenes reales, salida/pre-ejecucion/ (rutina-estado "ejecutando" con el plan). Uso: node bin/40-decidir.mjs --dir <carpeta>
+// Paso 7 · Decidir (12-plan §6, §5.11.6–§5.11.8; 12b §I): reglas deterministas → decisiones.json y plan-ordenes.json con
+// su huella. No escribe nada para db (el reclamo de envío lo arma 50-ejecutar --armar). Uso: node bin/40-decidir.mjs --dir <carpeta>
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
-import { leerArgs, lineaPaso, correrCli, leerDoc, leerTrabajo, escribirTrabajo, leerJson, limpiarGrupo, escribirDoc, rutas } from "../lib/archivos.mjs";
+import { leerArgs, lineaPaso, correrCli, leerDoc, leerTrabajo, escribirTrabajo, leerJson, rutas } from "../lib/archivos.mjs";
 import { crearRegistro } from "../lib/registro.mjs";
 import { cargarPagina } from "../lib/cargar-pagina.mjs";
 import { decidir, configEfectiva } from "../lib/reglas.mjs";
@@ -33,12 +33,12 @@ export async function main(argv, { ahora = Date.now, pagina = null } = {}) {
   const nv = notas ? validarNoticias({ doc: notas, ahoraMs: t, ventanaH: config.noticiasVentanaH, simbolos }) : { validas: [], descartadas: [], eventos: [] };
   // la ventana y el mercado se evalúan ahora, no a la hora de preparar
   const anio = (prep.fechaET || C.etParts(t).date).slice(0, 4);
-  const fer = feriadosAnio({ anio, docDb: leerDoc(dir, `feriados-${anio}`).doc }).filas;
-  const ventana = ventanaDelDia({ C, ahoraMs: t, feriados: fer, config });
-  const pref = leerDoc(dir, "preferencias").doc;
-  const cetesPct = pref && pref.portafolio && typeof pref.portafolio.cetesPct === "number" ? pref.portafolio.cetesPct : null;
-  const r = decidir({ C, analisis, cartera, eventos: nv.eventos, config, contexto: { fecha: prep.fechaET, mercadoAbierto: C.marketState(t, fer).open, ventanaDentro: ventana.dentro,
-    bloqueoLibro: !!(prep.bloqueos && prep.bloqueos.libro), cetesPct, nowMs: t } });
+  const fdb = leerDoc(dir, `feriados-${anio}`), fer = feriadosAnio({ anio, docDb: fdb.estado === "ok" ? fdb.doc : null }).filas;
+  const ventana = ventanaDelDia({ C, ahoraMs: t, feriados: fer || [], config });
+  if (!fer) ventana.dentro = false;
+  // la rutina no lee preferencias de la página: la tasa de CETES no entra (solo cambia el texto del efectivo en buildPortfolio)
+  const r = decidir({ C, analisis, cartera, eventos: nv.eventos, config, contexto: { fecha: prep.fechaET, mercadoAbierto: C.marketState(t, fer || []).open, ventanaDentro: ventana.dentro,
+    bloqueoLibro: !!(prep.bloqueos && prep.bloqueos.libro), calendarioAusente: !fer, cetesPct: null, nowMs: t } });
   r.alertas.push(...alertasNot);
   const plan = { fecha: r.fecha, simulacion: r.simulacion, ordenes: r.ordenes };
   escribirTrabajo(dir, "plan-ordenes.json", plan);
@@ -46,17 +46,9 @@ export async function main(argv, { ahora = Date.now, pagina = null } = {}) {
   const dec = { fecha: r.fecha, simulacion: r.simulacion, modo: r.modo, motivoModo: r.motivoModo, objetivo: r.objetivo, valorUSD: r.valorUSD, efectivoDisponibleUSD: r.efectivoDisponibleUSD,
     decisiones: r.decisiones, planSha, alertas: r.alertas, roles: r.roles || {}, ventana, noticias: { validas: nv.validas.length, descartadas: nv.descartadas, eventos: nv.eventos } };
   escribirTrabajo(dir, "decisiones.json", dec);
-  limpiarGrupo(dir, "pre-ejecucion");
   const accion = !r.ordenes.length ? "nada" : r.simulacion ? "simulacion" : "ejecutar";
-  if (accion === "ejecutar") {
-    const est = { kind: "rutinaEstado", v: 1, fecha: prep.fechaET, estado: "en_curso", paso: "ejecutando", inicio: prep.ahora || t, fin: null, intentos: (prep.rutina && prep.rutina.intentos) || 1,
-      ejecucion: { inicio: t, simulacion: false, planSha, plan: r.ordenes }, motivo: null };
-    if (prep.recuperacion) Object.assign(est, { recuperacion: prep.recuperacion, motivo: `recuperación de ${prep.recuperacion.de}` });
-    escribirDoc(dir, "pre-ejecucion", "rutina-estado", est);
-  }
   reg.info("decisiones", { modo: r.modo, ordenes: r.ordenes.length, accion });
-  return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion, resumen: { modo: r.modo, ordenes: r.ordenes.length, simulacion: r.simulacion, vetadas: r.decisiones.filter(d => d.accion === "vetada").length },
-    escribir: accion === "ejecutar" ? "salida/pre-ejecucion/_orden.json" : null }) };
+  return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion, modo: prep.modo || null, resumen: { modo: r.modo, ordenes: r.ordenes.length, simulacion: r.simulacion, vetadas: r.decisiones.filter(d => d.accion === "vetada").length } }) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) correrCli(main, PASO);

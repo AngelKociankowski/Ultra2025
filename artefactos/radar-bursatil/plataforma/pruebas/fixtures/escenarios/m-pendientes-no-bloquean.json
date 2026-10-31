@@ -1,0 +1,101 @@
+{
+ "nombre": "m-pendientes-no-bloquean",
+ "descripcion": "Pendientes (12b §I, H9): una compra pendiente frena otra compra del mismo símbolo; un cierre enviado hoy frena otra venta; uno de ayer no frena la V1 de hoy",
+ "agregarLotes": [
+  {
+   "sym": "GLD",
+   "instrumentId": 3025,
+   "positionId": 2600000105,
+   "unidades": 1,
+   "costoUSD": 350,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  },
+  {
+   "sym": "TLT",
+   "instrumentId": 3020,
+   "positionId": 2600000106,
+   "unidades": 5,
+   "costoUSD": 410,
+   "abiertaEl": "2026-10-20T15:00:00Z"
+  }
+ ],
+ "pendientes": [
+  {
+   "opId": "2026-11-02-TLT-V1",
+   "dia": "2026-11-02",
+   "orderId": 5001,
+   "sym": "TLT",
+   "instrumentId": 3020,
+   "lado": "venta",
+   "montoUSD": null,
+   "unidades": null,
+   "positionId": 2600000106,
+   "enviadaEl": "2026-11-02T14:55:00Z",
+   "estado": "aceptada"
+  },
+  {
+   "opId": "2026-10-30-GLD-V1",
+   "dia": "2026-10-30",
+   "orderId": 5002,
+   "sym": "GLD",
+   "instrumentId": 3025,
+   "lado": "venta",
+   "montoUSD": null,
+   "unidades": null,
+   "positionId": 2600000105,
+   "enviadaEl": "2026-10-30T15:00:00Z",
+   "estado": "incierta"
+  },
+  {
+   "opId": "2026-10-30-IWM-C1",
+   "dia": "2026-10-30",
+   "orderId": 6001,
+   "sym": "IWM",
+   "instrumentId": 3005,
+   "lado": "compra",
+   "montoUSD": 1200,
+   "unidades": null,
+   "positionId": null,
+   "enviadaEl": "2026-10-30T15:00:00Z",
+   "estado": "aceptada"
+  }
+ ],
+ "efectivoUSD": 5000,
+ "objetivo": {
+  "pesos": {
+   "SPY": "actual",
+   "DIA": "actual",
+   "XLF": "actual",
+   "XLE": "actual",
+   "IWM": 0.12
+  }
+ },
+ "esperado": {
+  "ordenes": [
+   [
+    "GLD",
+    "venta",
+    "V1",
+    null
+   ]
+  ],
+  "acciones": {
+   "TLT": [
+    "omitida",
+    "V1"
+   ],
+   "GLD": [
+    "vender",
+    "V1"
+   ],
+   "IWM": [
+    "omitida",
+    "R1"
+   ]
+  },
+  "razones": {
+   "TLT": "Ya tiene un cierre enviado hoy",
+   "IWM": "Tiene una compra pendiente de confirmar"
+  }
+ }
+}
