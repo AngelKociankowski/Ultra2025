@@ -5,7 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { leerArgs, lineaPaso, correrCli, leerDoc, leerTrabajo, leerJson, escribirAviso, escribirTrabajo, rutas } from "../lib/archivos.mjs";
 import { crearRegistro } from "../lib/registro.mjs";
-import { aplicarResultados, libroADb, mapaADb, opsNuevo, opsValidas } from "../lib/libro.mjs";
+import { aplicarResultados, alertaPendiente, libroADb, mapaADb, opsNuevo, opsValidas } from "../lib/libro.mjs";
 import { actualizarFuera, configEfectiva } from "../lib/reglas.mjs";
 import { actualizarRefs } from "../lib/rendimientos.mjs";
 import { validarNoticias } from "../lib/noticias.mjs";
@@ -92,7 +92,10 @@ function cerrar({ dir, a, t, reg }) {
       resultadosOps = r.ops.ops.filter(o => opsIds.includes(o.id));
     }
     if (opsHoy.ops.length) poner(`ops-${fecha}`, opsHoy);
+    // cierre de ejecuciones: las abiertas que 20-cartera concilió (F.5) y la de hoy de esta sesión
+    for (const [f, d] of Object.entries(cartera.ejecuciones || {})) poner(`ejecucion-${f}`, d);
     if (ejecHoy && ejec && Array.isArray(ejec.res) && ejec.doc) poner(`ejecucion-${fecha}`, Object.assign({}, ejec.doc, { res: ejec.res, fin: ts(t) }));
+    for (const x of libro.pendientes) alertas.push(alertaPendiente(x));
     const faltantes = decis ? decis.decisiones.filter(d => /dato faltante/.test(d.razonOmision || "")).map(d => d.sym) : [];
     const completo = !!(out && !out.partial && decis && decis.objetivo && decis.objetivo.estado === "ok");
     libro = actualizarFuera({ libro, pesos: decis && decis.objetivo ? decis.objetivo.pesos : {}, completo, fecha, faltantes });
@@ -177,7 +180,9 @@ function cerrar({ dir, a, t, reg }) {
   bit.presupuesto = p0.total + finalBytes;
   if (bit.presupuesto > PRESUPUESTO_DIA) { bit.alertas.unshift(`Presupuesto de copia del día ≈ ${bit.presupuesto} B (> ${PRESUPUESTO_DIA})`); recortarBitacora(bit); }
   // ---- rutina-estado (último) ----
-  let abiertas = (estadoPrevio && Array.isArray(estadoPrevio.ejecucionesAbiertas) ? estadoPrevio.ejecucionesAbiertas : []).filter(f => f !== fecha || abierta);
+  // una ejecución deja de estar abierta solo si su cierre (con fin) va en este grupo
+  const cerradas = new Set(docs.filter(d => /^ejecucion-/.test(d.id) && d.data.fin).map(d => d.id.slice("ejecucion-".length)));
+  let abiertas = (estadoPrevio && Array.isArray(estadoPrevio.ejecucionesAbiertas) ? estadoPrevio.ejecucionesAbiertas : []).filter(f => !cerradas.has(f) && (f !== fecha || abierta));
   if (abierta && !abiertas.includes(fecha)) abiertas.push(fecha);
   const escritos = Object.fromEntries(docs.map(d => [d.id, conH(d.data).h]));
   const estadoFin = { kind: "rutinaEstado", v: 2, fecha, estado: degradada ? "degradada" : "hecha", paso: "cerrar", sesion: (prep.rutina && prep.rutina.sesion) || "s-desconocida",

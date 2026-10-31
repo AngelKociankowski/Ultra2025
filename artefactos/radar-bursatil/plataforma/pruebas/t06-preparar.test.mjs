@@ -1,4 +1,4 @@
-// T06 / K3 / H13 / H14 · 00-preparar nuevo (12b §D.2): lista sin documentos de la página y las 8 reglas en orden
+// T06 / K3 · 00-preparar nuevo (12b §D.2): las 8 reglas en orden (H13 en h13, H14 y la lista en h14)
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -7,8 +7,7 @@ import { main as preparar } from "../bin/00-preparar.mjs";
 import { cargarPagina } from "../lib/cargar-pagina.mjs";
 import { semilla, libroADb, libroDeDb } from "../lib/libro.mjs";
 import { conH } from "../lib/db.mjs";
-import { DB_RUTA } from "../lib/constantes.mjs";
-import { carpetaConDb, carpetaTemporal, leerSalida, existe, RAIZ, archivosBajo } from "./util.mjs";
+import { carpetaConDb, carpetaTemporal, leerSalida, existe } from "./util.mjs";
 
 const pag = cargarPagina();
 const S = semilla({ ahora: () => Date.parse("2026-10-31T12:00:00Z") });
@@ -34,28 +33,6 @@ async function correr(iso, docs, opts = {}) {
   return { dir, r, p, w, aviso, lm };
 }
 const LUN = "2026-11-02T14:47:00Z";
-
-test("--fase lista: obligatorios sin documentos de la página; .trabajo/hoy apunta a la fecha ET (H14)", async () => {
-  const raiz = carpetaTemporal();
-  const r = await preparar(["--fase", "lista", "--modo", "en_linea"], { ahora: () => T("2026-11-03T02:30:00Z"), raiz }); // 21:30 ET del 2-nov
-  assert.equal(r.codigo, 0); assert.equal(r.linea.modo, "en_linea"); assert.equal(r.linea.dir, ".trabajo/hoy");
-  assert.deepEqual(r.linea.lecturas.map(l => [l.id, l.obligatoria]), [["rutina-estado", true], ["rutina-config", true], ["cartera-libro", true], ["etoro-mapa", true], ["bitacora-mes-2026-11", true]]);
-  const l = r.linea.lecturas[0];
-  assert.deepEqual(l.en_linea, { herramienta: "mcp__claude-artifacts__db_get", args: { slug: "776fd979-e792-4459-ae2f-00814ef68cde", path: `${DB_RUTA}/rutina-estado` } });
-  assert.equal(l.archivo.args.collection, "data/users/me"); assert.ok(path.isAbsolute(l.archivo.args.out_dir));
-  assert.equal(fs.readlinkSync(path.join(raiz, ".trabajo/hoy")), "2026-11-02");
-  assert.ok(fs.existsSync(path.join(raiz, ".trabajo/hoy/entrada/archivo")));
-  // sin calendario en el repo para 2028: se pide feriados-2028 de la página (solo lectura, no obligatorio)
-  const r28 = await preparar(["--fase", "lista", "--modo", "en_linea"], { ahora: () => T("2028-01-17T14:47:00Z"), raiz: carpetaTemporal() });
-  assert.deepEqual(r28.linea.lecturas.slice(-1).map(x => [x.id, x.obligatoria]), [["feriados-2028", false]]);
-  // ningún paso lee ni escribe documentos de la página (comentarios aparte; `cat: "corrida"` es la categoría del contador
-  // de llamadas que usa la capa de datos de la página, no un documento)
-  const usos = [];
-  for (const f of archivosBajo(path.join(RAIZ, "bin")).concat(archivosBajo(path.join(RAIZ, "lib")))) {
-    fs.readFileSync(f, "utf8").split("\n").forEach((x, i) => { const c = x.replace(/\/\/.*$/, ""); if (/"corrida"|dia-\$\{|"indice"|contador-/.test(c) && !/esDePagina|\^\(dia-|cat: "corrida"/.test(c)) usos.push(`${path.relative(RAIZ, f)}:${i + 1}`); });
-  }
-  assert.deepEqual(usos, []);
-});
 
 test("--ahora solo con RADAR_PRUEBAS=1", async () => {
   delete process.env.RADAR_PRUEBAS;
@@ -88,17 +65,6 @@ test("regla 2 · sábado → fin_de_semana sin escribir; Thanksgiving → feriad
   assert.equal(b.p.rutina.motivoSalida, "feriado"); assert.equal(b.r.linea.escribir, "salida/ahora/db_write.json");
   assert.equal(b.w.ops.length, 1); assert.equal(b.w.ops[0].ifVersion, 8); assert.equal(b.w.ops[0].data.estado, "sin_mercado");
   assert.equal(b.aviso, "Radar · jue 26-nov · Feriado NYSE (Thanksgiving Day): sin operación.");
-});
-
-test("H13 · sin calendario de 2028: continuar con ventana cerrada y alerta; con feriados-2028 en db → feriado", async () => {
-  for (const iso of ["2028-01-17T14:47:00Z", "2028-07-04T13:47:00Z", "2028-12-25T14:47:00Z"]) {
-    const x = await correr(iso, {});
-    assert.equal(x.r.codigo, 0, iso); assert.equal(x.p.mercado.calendario, "ausente"); assert.equal(x.p.ventana.dentro, false);
-    assert.ok(x.p.alertas.includes("Falta el calendario NYSE de 2028: hoy no se opera"), iso);
-  }
-  const fer = { kind: "feriados", v: 1, year: "2028", rows: [{ date: "2028-01-17", name: "Martin Luther King, Jr. Day", isClosed: true, adjOpenTime: null, adjCloseTime: null }] };
-  const y = await correr("2028-01-17T14:47:00Z", { "feriados-2028": fer });
-  assert.equal(y.p.rutina.motivoSalida, "feriado");
 });
 
 test("27-nov 9:47 → ventana hasta 12:30; 8:47 → temprano (nada en db); 15:40 → continuar fuera de ventana", async () => {

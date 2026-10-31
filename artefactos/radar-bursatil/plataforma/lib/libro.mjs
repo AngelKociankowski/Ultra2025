@@ -1,8 +1,8 @@
 // Libro del mandato "Cartera Radar" (12-plan §5.8; 12b §E.5.3–§E.5.10, §E.11, §I). Puro: no habla con la red.
 // En memoria se usa la forma expandida (posiciones/lotes/pendientes); en db, la compacta v2 (libroADb / libroDeDb).
 import { CONFIG_DEFECTO } from "./constantes.mjs";
-import { fechaHoraET } from "./tiempo.mjs";
-import { usd, u6, fx4, precio as px, ts } from "./db.mjs";
+import { fechaHoraET, diasHabilesEntre, aperturaParaOrden } from "./tiempo.mjs";
+import { usd, u6, precio as px, ts } from "./db.mjs";
 
 export const MANDATO = Object.freeze({ inicio: "2026-10-30", baseMXN: 600000, fx0: 18.774, baseUSD: 31959.09, perfil: "moderado" });
 // Base de rendimientos (cierre del 30-oct): [f, v, vm, spy, i, im]
@@ -67,7 +67,7 @@ export function libroDeDb(doc) {
   for (const [sym, v] of Object.entries(doc.fuera || {})) if (Array.isArray(v) && esFecha(v[0]) && Number.isInteger(v[1])) fueraDelObjetivo[sym] = { desde: v[0], dias: v[1] };
   const refs = copia(doc.refs);
   return { libro: { mandato: copia(doc.mandato), efectivoUSD: doc.efectivo, realizadoUSD: doc.realizado, posiciones, pendientes, fueraDelObjetivo,
-    precios: copia(doc.precios || {}), refs, operadoHoy: { fecha: null, syms: [] }, ultimaRutina: refs && refs.dia ? refs.dia[0] : null }, alertas };
+    precios: copia(doc.precios || {}), refs, ultimaRutina: refs && refs.dia ? refs.dia[0] : null }, alertas };
 }
 export function libroADb(L, atMs) {
   const lotes = [];
@@ -146,10 +146,13 @@ function registrarVenta(L, { sym, positionId, unidades, precio }) {
 
 // ordenes: { [orderId]: respuesta de orden(orderId) } para pendientes que ya no están ni en cola ni como posición.
 // ops: operaciones conocidas (regla 2 de pertenencia). bids: { instrumentId: {bid} } para cierres sin fila en historial.
-// La recuperación de ejecuciones abiertas (ejecucion-<f>) va aparte (12b §F.5).
-export function conciliar({ libro, portafolio, historial, ahora, ordenes = {}, ops = [], bids = {} }) {
+// feriados: filas NYSE de los años en juego (plazos de 12b §F.7 en días hábiles).
+// La recuperación de ejecuciones abiertas (ejecucion-<f>) va aparte: conciliarEjecucion (12b §F.5).
+export const VENTANA_ANTES_MS = 120000, VENTANA_DESPUES_MS = 600000, DIAS_INCIERTA = 3;
+export function conciliar({ libro, portafolio, historial, ahora, ordenes = {}, ops = [], bids = {}, feriados = [] }) {
   const L = copia(libro), eventos = [], alertas = [];
-  const t = typeof ahora === "function" ? ahora() : ahora;
+  const t = typeof ahora === "function" ? ahora() : ahora, hoy = fechaHoraET(t).fecha;
+  const diaDe = p => p.dia || String(p.enviadaEl).slice(0, 10) || hoy;
   const cp = cpDe(portafolio), posiciones = Array.isArray(cp.positions) ? cp.positions : [], enCola = Array.isArray(cp.ordersForOpen) ? cp.ordersForOpen : [];
   const colaIds = new Set(enCola.map(ordId).filter(x => x !== null));
   const bidDe = id => (bids[id] && isNum(bids[id].bid) && bids[id].bid > 0 ? bids[id].bid : null);
@@ -161,9 +164,12 @@ export function conciliar({ libro, portafolio, historial, ahora, ordenes = {}, o
   // 1. Compras pendientes
   for (const pend of L.pendientes.filter(p => p.lado === "compra")) {
     let match = posiciones.filter(x => !asignadas.has(posId(x)) && pend.orderId !== null && ordId(x) === pend.orderId);
-    if (!match.length) { // regla 3: la posición no trae orderID
-      const c = posiciones.find(x => !asignadas.has(posId(x)) && ordId(x) === null && instId(x) === pend.instrumentId
-        && Date.parse(x.openDateTime) >= Date.parse(pend.enviadaEl) - 120000 && isNum(x.amount) && Math.abs(x.amount / pend.montoUSD - 1) <= 0.01);
+    if (!match.length) { // regla 3 (H21): sin orderId o la posición no lo trae → instrumento, ventana [env − 120 s, env + 10 min] y monto ±1 %;
+      // una orden enviada con el mercado cerrado se llena a la apertura siguiente: la ventana cierra 10 min después de esa apertura
+      const env = Date.parse(pend.enviadaEl), hasta = Number.isFinite(env) ? Math.max(env, aperturaParaOrden(env, feriados) || env) + VENTANA_DESPUES_MS : NaN;
+      const c = posiciones.find(x => !asignadas.has(posId(x)) && (ordId(x) === null || pend.orderId === null) && instId(x) === pend.instrumentId
+        && Number.isFinite(env) && Date.parse(x.openDateTime) >= env - VENTANA_ANTES_MS && Date.parse(x.openDateTime) <= hasta
+        && isNum(x.amount) && isNum(pend.montoUSD) && Math.abs(x.amount / pend.montoUSD - 1) <= 0.01);
       if (c) match = [c];
     }
     if (match.length) {
@@ -178,13 +184,16 @@ export function conciliar({ libro, portafolio, historial, ahora, ordenes = {}, o
         ejecucion: { precio: u > 0 ? Math.round(costo / u * 1e4) / 1e4 : null, unidades: seis(u), montoUSD: cts(costo), at: match[0].openDateTime } });
       continue;
     }
-    if (pend.orderId !== null && colaIds.has(pend.orderId)) continue; // sigue pendiente
+    if (pend.orderId !== null && colaIds.has(pend.orderId)) { pend.estado = "aceptada"; continue; } // en cola: se respeta, no se reenvía
     const o = pend.orderId !== null ? ordenes[pend.orderId] : null;
     const err = o && (num(o.errorCode) > 0 || (typeof o.errorCode === "string" && o.errorCode && o.errorCode !== "0"));
-    if (err) {
+    const vencida = diasHabilesEntre(diaDe(pend), hoy, feriados) >= DIAS_INCIERTA; // F.7: sin rastro al 3.er día hábil
+    if (err || vencida) {
       L.efectivoUSD = cts(L.efectivoUSD + pend.montoUSD);
       L.pendientes.splice(L.pendientes.indexOf(pend), 1);
-      eventos.push({ tipo: "no_ejecutada", lado: "compra", opId: pend.opId, orderId: pend.orderId, sym: pend.sym, error: `errorCode ${o.errorCode}, statusID ${o.statusID}` });
+      const error = err ? `errorCode ${o.errorCode}, statusID ${o.statusID}` : `sin rastro en ${DIAS_INCIERTA} días hábiles`;
+      eventos.push({ tipo: "no_ejecutada", lado: "compra", opId: pend.opId, orderId: pend.orderId, sym: pend.sym, error });
+      alertas.push(`Compra de ${pend.sym} del ${diaDe(pend)} no se ejecutó (${error}): vuelven US$ ${cts(pend.montoUSD).toFixed(2)} al efectivo.`);
     } else {
       if (pend.estado !== "incierta") eventos.push({ tipo: "incierta", lado: "compra", opId: pend.opId, orderId: pend.orderId, sym: pend.sym });
       pend.estado = "incierta";
@@ -198,7 +207,15 @@ export function conciliar({ libro, portafolio, historial, ahora, ordenes = {}, o
     if (!ent) { L.pendientes.splice(L.pendientes.indexOf(pend), 1); alertas.push(`Cierre pendiente de ${pend.sym} sin lote en el libro (posición ${pend.positionId}).`); continue; }
     const pos = posiciones.find(x => posId(x) === pend.positionId);
     const antes = ent.l.unidades, ahoraU = pos ? num(pos.units) : 0;
-    if (pos && !(ahoraU < antes - 1e-9)) continue; // aún no se ejecuta
+    if (pos && !(ahoraU < antes - 1e-9)) {
+      // F.5/F.7 (H9): con orden de cierre en cola sigue aceptada; intacta y sin orden al día hábil siguiente → no_ejecutada
+      if ((cp.ordersForClose || []).some(x => posId(x) === pend.positionId)) { pend.estado = "aceptada"; pend.enCola = true; continue; }
+      if (diasHabilesEntre(diaDe(pend), hoy, feriados) < 1) continue;
+      L.pendientes.splice(L.pendientes.indexOf(pend), 1);
+      eventos.push({ tipo: "no_ejecutada", lado: "venta", opId: pend.opId, sym: pend.sym, error: "posición intacta y sin orden de cierre" });
+      alertas.push(`Cierre de ${pend.sym} del ${diaDe(pend)} no se ejecutó (posición intacta): la regla vuelve a decidir.`);
+      continue;
+    }
     const h = filaHistorial(historial, pend.positionId), precio = num(precioCierre(h), bidDe(pend.instrumentId));
     if (precio === null) { alertas.push(`Cierre de ${pend.sym} sin precio (ni historial ni bid): se reintenta mañana.`); continue; }
     const r = registrarVenta(L, { sym: pend.sym, positionId: pend.positionId, unidades: cts6(antes - ahoraU), precio });
@@ -228,7 +245,7 @@ export function conciliar({ libro, portafolio, historial, ahora, ordenes = {}, o
   if (opsOrden.size) for (const x of posiciones) if (!asignadas.has(posId(x)) && opsOrden.has(ordId(x)) && !lotes().some(e => e.l.positionId === posId(x))) {
     alertas.push(`Posición ${posId(x)} (orden ${ordId(x)}) aparece en las operaciones sin pendiente: revisar.`);
   }
-  for (const x of L.pendientes) alertas.push(`Pendiente de confirmar: ${x.sym} ${x.lado} desde ${x.dia || String(x.enviadaEl).slice(0, 10)}`);
+  for (const x of L.pendientes) alertas.push(alertaPendiente(x));
   return { libro: L, eventos, alertas };
 }
 const cts6 = x => Math.round(x * 1e6) / 1e6;
@@ -285,59 +302,59 @@ export function unidadesAVender({ libro, sym, unidades }) {
   return out.filter(c => c.unidades === null || c.unidades > 0);
 }
 
-// Forma v1 de una operación: solo la usa aplicarEjecucion (50-ejecutar de 12 §6.6), que B1 reemplaza por aplicarResultados.
-function opDe({ id, fechaIso, sym, instrumentId, lado, regla, motivo, montoUSD = null, unidades = null, orderId = null, estado, simulacion = false, noticias = [] }) {
-  const et = fechaHoraET(Date.parse(fechaIso));
-  return { id, fecha: et.fecha, hora: et.hora, sym, instrumentId, lado, regla, motivo, montoUSD, unidades, orderId, positionIds: [],
-    estado, ejecucion: null, realizadoUSD: null, error: null, noticias, simulacion };
-}
+export const alertaPendiente = x => `Pendiente de confirmar: ${x.sym} ${x.lado} desde ${x.dia || String(x.enviadaEl).slice(0, 10)}`;
 
-// Tras 50-ejecutar. resultados: cada orden del plan con su resultado mezclado
-// ({id, sym, instrumentId, lado, regla, motivo, montoUSD, cierres, noticias, estado, orderId, positionIds, ejecucion, error, detalle}).
-export function aplicarEjecucion({ libro, ops, resultados, ahora }) {
-  const L = copia(libro), O = copia(ops), t = typeof ahora === "function" ? ahora() : ahora, hoy = fechaHoraET(t).fecha, iso = new Date(t).toISOString();
-  const enviados = [];
-  for (const r of resultados) {
-    const op = opDe({ id: r.id, fechaIso: iso, sym: r.sym, instrumentId: r.instrumentId, lado: r.lado, regla: r.regla, motivo: r.motivo,
-      montoUSD: r.lado === "compra" ? r.montoUSD : null, unidades: null, orderId: r.orderId ?? null, estado: r.estado, simulacion: r.estado === "simulada", noticias: r.noticias || [] });
-    op.positionIds = r.positionIds || []; op.error = r.error || null;
-    if (r.estado === "simulada") {
-      if (r.lado === "venta") op.unidades = (r.cierres || []).every(c => c.unidades === null) ? null : (r.cierres || []).reduce((a, c) => a + (c.unidades || 0), 0);
-      O.ops = O.ops.filter(x => x.id !== op.id).concat([op]);
-      continue;
-    }
-    if (r.estado !== "cancelada") enviados.push(r.sym);
-    if (r.lado === "compra") {
-      if (["ejecutada", "pendiente", "enviada", "desconocida"].includes(r.estado)) L.efectivoUSD = cts(L.efectivoUSD - r.montoUSD);
-      if (r.estado === "ejecutada" && r.ejecucion && (r.positionIds || []).length) {
-        const porPos = r.detalle && Array.isArray(r.detalle) ? r.detalle : [{ positionId: r.positionIds[0], unidades: r.ejecucion.unidades, montoUSD: r.ejecucion.montoUSD }];
-        for (const d of porPos) agregarLote(L, { sym: r.sym, instrumentId: r.instrumentId, positionId: d.positionId, orderId: r.orderId, unidades: d.unidades, costoUSD: d.montoUSD, abiertaEl: r.ejecucion.at });
-        op.ejecucion = r.ejecucion; op.unidades = r.ejecucion.unidades;
-      } else if (["pendiente", "enviada", "desconocida"].includes(r.estado)) {
-        L.pendientes.push(Object.assign({ opId: r.id, orderId: r.orderId ?? null, sym: r.sym, instrumentId: r.instrumentId, lado: "compra", montoUSD: r.montoUSD, positionId: null, unidades: null, enviadaEl: iso },
-          r.estado === "desconocida" ? { estado: "desconocida" } : {}));
+// Ejecución abierta (12b §F.5, H6): ejecucion-<f> sin `fin` y sin diario. Cada línea se busca en el portafolio con F.3.4 contra
+// `antes` y la ventana [armado − 120 s, armado + 10 min]: encontrada → ejecutada/aceptada; no encontrada → incierta (efectivo
+// provisional); un cierre con la posición intacta y sin orden, un día hábil después → no_ejecutada. Devuelve el libro y el
+// ops-<f> con los resultados (vía aplicarResultados) y el documento cerrado (res + fin).
+export function conciliarEjecucion({ libro, doc, opsDoc, portafolio, historial = [], bids = {}, ahora, feriados = [] }) {
+  const t = typeof ahora === "function" ? ahora() : ahora, hoy = fechaHoraET(t).fecha;
+  const cp = cpDe(portafolio), posiciones = Array.isArray(cp.positions) ? cp.positions : [];
+  const antesPos = new Set((doc.antes && doc.antes.pos) || []), antesOrd = new Set((doc.antes && doc.antes.ord) || []);
+  const armado = Date.parse(doc.armado), tomadas = new Set(libro.posiciones.flatMap(p => p.lotes.map(l => l.positionId)));
+  const enVentana = x => { const d = Date.parse(x.openDateTime); return Number.isFinite(d) && d >= armado - VENTANA_ANTES_MS && d <= armado + VENTANA_DESPUES_MS; };
+  const casa = (l, x) => instId(x) === l.i && enVentana(x) && isNum(x.amount) && isNum(l.usd) && Math.abs(x.amount / l.usd - 1) <= 0.01;
+  const lote = positionId => libro.posiciones.flatMap(p => p.lotes).find(l => l.positionId === positionId);
+  const hechos = new Set((doc.res || []).map(r => `${r.id}|${r.k}`));
+  const res = [];
+  for (const l of doc.lineas || []) {
+    if (hechos.has(`${l.id}|${l.k}`)) continue;
+    const r = { id: l.id, k: l.k, est: "incierta", env: doc.armado, http: null, o: null, pos: [], px: null, uej: null, usdej: null, usd: l.lado === "c" ? l.usd : null, err: "sin diario: conciliada al día siguiente" };
+    if (l.lado === "c") {
+      const p = posiciones.find(x => !antesPos.has(posId(x)) && !tomadas.has(posId(x)) && casa(l, x));
+      if (p) { tomadas.add(posId(p)); Object.assign(r, { est: "ejecutada", o: ordId(p), pos: [posId(p)], px: px(isNum(p.openRate) ? p.openRate : p.amount / p.units), uej: u6(p.units), usdej: usd(p.amount), abierta: p.openDateTime, err: null }); }
+      else {
+        const q = (cp.ordersForOpen || []).find(x => !antesOrd.has(ordId(x)) && casa(l, x));
+        if (q) Object.assign(r, { est: "aceptada", o: ordId(q), err: null });
       }
     } else {
-      let monto = 0, realizado = 0, unidades = 0, alguna = false;
-      for (const d of r.detalle || []) {
-        if (d.estado === "ejecutada" && isNum(d.precio)) {
-          const v = registrarVenta(L, { sym: r.sym, positionId: d.positionId, unidades: d.unidades, precio: d.precio });
-          if (v) { monto += v.montoUSD; realizado += v.realizadoUSD; unidades += v.unidades; alguna = true; }
-        } else if (["pendiente", "enviada", "desconocida"].includes(d.estado)) {
-          L.pendientes.push(Object.assign({ opId: r.id, orderId: d.orderId ?? null, sym: r.sym, instrumentId: r.instrumentId, lado: "venta", montoUSD: null, positionId: d.positionId, unidades: d.unidades, enviadaEl: iso },
-            d.estado === "desconocida" ? { estado: "desconocida" } : {}));
-        }
-      }
-      if (alguna) { op.ejecucion = { precio: unidades > 0 ? Math.round(monto / unidades * 1e4) / 1e4 : null, unidades: cts6(unidades), montoUSD: cts(monto), at: iso }; op.realizadoUSD = cts(realizado); op.unidades = cts6(unidades); }
+      const p = posiciones.find(x => posId(x) === l.pos), lt = lote(l.pos);
+      r.pos = [l.pos];
+      if (lt && (!p || (isNum(p.units) && p.units < lt.unidades - 1e-9))) {
+        const h = filaHistorial(historial, l.pos), precio = num(precioCierre(h), bids[l.i] && isNum(bids[l.i].bid) && bids[l.i].bid > 0 ? bids[l.i].bid : null);
+        if (precio !== null) Object.assign(r, { est: "ejecutada", px: px(precio), err: null });
+        else r.err = "cerrada en eToro sin precio de cierre";
+      } else if ((cp.ordersForClose || []).some(x => posId(x) === l.pos)) Object.assign(r, { est: "aceptada", err: null });
+      else if (!lt) Object.assign(r, { est: "no_ejecutada", err: "el lote ya no está en el libro" });
+      else if (diasHabilesEntre(doc.f, hoy, feriados) >= 1) Object.assign(r, { est: "no_ejecutada", err: "posición intacta y sin orden de cierre" });
     }
-    O.ops = O.ops.filter(x => x.id !== op.id).concat([op]);
+    res.push(r);
   }
-  if (enviados.length) {
-    const prev = L.operadoHoy && L.operadoHoy.fecha === hoy ? L.operadoHoy.syms : [];
-    L.operadoHoy = { fecha: hoy, syms: [...new Set(prev.concat(enviados))] };
+  // plan reconstruido de las líneas (sym y regla salen del id `<f>-<SYM>-<REGLA>`)
+  const plan = [];
+  for (const l of doc.lineas || []) {
+    let o = plan.find(x => x.id === l.id);
+    if (!o) {
+      const m = String(l.id).match(/^\d{4}-\d{2}-\d{2}-(.+)-([A-Z0-9]+)$/);
+      o = { id: l.id, sym: m ? m[1] : l.id, instrumentId: l.i, lado: l.lado === "v" ? "venta" : "compra", regla: m ? m[2] : null, motivo: "", montoUSD: l.usd, cierres: l.lado === "v" ? [] : null, noticias: [] };
+      plan.push(o);
+    }
+    if (l.lado === "v") o.cierres[l.k] = { positionId: l.pos, unidades: l.u };
   }
-  L.at = t; O.at = t;
-  return { libro: L, ops: O };
+  const nuevos = new Set(res.map(r => r.id));
+  const ap = aplicarResultados({ libro, opsHoy: opsDoc || opsNuevo(doc.f), plan: plan.filter(o => nuevos.has(o.id)), res, simulacion: false, ahora: t, dia: doc.f });
+  return { libro: ap.libro, ops: ap.ops, doc: Object.assign({}, doc, { res: (doc.res || []).concat(res), fin: ts(t) }) };
 }
 
 // Aplica los eventos de conciliar a los documentos ops-<f> ({ "<f>": OpsDoc v2 }). El día de cada operación sale de su id.
@@ -373,8 +390,8 @@ export function aplicarEventosOps({ docs, eventos, ahora }) {
 
 // Resultado de un día en el libro y en ops-<hoy> (12b §F.3.5). plan: órdenes de plan-ordenes.json; res: líneas de
 // ejecucion.json ({id, k, est, env, o, pos, px, uej, usdej, abierta, err}); simulacion: solo se registran como simuladas.
-export function aplicarResultados({ libro, opsHoy, plan, res = [], simulacion, ahora }) {
-  const L = copia(libro), O = copia(opsHoy), t = typeof ahora === "function" ? ahora() : ahora, hoy = fechaHoraET(t).fecha;
+export function aplicarResultados({ libro, opsHoy, plan, res = [], simulacion, ahora, dia = null }) {
+  const L = copia(libro), O = copia(opsHoy), t = typeof ahora === "function" ? ahora() : ahora, hoy = dia || fechaHoraET(t).fecha;
   const poner = op => { O.ops = O.ops.filter(x => x.id !== op.id).concat([op]); };
   for (const orden of plan) {
     const venta = orden.lado === "venta";
@@ -411,7 +428,8 @@ export function aplicarResultados({ libro, opsHoy, plan, res = [], simulacion, a
     }
     if (venta && alguna) Object.assign(op, { px: px(monto / u), uej: u6(u), usdej: usd(monto), real: usd(real) });
     const ests = lineas.map(r => r.est);
-    op.est = ests.includes("ejecutada") ? "ejecutada" : ests.includes("aceptada") ? "aceptada" : ests.includes("incierta") ? "incierta" : ests.includes("rechazada") ? "rechazada" : "no_enviada";
+    op.est = ests.includes("ejecutada") ? "ejecutada" : ests.includes("aceptada") ? "aceptada" : ests.includes("incierta") ? "incierta" : ests.includes("no_ejecutada") ? "no_ejecutada"
+      : ests.includes("rechazada") ? "rechazada" : "no_enviada";
     poner(op);
   }
   return { libro: L, ops: O };

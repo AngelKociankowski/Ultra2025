@@ -99,8 +99,10 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
   const valorDe = {}, pendDe = {}, unidadesDe = {}, bidDe = {}, sinPrecio = new Set();
   for (const p of val.posiciones) { valorDe[p.sym] = p.valorUSD; unidadesDe[p.sym] = p.unidades; bidDe[p.sym] = p.precioValido === false ? null : p.precioUSD; if (p.precioValido === false) sinPrecio.add(p.sym); }
   for (const x of libro.pendientes) if (x.lado === "compra") pendDe[x.sym] = (pendDe[x.sym] || 0) + (x.montoUSD || 0);
-  // §I: un cierre pendiente solo frena otra venta del mismo símbolo el mismo día; una compra pendiente frena otra compra
+  // §I: un cierre pendiente solo frena otra venta del mismo símbolo el mismo día; una compra pendiente frena otra compra.
+  // Un cierre de otro día que la conciliación vio en ordersForClose sigue en cola en eToro (F.5: aceptada, no se reenvía).
   const ventaPendHoy = new Set(libro.pendientes.filter(x => x.lado === "venta" && x.dia === fecha).map(x => x.sym));
+  const ventaEnCola = new Set(libro.pendientes.filter(x => x.lado === "venta" && x.dia !== fecha && x.enCola).map(x => x.sym));
   const compraPend = new Set(libro.pendientes.filter(x => x.lado === "compra").map(x => x.sym));
   // "en cartera" por unidades del libro, nunca por valor (H8)
   const enCartera = sym => libro.posiciones.some(p => p.sym === sym && p.lotes.reduce((a, l) => a + l.unidades, 0) > 0) || compraPend.has(sym);
@@ -152,6 +154,7 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
   for (const d of activas()) {
     if (sinPrecio.has(d.sym)) { omitir(d, "Sin precio válido de eToro hoy"); alertas.push(`${d.sym}: sin precio válido de eToro hoy; no recibe órdenes.`); continue; }
     if (d.lado === "venta" && ventaPendHoy.has(d.sym)) { omitir(d, "Ya tiene un cierre enviado hoy"); continue; }
+    if (d.lado === "venta" && ventaEnCola.has(d.sym)) { omitir(d, "Tiene un cierre en cola en eToro"); continue; }
     if (d.lado === "venta" && !conLotes(d.sym)) { omitir(d, "Solo tiene una compra pendiente; no hay posición que cerrar"); continue; }
     if (d.lado === "compra" && compraPend.has(d.sym)) { omitir(d, "Tiene una compra pendiente de confirmar"); continue; }
     if (d.lado === "compra") {
@@ -177,6 +180,14 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
   // tope de órdenes por día
   const orden = activas().slice().sort((x, y) => PRIORIDAD[x.regla] - PRIORIDAD[y.regla] || y.montoUSD - x.montoUSD);
   orden.slice(config.maxOrdenesDia).forEach(d => omitir(d, `Tope de ${config.maxOrdenesDia} órdenes por día`));
+  // A2.4: si el tope dejó fuera una venta cuyo dinero financiaba compras, las compras se vuelven a escalar (§6.4.3)
+  const disponible2 = Math.max(0, libro.efectivoUSD + activas().filter(d => d.lado === "venta").reduce((a, d) => a + d.montoUSD, 0));
+  const compras2 = activas().filter(d => d.lado === "compra"), pedido2 = compras2.reduce((a, d) => a + d.montoUSD, 0);
+  if (pedido2 > disponible2 + 0.005) {
+    const f2 = disponible2 / pedido2;
+    for (const d of compras2) { d.montoUSD = piso(d.montoUSD * f2); if (d.montoUSD < config.minOrdenUSD) omitir(d, "Sin efectivo suficiente del mandato"); }
+    alertas.push(`Compras escaladas de nuevo al ${p1(f2 * 100)} %: el tope dejó fuera una venta (US$ ${disponible2.toFixed(2)} disponibles).`);
+  }
   if (bloqueo) for (const d of activas()) omitir(d, `Bloqueado: ${bloqueo}`);
 
   // ---- plan de órdenes: ventas primero (V1, N2, V2, R1 a la baja), luego compras (R1 al alza, C1) ----

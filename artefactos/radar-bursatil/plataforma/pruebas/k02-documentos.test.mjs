@@ -48,10 +48,10 @@ const PRECISION = {
     d.obj.forEach(o => assert.ok(Number.isInteger(o[1]), id + ".obj ‱"));
   },
 };
-function revisarDoc(id, data, { sinTope = false } = {}) {
+function revisarDoc(id, data) {
   const doc = conH(data), k = kindDeId(id), n = bytes(doc);
   assert.deepEqual(validarDoc(id, doc), [], id);
-  if (!sinTope) assert.ok(n <= DOC_TOPES[k], `${id}: ${n} B > tope ${DOC_TOPES[k]}`);
+  assert.ok(n <= DOC_TOPES[k], `${id}: ${n} B > tope ${DOC_TOPES[k]}`);
   if (PRECISION[k]) PRECISION[k](doc, id);
   JSON.stringify(doc, (key, v) => { if (typeof v === "number") max(v, 8, `${id}.${key}`); return v; });
   return n;
@@ -108,9 +108,9 @@ async function casoGrande(nOrdenes) {
   return Object.fromEntries(docsDe(e.dir, "final"));
 }
 
-test("caso grande (12 lotes, 5 pend, 8 notas, 15 decisiones, 7 órdenes): todo valida y respeta §E.3; todo salvo cartera-libro cabe en su tope", async t => {
+test("caso grande (12 lotes, 5 pend, 8 notas, 15 decisiones, 7 órdenes): todo valida, respeta §E.3 y cabe en su tope", async t => {
   const fin = await casoGrande(7), tam = {};
-  for (const [id, x] of Object.entries(fin)) tam[id] = revisarDoc(id, x, { sinTope: id === "cartera-libro" });
+  for (const [id, x] of Object.entries(fin)) tam[id] = revisarDoc(id, x);
   t.diagnostic(JSON.stringify(tam));
   assert.equal(fin["cartera-libro"].lotes.length, 12); assert.equal(fin["cartera-libro"].pend.length, 5);
   assert.equal(fin["ops-2026-11-02"].ops.length, 7);
@@ -119,15 +119,15 @@ test("caso grande (12 lotes, 5 pend, 8 notas, 15 decisiones, 7 órdenes): todo v
   assert.equal(b.dec.filter(d => d[2] !== "mantener").length, 12); assert.equal(b.notas.length, 4);
 });
 
-// DESVÍO 4 (reporte 16): 12 lotes + 5 pendientes con la forma de §E.5.3 no caben en los 2 500 B de cartera-libro
-test("cartera-libro con 12 lotes y 5 pendientes cabe en su tope", { todo: "DESVÍO 4: tope de cartera-libro (2 500 B) menor que 12 lotes + 5 pend" }, async t => {
+// 00n (desvío 4): tope de cartera-libro 3 000 B
+test("cartera-libro con 12 lotes y 5 pendientes cabe en su tope", async t => {
   const fin = await casoGrande(7);
   t.diagnostic(`cartera-libro con 12 lotes y 5 pend: ${bytes(conH(fin["cartera-libro"]))} B`);
   revisarDoc("cartera-libro", fin["cartera-libro"]);
 });
 
-// DESVÍO 3 (reporte 16): con maxOrdenesDia = 12 y mot ≤ 120, ops-<hoy> no cabe en los 3 000 B de §E.5
-test("ops-<hoy> con 12 órdenes cabe en su tope", { todo: "DESVÍO 3: tope de ops-<f> (3 000 B) menor que 12 órdenes con mot ≤ 120" }, async t => {
+// 00n (desvío 3): tope de ops-<f> 5 000 B, para maxOrdenesDia = 12 con mot ≤ 120
+test("ops-<hoy> con 12 órdenes cabe en su tope", async t => {
   const fin = await casoGrande(12);
   t.diagnostic(`ops-2026-11-02 con 12 órdenes: ${bytes(conH(fin["ops-2026-11-02"]))} B`);
   revisarDoc("ops-2026-11-02", fin["ops-2026-11-02"]);

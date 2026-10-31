@@ -12,8 +12,6 @@ const RUNBOOK = fs.readFileSync(path.join(RAIZ, "RUNBOOK.md"), "utf8");
 const PROMPT = fs.readFileSync(path.join(RAIZ, "PROMPT-TAREA.md"), "utf8");
 // valores de ejemplo para los marcadores del RUNBOOK
 const MARCAS = { "<archivo|en_linea>": "en_linea", "<radar.accion de D/trabajo/preparar.json>": "correr", "<paso>": "cerrar" };
-// 50-ejecutar se reescribe en B1 (12b §K.2): hasta entonces sus fases nuevas no existen y el RUNBOOK solo las pide con operar:true
-const PENDIENTES_B1 = new Set(["bin/50-ejecutar.mjs --dir .trabajo/hoy --armar", "bin/50-ejecutar.mjs --dir .trabajo/hoy --enviar", "bin/50-ejecutar.mjs --dir .trabajo/hoy --reanudar"]);
 
 function comandos(texto) {
   const out = [];
@@ -21,7 +19,7 @@ function comandos(texto) {
   return [...new Set(out)];
 }
 
-test("cada `node bin/<x>.mjs` del RUNBOOK existe y acepta las opciones citadas (--help sale con 0)", t => {
+test("cada `node bin/<x>.mjs` del RUNBOOK existe y acepta las opciones citadas (--help sale con 0)", () => {
   const cmds = comandos(RUNBOOK);
   // --reanudar se cita como opción en lugar de --enviar (paso 8.4)
   if (/con `--reanudar` en lugar de `--enviar`/.test(RUNBOOK)) cmds.push("bin/50-ejecutar.mjs --dir .trabajo/hoy --reanudar");
@@ -33,17 +31,12 @@ test("cada `node bin/<x>.mjs` del RUNBOOK existe y acepta las opciones citadas (
     const [archivo, ...args] = txt.split(/\s+/);
     assert.ok(fs.existsSync(path.join(RAIZ, archivo)), archivo);
     vistos.add(archivo);
-    if (PENDIENTES_B1.has(c)) { t.diagnostic(`pendiente de B1: ${c}`); continue; }
     const salida = execFileSync(process.execPath, [archivo, ...args.map(x => (x === ".trabajo/hoy" ? ".trabajo/no-existe" : x)), "--help"], { cwd: RAIZ, encoding: "utf8", timeout: 20000 });
     assert.match(salida, /^Uso: node bin\//, c);
   }
   assert.deepEqual([...vistos].sort(), ["bin/00-preparar.mjs", "bin/10-radar.mjs", "bin/20-cartera.mjs", "bin/30-fmp-noticias.mjs", "bin/40-decidir.mjs", "bin/50-ejecutar.mjs", "bin/60-cerrar.mjs", "bin/db.mjs", "bin/esperar.mjs"]);
   // una opción que no existe falla (el --help no tapa errores de nombre)
   assert.throws(() => execFileSync(process.execPath, ["bin/20-cartera.mjs", "--dir", "x", "--modo", "y", "--help"], { cwd: RAIZ, stdio: "pipe" }));
-});
-
-test("50-ejecutar --armar / --enviar / --reanudar (B1)", { todo: "B1 reescribe 50-ejecutar con estas fases" }, () => {
-  for (const c of PENDIENTES_B1) execFileSync(process.execPath, [...c.split(/\s+/).map(x => (x === ".trabajo/hoy" ? ".trabajo/no-existe" : x)), "--help"], { cwd: RAIZ, stdio: "pipe" });
 });
 
 test("RUNBOOK.md y PROMPT-TAREA.md = 12b §L y §M literales salvo el paso 0 con la etiqueta rutina-aprobada (00m 1)", t => {

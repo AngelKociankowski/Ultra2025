@@ -1,151 +1,195 @@
-// T14 · 50-ejecutar con transporte falso de eToro con guion (nunca sale a la red)
+// T14 / B1 · 50-ejecutar en tres fases (12b §F) con eToro falso con guion (nunca sale a la red)
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { main as ejecutar } from "../bin/50-ejecutar.mjs";
-import { shaArchivo } from "../bin/40-decidir.mjs";
-import { escribirTrabajo } from "../lib/archivos.mjs";
-import { requestIdDe } from "../lib/reglas.mjs";
-import { aplicarEjecucion, valuar } from "../lib/libro.mjs";
-import { etoroFalso } from "./etoro-falso.mjs";
-import { libroLunes } from "./escenario.mjs";
-import { carpetaConDb, leerSalida, leerFix } from "./util.mjs";
+import { crearEToro } from "../lib/etoro.mjs";
+import { transporteFalso } from "../lib/http.mjs";
+import { aplicarResultados, opsNuevo } from "../lib/libro.mjs";
+import { leerVersiones, hDe } from "../lib/db.mjs";
+import { leerTrabajo } from "../lib/archivos.mjs";
+import { DB_RUTA } from "../lib/constantes.mjs";
+import { ejecutar, montar, armarYReclamar, reclamar, etoroGuion, reloj, posts, sinEspera, leerDiario, resDe, PLAN, F, T0 } from "./ejecucion.mjs";
+import { leerSalida } from "./util.mjs";
 
-const F = "2026-11-04";
-const orden = (o, i) => Object.assign({ orden: i + 1, noticias: [], requestIds: (o.cierres || [0]).map((_, k) => requestIdDe(F, o.id, k)) }, o);
-const PLAN = [
-  { id: `${F}-XLE-V1`, sym: "XLE", instrumentId: 3008, lado: "venta", regla: "V1", montoUSD: null, cierres: [{ positionId: 2600000005, unidades: null }], motivo: "Pasó a Evitar (44 %)" },
-  { id: `${F}-SPY-R1`, sym: "SPY", instrumentId: 3000, lado: "venta", regla: "R1", montoUSD: null, cierres: [{ positionId: 2600000001, unidades: null }, { positionId: 2600000002, unidades: 2 }], motivo: "Desviación" },
-  { id: `${F}-QQQ-C1`, sym: "QQQ", instrumentId: 3006, lado: "compra", regla: "C1", montoUSD: 1500, cierres: null, motivo: "Entra al objetivo" },
-  { id: `${F}-IWM-C1`, sym: "IWM", instrumentId: 3005, lado: "compra", regla: "C1", montoUSD: 800, cierres: null, motivo: "Entra al objetivo" },
-].map(orden);
+const op = (t, ahora) => ({ transporteEToro: t, ahora, dormir: sinEspera });
+const ruta = req => new URL(req.url).pathname.replace(/^.*\/demo\//, "");
 
-function montar({ plan = PLAN, simulacion = false, alterar = false, efectivo = null } = {}) {
-  const libro = libroLunes();
-  if (efectivo !== null) libro.efectivoUSD = efectivo;
-  const dir = carpetaConDb({});
-  escribirTrabajo(dir, "preparar.json", { fechaET: F, ahora: 1, config: { minOrdenUSD: 100 } });
-  escribirTrabajo(dir, "cartera.json", { estado: "listo", libro, valuacion: valuar({ libro, tasas: leerFix("etoro/lunes-tasas.json"), fx: { valor: 18.7, fuente: "etoro" } }) });
-  escribirTrabajo(dir, "plan-ordenes.json", { fecha: F, simulacion, ordenes: plan });
-  const sha = shaArchivo(path.join(dir, "trabajo/plan-ordenes.json"));
-  escribirTrabajo(dir, "decisiones.json", { fecha: F, simulacion, planSha: alterar ? "0".repeat(64) : sha, decisiones: [] });
-  return { dir, libro };
-}
-
-// eToro con estado: los cierres quitan o reducen la posición; las compras crean una orden que se llena al instante
-function etoroGuion({ fallas = {}, reloj }) {
-  let n = 0;
-  const pf = JSON.parse(JSON.stringify(leerFix("etoro/lunes-ejecutado.json")));
-  const t = etoroFalso({ portafolio: () => pf, tasas: leerFix("etoro/lunes-tasas.json").rates.concat([{ instrumentID: 3006, bid: 690, ask: 690.1 }, { instrumentID: 3005, bid: 280, ask: 280.1 }]),
-    historial: [{ positionId: 2600000005, closeRate: 70.5 }],
-    post: (req) => {
-      n++;
-      const f = fallas[n]; if (f) { if (typeof f === "function") return f(); return f; }
-      const c = JSON.parse(req.cuerpo), u = new URL(req.url).pathname;
-      const m = u.match(/positions\/(\d+)$/);
-      if (m) {
-        const id = Number(m[1]), i = pf.clientPortfolio.positions.findIndex(p => p.positionID === id);
-        if (c.UnitsToDeduct === null) pf.clientPortfolio.positions.splice(i, 1); else pf.clientPortfolio.positions[i].units = Math.round((pf.clientPortfolio.positions[i].units - c.UnitsToDeduct) * 1e6) / 1e6;
-        return { http: 200, texto: JSON.stringify({ orderForClose: { positionID: id, instrumentID: c.InstrumentId, unitsToDeduct: c.UnitsToDeduct, orderID: 5000 + n } }) };
-      }
-      const px = c.instrumentId === 3006 ? 690 : 280;
-      pf.clientPortfolio.positions.push({ positionID: 2800000000 + n, orderID: 6000 + n, instrumentID: c.instrumentId, units: Math.floor(c.amount / px * 1e6) / 1e6, amount: c.amount, openRate: px,
-        openDateTime: new Date(reloj()).toISOString(), isBuy: true, leverage: 1 });
-      return { http: 200, texto: JSON.stringify({ token: "t", orderId: 6000 + n, referenceId: "r" }) };
-    } });
-  t.pf = pf;
-  return t;
-}
-const reloj = () => { let x = Date.parse("2026-11-04T15:00:00Z"); return () => (x += 1000); };
-const posts = t => t.llamadas.filter(c => c.metodo === "POST");
-const diario = dir => fs.readFileSync(path.join(dir, "trabajo/diario-ejecucion.jsonl"), "utf8").trim().split("\n").map(l => JSON.parse(l));
-const sinEspera = async () => {};
-
-test("ventas antes que compras; diario con envío antes de cada POST; efectivo nunca negativo", async () => {
-  const { dir, libro } = montar(), ahora = reloj(), t = etoroGuion({ reloj: ahora });
-  const r = await ejecutar(["--dir", dir], { transporteEToro: t, ahora, dormir: sinEspera });
-  assert.equal(r.codigo, 0, JSON.stringify(r.linea));
-  const p = posts(t);
-  assert.deepEqual(p.map(c => new URL(c.url).pathname.replace(/\d+$/, "N")), [
-    "/api/v1/trading/execution/demo/market-close-orders/positions/N", "/api/v1/trading/execution/demo/market-close-orders/positions/N", "/api/v1/trading/execution/demo/market-close-orders/positions/N",
-    "/api/v2/trading/execution/demo/orders", "/api/v2/trading/execution/demo/orders"]);
-  assert.deepEqual(p.map(c => c.encabezados["x-request-id"]), [PLAN[0].requestIds[0], PLAN[1].requestIds[0], PLAN[1].requestIds[1], PLAN[2].requestIds[0], PLAN[3].requestIds[0]]);
-  const d = diario(dir);
-  assert.equal(d.length, 10);
-  d.forEach((l, i) => assert.equal(l.fase, i % 2 === 0 ? "envio" : "respuesta"));
-  const ej = leerSalida(dir, "trabajo/ejecucion.json");
-  assert.deepEqual(ej.resultados.map(x => [x.id, x.estado]), PLAN.map(o => [o.id, "ejecutada"]));
-  assert.equal(ej.resultados[0].ejecucion.precio, 70.5); // del historial
-  const ops = { kind: "carteraOps", v: 1, mes: "2026-11", at: 0, ops: [] };
-  const ap = aplicarEjecucion({ libro, ops, ahora: Date.parse("2026-11-04T15:10:00Z"), resultados: ej.resultados.map(x => Object.assign({}, PLAN.find(o => o.id === x.id), x)) });
-  assert.ok(ap.libro.efectivoUSD >= 0, String(ap.libro.efectivoUSD));
-  assert.equal(ap.libro.efectivoUSD, ej.efectivoDespuesUSD);
-  assert.ok(ap.libro.posiciones.some(p => p.sym === "QQQ") && ap.libro.posiciones.some(p => p.sym === "IWM") && !ap.libro.posiciones.some(p => p.sym === "XLE"));
-  assert.equal(ap.libro.posiciones.find(p => p.sym === "SPY").lotes.length, 1);
+test("--armar: un solo set de ejecucion-<hoy> sin ifVersion con antes y las líneas; GET solamente", async () => {
+  const { dir } = montar(), ahora = reloj(), t = etoroGuion({ reloj: ahora });
+  const r = await ejecutar(["--dir", dir, "--armar"], op(t, ahora));
+  assert.equal(r.codigo, 0); assert.equal(r.linea.accion, "armado"); assert.equal(r.linea.escribir, "salida/pre-ejecucion/db_write.json");
+  const w = leerSalida(dir, "salida/pre-ejecucion/db_write.json");
+  assert.equal(w.ops.length, 1);
+  assert.deepEqual([w.ops[0].op, w.ops[0].path, w.ops[0].ifVersion], ["set", `${DB_RUTA}/ejecucion-${F}`, undefined]);
+  const d = w.ops[0].data;
+  assert.deepEqual([d.kind, d.f, d.sesion, d.fin, d.res], ["ejecucion", F, "s-prueba1", null, []]);
+  assert.deepEqual(d.antes, { pos: [2600000001, 2600000002, 2600000005], ord: [] });
+  assert.deepEqual(d.lineas.map(l => [l.id.slice(11), l.k, l.lado, l.pos, l.u, l.usd]), [["XLE-V1", 0, "v", 2600000005, null, null], ["SPY-R1", 0, "v", 2600000001, null, null],
+    ["SPY-R1", 1, "v", 2600000002, 2, null], ["QQQ-C1", 0, "c", null, null, 1500], ["IWM-C1", 0, "c", null, null, 800]]);
+  assert.deepEqual(d.lineas.map(l => l.rid), PLAN.flatMap(o => o.requestIds));
+  assert.equal(hDe(leerTrabajo(dir, "ejecucion-doc.json")), d.h, "el reclamo es el documento armado");
+  assert.equal(posts(t).length, 0);
+  // reclamo creado (versión 1) → registrar lo marca escrito por esta sesión
+  assert.equal(reclamar(dir).accion, "listo");
+  assert.deepEqual([leerVersiones(dir)[`ejecucion-${F}`].version, leerVersiones(dir)[`ejecucion-${F}`].escritoEn], [1, "pre-ejecucion"]);
 });
 
-test("planSha distinto → 0 POST y código 3", async () => {
-  const { dir } = montar({ alterar: true }), t = etoroGuion({ reloj: reloj() });
-  const r = await ejecutar(["--dir", dir], { transporteEToro: t, dormir: sinEspera });
-  assert.equal(r.codigo, 3); assert.equal(r.linea.resumen.codigo, "plan_alterado");
-  assert.equal(t.llamadas.length, 0);
+test("--enviar: ventas antes que compras, 1 POST por línea, diario con envío en disco antes de cada POST, efectivo nunca negativo", async () => {
+  const { dir, libro } = montar(), ahora = reloj();
+  const vistos = [];
+  const t = etoroGuion({ reloj: ahora, antesDePost: req => {
+    const d = leerDiario(dir), u = d[d.length - 1];
+    vistos.push([u.fase, u.rid === req.encabezados["x-request-id"]]);
+  } });
+  await armarYReclamar(dir, op(t, ahora));
+  const r = await ejecutar(["--dir", dir, "--enviar"], op(t, ahora));
+  assert.equal(r.codigo, 0); assert.equal(r.linea.accion, "listo");
+  assert.deepEqual(posts(t).map(ruta), ["market-close-orders/positions/2600000005", "market-close-orders/positions/2600000001", "market-close-orders/positions/2600000002", "orders", "orders"]);
+  assert.deepEqual(vistos, Array(5).fill(["envio", true]), "la línea de envío ya estaba en el diario cuando salió el POST");
+  assert.deepEqual(new Set(posts(t).map(p => p.encabezados["x-request-id"])).size, 5);
+  const res = resDe(dir);
+  assert.deepEqual(res.map(x => [x.id.slice(11), x.k, x.est]), [["XLE-V1", 0, "ejecutada"], ["SPY-R1", 0, "ejecutada"], ["SPY-R1", 1, "ejecutada"], ["QQQ-C1", 0, "ejecutada"], ["IWM-C1", 0, "ejecutada"]]);
+  assert.deepEqual([res[0].px, res[0].uej, res[0].usdej], [70.5, 27.059025, 1907.66]);
+  assert.deepEqual([res[2].uej, res[2].usdej], [2, 1515]);
+  assert.deepEqual([res[3].o, res[3].pos, res[3].usdej, res[3].usd], [6004, [2800000004], 1500, 1500]);
+  assert.ok(res.every(x => x.env && /Z$/.test(x.env)));
+  const d = leerDiario(dir);
+  assert.deepEqual(d.map(x => x.fase), ["envio", "respuesta", "envio", "respuesta", "envio", "respuesta", "envio", "respuesta", "envio", "respuesta"]);
+  const ap = aplicarResultados({ libro, opsHoy: opsNuevo(F), plan: PLAN, res, simulacion: false, ahora: Date.parse(T0) + 600000 });
+  assert.ok(ap.libro.efectivoUSD >= 0);
+  assert.equal(ap.libro.efectivoUSD, Math.round((5000 + 1907.66 + res[1].usdej + 1515 - 1500 - 800) * 100) / 100);
+  assert.deepEqual(ap.ops.ops.map(o => o.est), ["ejecutada", "ejecutada", "ejecutada", "ejecutada"]);
 });
 
-test("503 en una compra: busca en portafolio, nada → un reintento con el mismo x-request-id; si vuelve a fallar → desconocida (nunca 3 POST)", async () => {
-  const plan = [PLAN[2]];
-  const { dir } = montar({ plan, efectivo: 5000 }), ahora = reloj(), t = etoroGuion({ reloj: ahora, fallas: { 1: { http: 503, texto: "" }, 2: { http: 503, texto: "" }, 3: { http: 200, texto: "{}" } } });
-  const r = await ejecutar(["--dir", dir], { transporteEToro: t, ahora, dormir: sinEspera });
+test("efectivo insuficiente: las compras se escalan por igual; lo que queda bajo el mínimo → no_enviada (sin efectivo)", async () => {
+  const { dir } = montar({ plan: PLAN.slice(2), efectivo: 1150 }), ahora = reloj(), t = etoroGuion({ reloj: ahora });
+  await armarYReclamar(dir, op(t, ahora));
+  await ejecutar(["--dir", dir, "--enviar"], op(t, ahora));
+  const res = resDe(dir);
+  assert.deepEqual(res.map(x => [x.est, x.usd]), [["ejecutada", 750], ["ejecutada", 400]]);
+  const b = montar({ plan: PLAN.slice(2), efectivo: 120 }), tb = etoroGuion({ reloj: ahora });
+  await armarYReclamar(b.dir, op(tb, ahora));
+  await ejecutar(["--dir", b.dir, "--enviar"], op(tb, ahora));
+  assert.deepEqual(resDe(b.dir).map(x => [x.est, x.err]), [["no_enviada", "sin efectivo"], ["no_enviada", "sin efectivo"]]);
+  assert.equal(posts(tb).length, 0);
+});
+
+test("plan alterado → --armar nada (no_enviada) y 0 POST; --enviar sin reclamo de esta sesión → ya_ejecutado, 0 POST", async () => {
+  const a = montar({ alterar: true }), ahora = reloj(), t = etoroGuion({ reloj: ahora });
+  const r = await ejecutar(["--dir", a.dir, "--armar"], op(t, ahora));
+  assert.deepEqual([r.codigo, r.linea.accion], [0, "nada"]);
+  assert.ok(resDe(a.dir).every(x => x.est === "no_enviada" && x.err === "plan alterado"));
+  assert.ok(!fs.existsSync(path.join(a.dir, "salida/pre-ejecucion")));
+  const b = montar();
+  await ejecutar(["--dir", b.dir, "--armar"], op(t, ahora)); // sin registrar el reclamo
+  const e = await ejecutar(["--dir", b.dir, "--enviar"], op(t, ahora));
+  assert.deepEqual([e.codigo, e.linea.accion], [3, "ya_ejecutado"]);
+  // 409 en pre-ejecucion: registrar dice ya_hubo_envio y --enviar se niega
+  const c = montar();
+  await ejecutar(["--dir", c.dir, "--armar"], op(t, ahora));
+  assert.equal(reclamar(c.dir, { choque: true }).accion, "ya_hubo_envio");
+  assert.equal((await ejecutar(["--dir", c.dir, "--enviar"], op(t, ahora))).linea.accion, "ya_ejecutado");
+  // el documento armado cambió después del reclamo → no es el reclamo de esta sesión
+  const d = montar();
+  await armarYReclamar(d.dir, op(t, ahora));
+  const doc = leerTrabajo(d.dir, "ejecucion-doc.json"); doc.armado = "2026-11-04T15:59:59Z";
+  fs.writeFileSync(path.join(d.dir, "trabajo/ejecucion-doc.json"), JSON.stringify(doc));
+  assert.equal((await ejecutar(["--dir", d.dir, "--enviar"], op(t, ahora))).linea.accion, "ya_ejecutado");
+  assert.equal(posts(t).length, 0);
+});
+
+test("la cartera cambió entre --armar y --enviar (posición nueva de un instrumento del plan) → no_enviada, 0 POST", async () => {
+  const { dir } = montar(), ahora = reloj(), t = etoroGuion({ reloj: ahora });
+  await armarYReclamar(dir, op(t, ahora));
+  t.pf.clientPortfolio.positions.push({ positionID: 2899999990, orderID: 1, instrumentID: 3006, units: 1, amount: 690, openRate: 690, openDateTime: "2026-11-04T15:00:30Z", isBuy: true, leverage: 1 });
+  const r = await ejecutar(["--dir", dir, "--enviar"], op(t, ahora));
+  assert.equal(posts(t).length, 0); assert.equal(r.codigo, 0);
+  assert.ok(resDe(dir).every(x => x.est === "no_enviada" && x.err === "la cartera cambió entre el armado y el envío"));
+});
+
+test("400 → rechazada sin reenvío; 401 a mitad → rechazada y no se envía nada más (código 3)", async () => {
+  const a = montar(), ahora = reloj();
+  const t = etoroGuion({ reloj: ahora, fallas: { 1: { noLlego: true, resp: { http: 400, texto: '{"errorCode":"InvalidPosition"}' } } } });
+  await armarYReclamar(a.dir, op(t, ahora));
+  await ejecutar(["--dir", a.dir, "--enviar"], op(t, ahora));
+  assert.equal(posts(t).length, 5);
+  assert.deepEqual([resDe(a.dir)[0].est, resDe(a.dir)[0].http], ["rechazada", 400]);
+  const b = montar(), t2 = etoroGuion({ reloj: ahora, fallas: { 2: { noLlego: true, resp: { http: 401, texto: "" } } } });
+  await armarYReclamar(b.dir, op(t2, ahora));
+  const r = await ejecutar(["--dir", b.dir, "--enviar"], op(t2, ahora));
+  assert.equal(posts(t2).length, 2); assert.equal(r.codigo, 3);
+  assert.deepEqual(resDe(b.dir).map(x => x.est), ["ejecutada", "rechazada", "no_enviada", "no_enviada", "no_enviada"]);
+  assert.ok(resDe(b.dir).slice(2).every(x => /^detenido/.test(x.err)));
+});
+
+test("simulación → --armar nada, 0 POST y sin ejecucion.json", async () => {
+  const { dir } = montar({ simulacion: true }), ahora = reloj(), t = etoroGuion({ reloj: ahora });
+  const r = await ejecutar(["--dir", dir, "--armar"], op(t, ahora));
+  assert.deepEqual([r.codigo, r.linea.accion], [0, "nada"]);
+  assert.equal(t.llamadas.length, 0); assert.ok(!fs.existsSync(path.join(dir, "trabajo/ejecucion.json")));
+});
+
+test("el proceso muere entre el envío anotado y el POST: --reanudar no envía esa línea (queda incierta) y sí las que no tenían envío", async () => {
+  const { dir } = montar(), ahora = reloj(), t = etoroGuion({ reloj: ahora });
+  await armarYReclamar(dir, op(t, ahora));
+  // lo que dejó en disco el proceso muerto: la línea de envío de XLE sincronizada, sin POST ni respuesta
+  const xle = leerTrabajo(dir, "ejecucion-doc.json").lineas[0];
+  fs.writeFileSync(path.join(dir, "trabajo/diario-ejecucion.jsonl"), JSON.stringify({ t: "2026-11-04T15:00:05Z", id: xle.id, k: 0, fase: "envio", rid: xle.rid }) + "\n");
+  const r = await ejecutar(["--dir", dir, "--reanudar"], op(t, ahora));
+  assert.deepEqual(posts(t).map(ruta), ["market-close-orders/positions/2600000001", "market-close-orders/positions/2600000002", "orders", "orders"]);
   assert.equal(r.codigo, 3);
-  const p = posts(t);
-  assert.equal(p.length, 2);
-  assert.equal(p[0].encabezados["x-request-id"], p[1].encabezados["x-request-id"]);
-  const iP = t.llamadas.indexOf(p[0]), iP2 = t.llamadas.indexOf(p[1]);
-  assert.ok(t.llamadas.slice(iP + 1, iP2).some(c => c.url.endsWith("/demo/portfolio")), "mira el portafolio antes de reintentar");
-  assert.equal(leerSalida(dir, "trabajo/ejecucion.json").resultados[0].estado, "desconocida");
-  // si al mirar ya hay una orden nueva de ese instrumento, se adopta sin reintentar
-  const b = montar({ plan, efectivo: 5000 }), ah2 = reloj();
-  const t2 = etoroGuion({ reloj: ah2, fallas: { 1: () => { t2.pf.clientPortfolio.ordersForOpen.push({ instrumentID: 3006, orderID: 7777, amount: 1500, openDateTime: new Date(ah2()).toISOString(), statusID: 11 }); return { http: 503, texto: "" }; } } });
-  await ejecutar(["--dir", b.dir], { transporteEToro: t2, ahora: ah2, dormir: sinEspera });
-  assert.equal(posts(t2).length, 1);
-  const r2 = leerSalida(b.dir, "trabajo/ejecucion.json").resultados[0];
-  assert.equal(r2.estado, "pendiente"); assert.equal(r2.orderId, 7777);
+  assert.deepEqual(resDe(dir).map(x => x.est), ["incierta", "ejecutada", "ejecutada", "ejecutada", "ejecutada"]);
+  assert.equal(resDe(dir)[0].env, "2026-11-04T15:00:05Z");
+  assert.equal(leerDiario(dir).filter(x => x.fase === "reanudar").length, 1);
 });
 
-test("400 → rechazada sin reintento; 401 a mitad → no envía nada más", async () => {
-  const a = montar({ plan: [PLAN[2], PLAN[3]], efectivo: 5000 }), t = etoroGuion({ reloj: reloj(), fallas: { 1: { http: 400, texto: '{"errorCode":"InsufficientFunds"}' } } });
-  await ejecutar(["--dir", a.dir], { transporteEToro: t, dormir: sinEspera });
-  assert.equal(posts(t).length, 2);
-  assert.deepEqual(leerSalida(a.dir, "trabajo/ejecucion.json").resultados.map(x => x.estado), ["rechazada", "ejecutada"]);
-  const b = montar(), t2 = etoroGuion({ reloj: reloj(), fallas: { 2: { http: 401, texto: "" } } });
-  const r = await ejecutar(["--dir", b.dir], { transporteEToro: t2, dormir: sinEspera });
-  assert.equal(r.codigo, 3);
-  assert.equal(posts(t2).length, 2);
-  assert.deepEqual(leerSalida(b.dir, "trabajo/ejecucion.json").resultados.map(x => x.estado), ["ejecutada", "rechazada", "cancelada", "cancelada"]);
+test("F.1 · clasificación de cada respuesta de un POST (nunca se reenvía)", async () => {
+  const ID = "3f2a1c4e-5b6d-4e7f-8a9b-0c1d2e3f4a5b";
+  const casos = [
+    [{ http: 200, texto: '{"token":"x","orderId":391}' }, "comprar", "aceptada", 391, false],
+    [{ http: 200, texto: '{"orderForClose":{"orderID":77}}' }, "cerrar", "aceptada", 77, false],
+    [{ http: 200, texto: '{"token":"x","orderId":39' }, "comprar", "incierta", null, false],
+    [{ http: 200, texto: '{"token":"x"}' }, "comprar", "incierta", null, false],
+    [{ http: 200, texto: '{"orderId":391}', errorRed: "curl 18" }, "comprar", "incierta", 391, false],
+    [{ http: 307, texto: "" }, "comprar", "incierta", null, false],
+    [{ http: 503, texto: "" }, "cerrar", "incierta", null, false],
+    [{ http: 0, texto: "", errorRed: "curl 28 (tiempo)" }, "comprar", "incierta", null, false],
+    [{ http: 401, texto: "" }, "comprar", "rechazada", null, true],
+    [{ http: 403, texto: "" }, "cerrar", "rechazada", null, true],
+    [{ http: 0, conectar: 403, texto: "" }, "comprar", "rechazada", null, true],
+    [{ http: 429, texto: "Limit" }, "comprar", "rechazada", null, false],
+    [{ http: 400, texto: '{"errorCode":"InvalidAmount"}' }, "comprar", "rechazada", null, false],
+    [{ http: 404, texto: "<html" }, "comprar", "incierta", null, false],
+  ];
+  for (const [resp, metodo, clase, orderId, detener] of casos) {
+    const t = transporteFalso(() => resp), et = crearEToro({ transporte: t });
+    const r = metodo === "comprar" ? await et.comprar({ instrumentId: 3006, montoUSD: 100, requestId: ID }) : await et.cerrar({ positionId: 1, instrumentId: 3006, unidades: null, requestId: ID });
+    assert.deepEqual([r.clase, r.orderId, r.detener], [clase, orderId, detener], JSON.stringify(resp));
+    assert.equal(t.llamadas.length, 1, "un solo intento");
+  }
+  const lanza = await crearEToro({ transporte: () => { throw new Error("transporte roto"); } }).comprar({ instrumentId: 3006, montoUSD: 100, requestId: ID });
+  assert.equal(lanza.clase, "incierta");
 });
 
-test("--reanudar tras cortar después del 2.º POST: los 2 primeros no se reenvían (se adoptan desde portafolio)", async () => {
-  // el corte llega justo después del 2.º POST, antes de anotar su respuesta (como un proceso que muere)
-  const { dir } = montar(), base = reloj();
-  let cortar = false;
-  const ahora = () => { if (cortar) throw new Error("proceso cortado"); return base(); };
-  const t = etoroGuion({ reloj: base });
-  let postsHechos = 0;
-  const cortado = async req => { const r = await t(req); if (req.metodo === "POST" && ++postsHechos === 2) cortar = true; return r; };
-  await assert.rejects(() => ejecutar(["--dir", dir], { transporteEToro: cortado, ahora, dormir: sinEspera }), /proceso cortado/);
-  cortar = false;
-  assert.equal(posts(t).length, 2);
-  const antes = posts(t).length;
-  const r = await ejecutar(["--dir", dir, "--reanudar"], { transporteEToro: t, ahora, dormir: sinEspera });
-  assert.equal(r.codigo, 0, JSON.stringify(r.linea));
-  const nuevos = posts(t).slice(antes);
-  assert.deepEqual(nuevos.map(c => c.encabezados["x-request-id"]), [PLAN[1].requestIds[1], PLAN[2].requestIds[0], PLAN[3].requestIds[0]]);
-  assert.deepEqual(leerSalida(dir, "trabajo/ejecucion.json").resultados.map(x => x.estado), ["ejecutada", "ejecutada", "ejecutada", "ejecutada"]);
-});
-
-test("simulación → 0 POST y resultados simulada", async () => {
-  const { dir } = montar({ simulacion: true }), t = etoroGuion({ reloj: reloj() });
-  const r = await ejecutar(["--dir", dir], { transporteEToro: t, dormir: sinEspera });
-  assert.equal(r.codigo, 0); assert.equal(t.llamadas.length, 0);
-  assert.ok(leerSalida(dir, "trabajo/ejecucion.json").resultados.every(x => x.estado === "simulada"));
+test("--armar y --enviar se niegan si la ejecución de esta carpeta ya corrió; --reanudar solo una vez", async () => {
+  const { dir } = montar({ plan: PLAN.slice(0, 1) }), ahora = reloj(), t = etoroGuion({ reloj: ahora });
+  await armarYReclamar(dir, op(t, ahora));
+  await ejecutar(["--dir", dir, "--enviar"], op(t, ahora));
+  for (const f of ["--armar", "--enviar", "--reanudar"]) {
+    const r = await ejecutar(["--dir", dir, f], op(t, ahora));
+    assert.deepEqual([r.codigo, r.linea.accion], [3, "ya_ejecutado"], f);
+  }
+  assert.equal(posts(t).length, 1);
+  // una reanudación que muere después de marcarse: la segunda se niega
+  const b = montar({ plan: PLAN.slice(0, 1) }), base = reloj(), t2 = etoroGuion({ reloj: base });
+  await armarYReclamar(b.dir, op(t2, base));
+  fs.writeFileSync(path.join(b.dir, "trabajo/diario-ejecucion.jsonl"), "");
+  let morir = false;
+  const ahora2 = () => { if (morir) throw new Error("proceso cortado"); return base(); };
+  const corta = async req => { morir = true; return t2(req); };
+  await assert.rejects(() => ejecutar(["--dir", b.dir, "--reanudar"], op(corta, ahora2)), /proceso cortado/);
+  const r2 = await ejecutar(["--dir", b.dir, "--reanudar"], op(t2, base));
+  assert.deepEqual([r2.codigo, r2.linea.accion], [3, "ya_ejecutado"]);
+  assert.equal(posts(t2).length, 0);
 });

@@ -9,7 +9,7 @@ import { escribirJson } from "../lib/archivos.mjs";
 import { semilla } from "../lib/libro.mjs";
 import { main as preparar } from "../bin/00-preparar.mjs";
 import { main as dbCli } from "../bin/db.mjs";
-import { carpetaConDb, carpetaTemporal, agregarLecturas, leerFix } from "./util.mjs";
+import { carpetaConDb, carpetaTemporal, agregarLecturas } from "./util.mjs";
 
 const S = semilla({ ahora: () => Date.parse("2026-10-31T12:00:00Z") });
 const lineas = (dir, ls) => fs.writeFileSync(path.join(dir, "entrada", "lecturas.jsonl"), ls.map(l => JSON.stringify(l)).join("\n") + "\n");
@@ -150,4 +150,32 @@ test("(6) modo archivo desactivado mientras ACCION_REEMPLAZO sea null", async ()
   assert.equal(r.codigo, 2); assert.equal(r.linea.accion, "sin_db");
   const dir = carpetaConDb({}, null, { noExisten: ["punto-2026-11-02"] });
   assert.throws(() => armarGrupo({ dir, grupo: "final", modo: "archivo", docs: [{ id: "punto-2026-11-02", data: Object.assign({}, S["punto-2026-10-30"], { f: "2026-11-02" }) }] }), e => e.codigo === "sin_db");
+});
+
+test("00n (desvío 15) · db.mjs config: un set de rutina-config con ifVersion de la lectura y h válido; errores sin escribir", async () => {
+  const dir = carpetaConDb({ "rutina-config": S["rutina-config"] }, null, { versiones: { "rutina-config": 4 } });
+  const r = await dbCli(["config", "--dir", dir, "--operar", "true", "--activado", "2026-11-10T14:00:00Z"], { ahora: () => Date.parse("2026-11-09T20:00:00Z") });
+  assert.equal(r.codigo, 0); assert.equal(r.linea.escribir, "salida/config/db_write.json");
+  const w = JSON.parse(fs.readFileSync(path.join(dir, "salida/config/db_write.json"), "utf8"));
+  assert.equal(w.slug, DB_SLUG); assert.equal(w.ops.length, 1);
+  const op = w.ops[0];
+  assert.deepEqual([op.op, op.path, op.ifVersion], ["set", `${DB_RUTA}/rutina-config`, 4]);
+  assert.equal(op.data.h, hDe(op.data));
+  assert.deepEqual([op.data.operar, op.data.activadoEl, op.data.at, op.data.bandaPts], [true, "2026-11-10T14:00:00Z", "2026-11-09T20:00:00Z", 5]);
+  fs.writeFileSync(path.join(dir, "salida/config/resultado.json"), JSON.stringify({ results: [{ version: 5 }] }));
+  assert.equal(registrar({ dir, grupo: "config" }).accion, "listo");
+  assert.equal(leerVersiones(dir)["rutina-config"].version, 5);
+  // vuelta a simulación
+  const f = await dbCli(["config", "--dir", dir, "--operar", "false", "--activado", "null"], { ahora: () => Date.parse("2026-11-09T20:05:00Z") });
+  assert.equal(f.codigo, 0);
+  const op2 = JSON.parse(fs.readFileSync(path.join(dir, "salida/config/db_write.json"), "utf8")).ops[0];
+  assert.deepEqual([op2.ifVersion, op2.data.operar, op2.data.activadoEl], [5, false, null]);
+  // errores: nada se arma
+  for (const [args, codigo] of [[["--operar", "true", "--activado", "null"], 1], [["--operar", "sí"], 1], [["--operar", "true", "--activado", "mañana"], 1]]) {
+    fs.rmSync(path.join(dir, "salida/config"), { recursive: true, force: true });
+    const e = await dbCli(["config", "--dir", dir, ...args]);
+    assert.equal(e.codigo, codigo, args.join(" ")); assert.ok(!fs.existsSync(path.join(dir, "salida/config")));
+  }
+  const sin = await dbCli(["config", "--dir", vacia(), "--operar", "false"]);
+  assert.deepEqual([sin.codigo, sin.linea.accion], [3, "sin_lectura"]);
 });

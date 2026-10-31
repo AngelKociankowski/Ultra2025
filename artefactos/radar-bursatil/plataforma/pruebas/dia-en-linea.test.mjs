@@ -20,7 +20,8 @@ import { transporteFalso } from "../lib/http.mjs";
 import { DB_SLUG, DB_RUTA } from "../lib/constantes.mjs";
 import { crearDbFalso, crearSesion } from "./db-falso.mjs";
 import { etoroFalso } from "./etoro-falso.mjs";
-import { PAG, tasasA } from "./escenario.mjs";
+import { PAG, tasasA, prepararDia, dbInicial, OUT30, LUNES, copia } from "./escenario.mjs";
+import { ejecutar, etoroGuion, reloj, posts, sinEspera } from "./ejecucion.mjs";
 import { fmpSintetico } from "./sintetico.mjs";
 import { carpetaTemporal, leerFix } from "./util.mjs";
 
@@ -133,7 +134,7 @@ test("tres días en línea: Radar sintético, sin FMP, y recuperación tras mori
   assert.equal(db.doc("bitacora-2026-11-04"), null);
   const b = await sesion({ db, raiz, t: Date.parse("2026-11-04T15:30:00Z"), fmpRadar: () => ({ transporte: sinFmp(), ahora: () => Date.parse("2026-11-04T15:31:00Z") }) });
   assert.equal(b.pasos.preparar.linea.accion, "recuperar");
-  assert.ok(fs.readdirSync(path.join(raiz, ".trabajo")).some(x => x.startsWith("2026-11-04.prev-")), "la carpeta de la sesión A se aparta");
+  assert.equal(b.dir, a.dir, "misma exportación, misma carpeta del día");
   assert.ok(leerTrabajo(b.dir, "leer-mas.json").lecturas.some(x => x.id === "bitacora-2026-11-04"));
   assert.equal(b.pasos.final.accion, "listo"); assert.equal(b.pasos.verificar.codigo, 0);
   t.diagnostic(`presupuesto día 3 (sesión B, recuperación): ${b.pasos.presupuesto.linea.resumen.total} B`);
@@ -158,4 +159,27 @@ test("un carácter cambiado en una lectura → importar la marca corrupta y el d
   assert.equal(fs.readFileSync(path.join(s.dir, "salida/aviso.txt"), "utf8"), "Radar · lun 2-nov · Falla: el documento cartera-libro llegó dañado desde db; hoy no se operó.");
   assert.deepEqual(db.escrituras, []);
   assert.deepEqual(fs.readdirSync(path.join(s.dir, "salida")).filter(x => x !== "aviso.txt"), []);
+});
+
+test("H11 · día con órdenes reales (V1 de XLE ejecutada): pre-ejecucion + final aplicados al db falso; presupuesto ≤ 40 000 B", async t => {
+  const out = copia(OUT30); Object.assign(out.rows.find(r => r.symbol === "XLE"), { signal: 1, signalLabel: "Evitar", pct: 44 });
+  const db = dbInicial({ "rutina-config": Object.assign(semilla()["rutina-config"], { operar: true, activadoEl: "2026-11-01T15:00:00Z" }), ...PAGINA_DOCS });
+  const e = await prepararDia({ db, out, notas: NOTAS("2026-11-02") });
+  assert.equal(e.decidir.linea.accion, "ejecutar");
+  const ahora = reloj(new Date(LUNES + 11 * 60000).toISOString()), et = etoroGuion({ reloj: ahora });
+  await ejecutar(["--dir", e.dir, "--armar"], { transporteEToro: et, ahora, dormir: sinEspera });
+  comprobarGrupo(e.dir, "pre-ejecucion");
+  assert.equal(e.S.escribir("pre-ejecucion").accion, "listo");
+  assert.equal((await ejecutar(["--dir", e.dir, "--enviar"], { transporteEToro: et, ahora, dormir: sinEspera })).codigo, 0);
+  assert.equal(posts(et).length, 1);
+  await cerrar(["--dir", e.dir], { ahora: () => LUNES + 15 * 60000 });
+  comprobarGrupo(e.dir, "final");
+  assert.equal(e.S.escribir("final").accion, "listo");
+  e.S.leer(leerTrabajo(e.dir, "verificar.json").lecturas);
+  assert.equal((await dbCli(["verificar", "--dir", e.dir])).codigo, 0);
+  const p = (await dbCli(["presupuesto", "--dir", e.dir])).linea.resumen;
+  t.diagnostic(`presupuesto con órdenes reales: ${p.total} B`);
+  assert.ok(p.total <= 40000, `${p.total} B`);
+  assert.ok(db.doc("ejecucion-2026-11-02").fin); assert.deepEqual(db.doc("ops-2026-11-02").ops.map(o => [o.regla, o.est]), [["V1", "ejecutada"]]);
+  for (const id of Object.keys(PAGINA_DOCS)) assert.equal(db.version(id), 1, id);
 });

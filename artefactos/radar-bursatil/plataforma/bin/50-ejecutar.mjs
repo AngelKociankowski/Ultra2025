@@ -1,201 +1,245 @@
-// Paso 8 · Ejecutar en eToro Demo (12-plan §6.6, §5.11.9). Solo envía lo de trabajo/plan-ordenes.json con la huella que
-// escribió 40-decidir. Ventas (cierres) primero, luego compras. Uso: node bin/50-ejecutar.mjs --dir <carpeta> [--reanudar]
+// Paso 8 · Ejecutar en eToro Demo (12b §F). A lo más un POST por línea de plan por día; nunca se reenvía; lo que pudo llegar
+// a eToro cuenta como enviado hasta probar lo contrario.
+//   --armar     reclamo de envío del día: ejecucion-<hoy> sin ifVersion en salida/pre-ejecucion (F.2)
+//   --enviar    ventas primero y luego compras, con el diario sincronizado a disco antes de cada POST (F.3)
+//   --reanudar  el mismo proceso caído: nunca reenvía una línea con envío en el diario (F.4)
+// Uso: node bin/50-ejecutar.mjs --dir <carpeta> --armar | --enviar | --reanudar
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { leerArgs, lineaPaso, correrCli, leerTrabajo, escribirTrabajo, rutas } from "../lib/archivos.mjs";
+import { leerArgs, lineaPaso, correrCli, leerTrabajo, escribirTrabajo, leerDoc, rutas } from "../lib/archivos.mjs";
 import { crearRegistro } from "../lib/registro.mjs";
 import { crearEToro } from "../lib/etoro.mjs";
 import { transporteCurl } from "../lib/http.mjs";
-import { bidsDe } from "../lib/libro.mjs";
+import { cargarPagina } from "../lib/cargar-pagina.mjs";
+import { bidsDe, precioValido } from "../lib/libro.mjs";
+import { configEfectiva } from "../lib/reglas.mjs";
+import { armarGrupo, leerVersiones, conH, ts, usd, u6, precio } from "../lib/db.mjs";
+import { feriadosAnio, ventanaDelDia, fechaHoraET } from "../lib/tiempo.mjs";
 import { shaArchivo } from "./40-decidir.mjs";
-import { fechaHoraET } from "../lib/tiempo.mjs";
 
 const PASO = "50-ejecutar";
-const AYUDA = "Uso: node bin/50-ejecutar.mjs --dir <carpeta> [--reanudar]";
-const SONDEO_MS = 5000, ESPERA_MAX_MS = 90000;
+const AYUDA = "Uso: node bin/50-ejecutar.mjs --dir <carpeta> --armar | --enviar | --reanudar";
+const SONDEO_MS = 5000, SONDEOS = 24; // F.3.4: cada 5 s hasta 120 s
+const ANTES_MS = 120000, DESPUES_MS = 600000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const isNum = v => typeof v === "number" && Number.isFinite(v);
-const cts = x => Math.round(x * 100) / 100;
 const piso = x => Math.floor(x * 100 + 1e-7) / 100;
 const posId = p => p.positionID ?? p.positionId ?? null, ordId = p => p.orderID ?? p.orderId ?? null, instId = p => p.instrumentID ?? p.instrumentId ?? null;
+const FASES = ["--armar", "--enviar", "--reanudar"];
 
 function leerDiario(ruta) {
   if (!fs.existsSync(ruta)) return [];
+  // una última línea cortada por una caída se ignora: el envío se anota y sincroniza antes del POST
   return fs.readFileSync(ruta, "utf8").split("\n").filter(Boolean).map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
 }
+function anotarSync(ruta, linea) {
+  const fd = fs.openSync(ruta, "a");
+  try { fs.writeSync(fd, JSON.stringify(linea) + "\n"); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+}
 
-export async function main(argv, { transporteEToro = null, ahora = Date.now, dormir = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
-  const a = leerArgs(argv, { valores: ["--dir"], banderas: ["--reanudar"] });
-  if (a.ayuda) { process.stdout.write(AYUDA + "\n"); return { codigo: 0, linea: null }; }
-  if (!a.dir) return { codigo: 1, linea: lineaPaso({ paso: PASO, ok: false, accion: "error", resumen: { texto: AYUDA } }) };
-  const dir = path.resolve(a.dir), reg = crearRegistro({ dir, paso: PASO, ahora });
-  const R = rutas(dir), rutaPlan = path.join(R.trabajo, "plan-ordenes.json"), rutaDiario = path.join(R.trabajo, "diario-ejecucion.jsonl");
-  const dec = leerTrabajo(dir, "decisiones.json"), plan = leerTrabajo(dir, "plan-ordenes.json"), cartera = leerTrabajo(dir, "cartera.json"), prep = leerTrabajo(dir, "preparar.json") || {};
-  const t0 = ahora(), hoy = prep.fechaET || fechaHoraET(t0).fecha;
-  const terminar = (codigo, accion, resultados, extra = {}) => {
-    const cuerpo = Object.assign({ inicio: t0, resultados, efectivoAntesUSD: cartera && cartera.libro ? cartera.libro.efectivoUSD : null, efectivoDespuesUSD: null }, extra);
-    escribirTrabajo(dir, "ejecucion.json", cuerpo);
-    reg.info(`ejecución: ${accion}`, { resultados: resultados.map(r => [r.id, r.estado]) });
-    return { codigo, linea: lineaPaso({ paso: PASO, ok: codigo === 0, accion, resumen: { ordenes: resultados.length, estados: resultados.reduce((m, r) => (m[r.estado] = (m[r.estado] || 0) + 1, m), {}) } }) };
+// líneas de la ejecución (§E.5.10): una por cierre de lote y una por compra
+export function lineasDe(plan) {
+  const out = [];
+  for (const o of plan.ordenes || []) {
+    if (o.lado === "venta") (o.cierres || []).forEach((c, k) => out.push({ id: o.id, k, lado: "v", i: o.instrumentId, pos: c.positionId, u: c.unidades ?? null, usd: null, rid: o.requestIds[k] }));
+    else out.push({ id: o.id, k: 0, lado: "c", i: o.instrumentId, pos: null, u: null, usd: usd(o.montoUSD), rid: o.requestIds[0] });
+  }
+  return out;
+}
+const lineaValida = l => typeof l.rid === "string" && UUID.test(l.rid) && Number.isSafeInteger(l.i) && l.i > 0
+  && (l.lado === "v" ? Number.isSafeInteger(l.pos) && l.pos > 0 && (l.u === null || (isNum(l.u) && l.u > 0)) : isNum(l.usd) && l.usd > 0);
+
+function contexto(dir, pagina) {
+  const R = rutas(dir);
+  const prep = leerTrabajo(dir, "preparar.json") || {}, dec = leerTrabajo(dir, "decisiones.json"), plan = leerTrabajo(dir, "plan-ordenes.json"), cartera = leerTrabajo(dir, "cartera.json");
+  const config = configEfectiva(prep.config || null).config, { C } = pagina || cargarPagina();
+  const rutaPlan = path.join(R.trabajo, "plan-ordenes.json");
+  const planOk = !!(dec && plan && fs.existsSync(rutaPlan) && dec.planSha === shaArchivo(rutaPlan));
+  return { R, prep, dec, plan, cartera, config, C, planOk, rutaDiario: path.join(R.trabajo, "diario-ejecucion.jsonl"), rutaEjec: path.join(R.trabajo, "ejecucion.json") };
+}
+// F.2.1 / F.3.2: mercado abierto y dentro de la ventana con el reloj de ahora y el calendario (sin calendario: no)
+function enHorario({ dir, C, config, t }) {
+  const anio = fechaHoraET(t).fecha.slice(0, 4), fdb = leerDoc(dir, `feriados-${anio}`);
+  const fer = feriadosAnio({ anio, docDb: fdb.estado === "ok" ? fdb.doc : null }).filas;
+  return !!fer && C.marketState(t, fer).open && ventanaDelDia({ C, ahoraMs: t, feriados: fer, config }).dentro;
+}
+async function leerPortafolio(et, dormir) {
+  for (let i = 0; i < 3; i++) {
+    try { const p = await et.portafolio(); return (p && p.clientPortfolio) || p || {}; } catch (e) { if (i < 2) await dormir(2000); }
+  }
+  return null;
+}
+function antesDe(cp, instrumentos) {
+  const pos = (cp.positions || []).filter(p => instrumentos.has(instId(p))).map(posId).filter(isNum);
+  const ps = new Set(pos);
+  const ord = [...(cp.ordersForOpen || []), ...(cp.ordersForClose || [])].filter(o => instrumentos.has(instId(o)) || ps.has(posId(o))).map(ordId).filter(isNum);
+  return { pos: [...new Set(pos)].sort((a, b) => a - b), ord: [...new Set(ord)].sort((a, b) => a - b) };
+}
+const resNoEnviada = (lineas, err) => lineas.map(l => ({ id: l.id, k: l.k, est: "no_enviada", env: null, http: null, o: null, pos: [], px: null, uej: null, usdej: null, usd: null, err }));
+
+// ---- --armar (F.2) ----
+async function armar({ dir, x, et, ahora, dormir, reg }) {
+  const t = ahora(), f = x.prep.fechaET || fechaHoraET(t).fecha, modo = x.prep.modo || "en_linea";
+  if (fs.existsSync(x.rutaDiario) || fs.existsSync(x.rutaEjec)) return { codigo: 3, linea: lineaPaso({ paso: PASO, ok: false, accion: "ya_ejecutado", modo, resumen: { motivo: "ya hay diario o ejecucion.json en esta carpeta" } }) };
+  const lineas = x.plan ? lineasDe(x.plan) : [];
+  const nada = err => {
+    if (lineas.length && err) escribirTrabajo(dir, "ejecucion.json", { doc: null, res: resNoEnviada(lineas, err) });
+    reg.info(`armar: nada (${err || "sin órdenes reales"})`);
+    return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "nada", modo, resumen: { motivo: err || "sin órdenes reales", lineas: lineas.length } }) };
   };
-  // 1. huella del plan
-  if (!dec || !plan || !fs.existsSync(rutaPlan) || dec.planSha !== shaArchivo(rutaPlan)) {
-    reg.error("plan alterado o ausente: no se envía nada");
-    return { codigo: 3, linea: lineaPaso({ paso: PASO, ok: false, accion: "incompleto", resumen: { codigo: "plan_alterado" } }) };
-  }
-  const ordenes = plan.ordenes || [];
-  if (plan.simulacion || dec.simulacion) return terminar(0, "listo", ordenes.map(o => ({ id: o.id, estado: "simulada", orderId: null, positionIds: [], ejecucion: null, error: null })));
-  if (!cartera || cartera.estado !== "listo" || !cartera.libro) return terminar(3, "incompleto", ordenes.map(o => ({ id: o.id, estado: "cancelada", orderId: null, positionIds: [], ejecucion: null, error: "sin cartera conciliada" })));
+  if (!x.plan || !lineas.length || x.plan.simulacion || (x.dec && x.dec.simulacion)) return nada(null);
+  if (!enHorario({ dir, C: x.C, config: x.config, t })) return nada("fuera de horario");
+  if (!x.planOk) return nada("plan alterado");
+  if (!lineas.every(lineaValida)) return nada("línea de plan inválida");
+  if (!x.cartera || x.cartera.estado !== "listo" || !x.cartera.libro) return nada("sin cartera conciliada");
+  const cp = await leerPortafolio(et, dormir);
+  if (!cp) return nada("sin portafolio de eToro");
+  const doc = { kind: "ejecucion", v: 1, f, sesion: (x.prep.rutina && x.prep.rutina.sesion) || "s-desconocida", armado: ts(ahora()), fin: null,
+    antes: antesDe(cp, new Set(lineas.map(l => l.i))), lineas, res: [] };
+  escribirTrabajo(dir, "ejecucion-doc.json", doc);
+  const id = `ejecucion-${f}`;
+  const g = armarGrupo({ dir, grupo: "pre-ejecucion", docs: [{ id, data: doc }], modo, crear: [id] });
+  reg.info("armado", { lineas: lineas.length, antes: doc.antes });
+  return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "armado", modo, resumen: { lineas: lineas.length, antes: doc.antes.pos.length + doc.antes.ord.length }, escribir: g.escribir }) };
+}
 
-  const et = crearEToro({ transporte: transporteEToro || transporteCurl() });
-  const libro = cartera.libro, config = prep.config || {}, minOrden = isNum(config.minOrdenUSD) ? config.minOrdenUSD : 100;
-  const diarioPrevio = a.reanudar ? leerDiario(rutaDiario) : [];
-  const previos = a.reanudar ? (leerTrabajo(dir, "ejecucion.json") || { resultados: [] }).resultados : [];
-  const anotar = l => fs.appendFileSync(rutaDiario, JSON.stringify(Object.assign({ t: ahora() }, l)) + "\n");
-  const enviado = (id, k) => diarioPrevio.find(l => l.id === id && l.k === k && l.fase === "envio");
-  const respondido = (id, k) => diarioPrevio.filter(l => l.id === id && l.k === k && l.fase === "respuesta").pop();
-  let detenido = null;
-  const res = new Map(ordenes.map(o => [o.id, { id: o.id, estado: "pendiente", orderId: null, positionIds: [], ejecucion: null, error: null, detalle: [] }]));
-  const cp = async () => { const p = await et.portafolio(); return p.clientPortfolio || {}; };
-  const propios = new Set(libro.posiciones.flatMap(p => p.lotes.map(l => l.positionId)));
-  const pendOrd = new Set(libro.pendientes.map(p => p.orderId).filter(Boolean));
+// ---- --enviar / --reanudar (F.3, F.4) ----
+async function enviar({ dir, x, et, ahora, dormir, reg, reanudar }) {
+  const t0 = ahora(), f = x.prep.fechaET || fechaHoraET(t0).fecha, modo = x.prep.modo || "en_linea";
+  const salir = (motivo, accion = "ya_ejecutado") => { reg.aviso(`${accion}: ${motivo}`); return { codigo: 3, linea: lineaPaso({ paso: PASO, ok: false, accion, modo, resumen: { motivo, post: 0 } }) }; };
+  const diario0 = leerDiario(x.rutaDiario);
+  if (fs.existsSync(x.rutaEjec)) return salir("la ejecución de hoy ya terminó (ejecucion.json)");
+  if (!reanudar && fs.existsSync(x.rutaDiario)) return salir("ya hay diario: solo --reanudar (una vez)");
+  if (reanudar && !fs.existsSync(x.rutaDiario)) return salir("sin diario en esta carpeta: no hay nada que reanudar");
+  if (reanudar && diario0.some(l => l.fase === "reanudar")) return salir("ya se reanudó una vez");
+  // barrera 4 de F.6: el reclamo ejecucion-<hoy> lo escribió esta sesión y es el mismo documento armado
+  const doc = leerTrabajo(dir, "ejecucion-doc.json"), v = leerVersiones(dir)[`ejecucion-${f}`];
+  if (!doc || !v || v.estado !== "ok" || v.escritoEn !== "pre-ejecucion" || v.h !== conH(doc).h) return salir("ejecucion-<hoy> no la escribió esta sesión (sin reclamo de envío)");
+  if (!x.planOk || JSON.stringify(lineasDe(x.plan)) !== JSON.stringify(doc.lineas)) return salir("el plan no coincide con el armado", "incompleto");
+  const anotar = l => anotarSync(x.rutaDiario, Object.assign({ t: ts(ahora()) }, l));
+  if (reanudar) anotar({ fase: "reanudar" });
 
-  // 2. portafolio inicial: órdenes del mandato de días anteriores aún en cola bloquean compras de ese instrumento
-  let inicial;
-  try { inicial = await cp(); }
-  catch (e) { return terminar(3, "incompleto", ordenes.map(o => ({ id: o.id, estado: "cancelada", orderId: null, positionIds: [], ejecucion: null, error: `eToro: ${e.codigo}` }))); }
-  const colaVieja = new Set((inicial.ordersForOpen || []).filter(o => libro.pendientes.some(p => p.orderId === ordId(o) && String(p.enviadaEl).slice(0, 10) < hoy)).map(instId));
-
-  // envío con un único reintento seguro (§6.6.5); `buscar(cp)` detecta lo que ya entró en eToro tras el envío
-  async function enviar({ id, k, requestId, hacer, buscar }) {
-    const prev = enviado(id, k);
-    if (prev) { // --reanudar: nunca se reenvía sin mirar antes en eToro
-      const r0 = respondido(id, k);
-      let visto = null;
-      try { visto = buscar(await cp(), prev.t); } catch (e) { visto = null; }
-      if (visto) return { estado: "adoptada", visto, orderId: (r0 && r0.orderId) || visto.orderId || null };
-      if (r0 && r0.http >= 400 && r0.http < 500) return { estado: "rechazada", error: `HTTP ${r0.http}` };
-    }
-    for (let intento = 0; intento < 2; intento++) {
-      const tEnvio = ahora();
-      anotar({ id, k, fase: "envio", intento });
-      let r = null, e = null;
-      try { r = await hacer(requestId); } catch (x) { e = x; }
-      if (!e) {
-        const orderId = (r && (r.orderId || (r.orderForClose && r.orderForClose.orderID))) || null;
-        anotar({ id, k, fase: "respuesta", http: 200, orderId });
-        return { estado: "enviada", orderId, tEnvio };
-      }
-      anotar({ id, k, fase: "respuesta", http: e.http || 0, codigo: e.codigo });
-      if (e.codigo === "etoro_auth") { detenido = "etoro_auth"; return { estado: "rechazada", error: "etoro_auth" }; }
-      if (e.codigo === "etoro_rechazo" || e.codigo === "etoro_ritmo" || e.codigo === "etoro_argumento" || e.codigo === "etoro_prohibido") return { estado: "rechazada", error: `${e.codigo}${e.http ? " HTTP " + e.http : ""}` };
-      if (intento === 1) return { estado: "desconocida", error: e.codigo };
-      let visto = null;
-      try { visto = buscar(await cp(), tEnvio); } catch (x) { visto = null; }
-      if (visto) return { estado: "adoptada", visto, orderId: visto.orderId || null };
-    }
-    return { estado: "desconocida", error: "sin respuesta" };
-  }
-
-  // 3. ventas
-  const ventas = ordenes.filter(o => o.lado === "venta"), compras = ordenes.filter(o => o.lado === "compra");
-  const loteDe = positionId => libro.posiciones.flatMap(p => p.lotes).find(l => l.positionId === positionId);
-  const cierreVisto = (c, cpx) => { const p = (cpx.positions || []).find(x => posId(x) === c.positionId), l = loteDe(c.positionId); return !p || (l && isNum(p.units) && p.units < l.unidades - 1e-9); };
-  for (const o of ventas) {
-    if (detenido) break;
-    const r = res.get(o.id);
-    for (const [k, c] of (o.cierres || []).entries()) {
-      if (detenido) { r.detalle.push({ positionId: c.positionId, unidades: c.unidades, estado: "cancelada", precio: null, orderId: null }); continue; }
-      const e = await enviar({ id: o.id, k, requestId: o.requestIds[k], hacer: rid => et.cerrar({ positionId: c.positionId, instrumentId: o.instrumentId, unidades: c.unidades, requestId: rid }),
-        buscar: cpx => (cierreVisto(c, cpx) ? { orderId: null } : null) });
-      r.detalle.push({ positionId: c.positionId, unidades: c.unidades, estado: e.estado === "rechazada" || e.estado === "desconocida" ? e.estado : "pendiente", precio: null, orderId: e.orderId || null, error: e.error || null });
-    }
-  }
-  const porConfirmar = () => ventas.flatMap(o => res.get(o.id).detalle.filter(d => d.estado === "pendiente"));
-  if (porConfirmar().length) {
-    for (let w = 0; w <= ESPERA_MAX_MS; w += SONDEO_MS) {
-      let cpx = null;
-      try { cpx = await cp(); } catch (e) { cpx = null; }
-      if (cpx) for (const d of porConfirmar()) if (cierreVisto(d, cpx)) d.estado = "confirmada";
-      if (!porConfirmar().length) break;
-      await dormir(SONDEO_MS);
-    }
-    const confirmadas = ventas.flatMap(o => res.get(o.id).detalle.filter(d => d.estado === "confirmada").map(d => ({ d, o })));
-    if (confirmadas.length) {
-      let hist = [], bids = {};
-      try { hist = await et.historial(hoy); } catch (e) { hist = []; }
-      try { bids = bidsDe(await et.tasas([...new Set(confirmadas.map(x => x.o.instrumentId))])); } catch (e) { bids = {}; }
-      for (const { d, o } of confirmadas) {
-        const h = (Array.isArray(hist) ? hist : []).find(x => (x.positionId ?? x.positionID) === d.positionId);
-        d.precio = h && isNum(h.closeRate) ? h.closeRate : bids[o.instrumentId] ? bids[o.instrumentId].bid : null;
-        d.estado = isNum(d.precio) ? "ejecutada" : "pendiente";
-      }
-    }
-  }
-  let ingresos = 0;
-  for (const o of ventas) {
-    const r = res.get(o.id), ds = r.detalle, l = id => loteDe(id);
-    for (const d of ds) if (d.estado === "ejecutada") ingresos += (d.unidades === null ? l(d.positionId).unidades : d.unidades) * d.precio;
-    r.estado = ds.some(d => d.estado === "ejecutada") ? "ejecutada" : ds.some(d => d.estado === "pendiente") ? "pendiente" : ds.some(d => d.estado === "desconocida") ? "desconocida" : ds.every(d => d.estado === "cancelada") ? "cancelada" : "rechazada";
-    r.positionIds = ds.filter(d => d.estado === "ejecutada" || d.estado === "pendiente").map(d => d.positionId);
-    r.orderId = (ds.find(d => d.orderId) || {}).orderId || null;
-    const ej = ds.filter(d => d.estado === "ejecutada");
-    if (ej.length) {
-      const u = ej.reduce((s, d) => s + (d.unidades === null ? l(d.positionId).unidades : d.unidades), 0), m = ej.reduce((s, d) => s + (d.unidades === null ? l(d.positionId).unidades : d.unidades) * d.precio, 0);
-      r.ejecucion = { precio: u > 0 ? Math.round(m / u * 1e4) / 1e4 : null, unidades: Math.round(u * 1e6) / 1e6, montoUSD: cts(m), at: new Date(ahora()).toISOString() };
-    }
-    r.error = (ds.find(d => d.error) || {}).error || null;
-  }
-
-  // 4. compras: efectivo del mandato + ventas confirmadas; si no alcanza, se escalan por igual (§6.4.3)
-  const disponible = Math.max(0, libro.efectivoUSD + ingresos);
-  const activas = compras.filter(o => {
-    const r = res.get(o.id);
-    if (detenido) { Object.assign(r, { estado: "cancelada", error: `${detenido}: detenido` }); return false; }
-    if (colaVieja.has(o.instrumentId)) { Object.assign(r, { estado: "cancelada", error: "orden anterior del mandato aún en cola" }); return false; }
-    return true;
+  const libro = x.cartera.libro, minOrden = x.config.minOrdenUSD;
+  const antesPos = new Set(doc.antes.pos), lotes = new Map(libro.posiciones.flatMap(p => p.lotes.map(l => [l.positionId, l])));
+  const L = doc.lineas.map(l => {
+    const e = diario0.find(d => d.fase === "envio" && d.id === l.id && d.k === l.k), r = diario0.filter(d => d.fase === "respuesta" && d.id === l.id && d.k === l.k).pop();
+    const final = r && (r.clase === "rechazada" || r.clase === "no_enviada") ? r.clase : null;
+    return Object.assign({}, l, { env: e ? e.t : null, usdEnv: e && isNum(e.usd) ? e.usd : null, http: r ? r.http ?? null : null, clase: r ? r.clase : e ? "incierta" : null, o: r ? r.orderId ?? null : null,
+      est: final, pos: [], px: null, uej: null, usdej: null, err: r && r.clase !== "aceptada" ? r.motivo || null : null, abierta: null, posLote: l.pos });
   });
-  const pedido = activas.reduce((s, o) => s + o.montoUSD, 0), f = pedido > disponible + 0.005 ? disponible / pedido : 1;
-  const enviadas = [];
-  for (const o of activas) {
-    const r = res.get(o.id), monto = piso(o.montoUSD * f);
-    if (detenido) { Object.assign(r, { estado: "cancelada", error: `${detenido}: detenido` }); continue; }
-    if (monto < minOrden) { Object.assign(r, { estado: "cancelada", error: `sin efectivo tras las ventas (US$ ${monto.toFixed(2)})` }); continue; }
-    const buscarCompra = (cpx, desde) => {
-      const ord = (cpx.ordersForOpen || []).find(x => instId(x) === o.instrumentId && Date.parse(x.openDateTime) >= desde - 1000 && !pendOrd.has(ordId(x)));
-      if (ord) return { orderId: ordId(ord) };
-      const p = (cpx.positions || []).find(x => instId(x) === o.instrumentId && Date.parse(x.openDateTime) >= desde - 1000 && !propios.has(posId(x)));
-      return p ? { orderId: ordId(p) } : null;
-    };
-    const e = await enviar({ id: o.id, k: 0, requestId: o.requestIds[0], hacer: rid => et.comprar({ instrumentId: o.instrumentId, montoUSD: monto, requestId: rid }), buscar: buscarCompra });
-    if (e.estado === "rechazada" || e.estado === "desconocida") { Object.assign(r, { estado: e.estado, error: e.error, orderId: e.orderId || null }); continue; }
-    Object.assign(r, { estado: "pendiente", orderId: e.orderId || null, montoEnviadoUSD: monto });
-    enviadas.push({ o, r, desde: e.tEnvio || t0 });
+  let detener = diario0.some(d => d.fase === "respuesta" && d.detener), sinCartera = false;
+  const sinPost = l => { l.est = "no_enviada"; };
+  // F.3.1: la cartera no cambió entre el armado y el envío (en --reanudar las posiciones nuevas pueden ser nuestras)
+  const cp0 = await leerPortafolio(et, dormir);
+  if (!cp0) {
+    sinCartera = true;
+    for (const l of L.filter(q => !q.est)) if (l.env) l.est = "incierta"; else { sinPost(l); l.err = "sin portafolio de eToro"; }
+    return terminar();
   }
-  // confirmación: posición del mandato con ese orderID (o regla 3) dentro de 90 s; lo no visto queda pendiente
-  const sinVer = () => enviadas.filter(x => x.r.estado === "pendiente");
-  for (let w = 0; enviadas.length && w <= ESPERA_MAX_MS; w += SONDEO_MS) {
-    let cpx = null;
-    try { cpx = await cp(); } catch (e) { cpx = null; }
-    if (cpx) for (const x of sinVer()) {
-      const p = (cpx.positions || []).find(q => !propios.has(posId(q)) && ((x.r.orderId && ordId(q) === x.r.orderId)
-        || (ordId(q) === null && instId(q) === x.o.instrumentId && Date.parse(q.openDateTime) >= x.desde - 1000 && isNum(q.amount) && Math.abs(q.amount / x.r.montoEnviadoUSD - 1) <= 0.01)));
-      if (p) {
-        propios.add(posId(p));
-        Object.assign(x.r, { estado: "ejecutada", positionIds: [posId(p)], ejecucion: { precio: isNum(p.openRate) ? p.openRate : p.amount / p.units, unidades: p.units, montoUSD: cts(p.amount), at: p.openDateTime },
-          detalle: [{ positionId: posId(p), unidades: p.units, montoUSD: cts(p.amount) }] });
-      }
+  if (!reanudar) {
+    const ahoraAntes = antesDe(cp0, new Set(L.map(l => l.i)));
+    const nuevos = ahoraAntes.pos.filter(p => !antesPos.has(p)).concat(ahoraAntes.ord.filter(o => !doc.antes.ord.includes(o)));
+    if (nuevos.length) { for (const l of L) { sinPost(l); l.err = "la cartera cambió entre el armado y el envío"; } return terminar(); }
+  }
+  async function post(l, hacer) {
+    if (detener) { sinPost(l); l.err = "detenido: eToro rechazó la autorización"; return; }
+    if (!enHorario({ dir, C: x.C, config: x.config, t: ahora() })) { sinPost(l); l.err = "fuera de horario"; return; }
+    l.env = ts(ahora());
+    anotar(Object.assign({ id: l.id, k: l.k, fase: "envio", rid: l.rid }, l.lado === "c" ? { usd: l.usdEnv } : {}));
+    let r;
+    try { r = await hacer(); } catch (e) { r = { clase: "no_enviada", http: null, orderId: null, motivo: (e && (e.mensaje || e.codigo)) || "argumento inválido" }; }
+    anotar(Object.assign({ id: l.id, k: l.k, fase: "respuesta", http: r.http, clase: r.clase, orderId: r.orderId, motivo: r.motivo }, r.detener ? { detener: true } : {}));
+    Object.assign(l, { clase: r.clase, http: r.http, o: r.orderId, err: r.clase === "aceptada" ? null : r.motivo });
+    if (r.clase === "no_enviada" || r.clase === "rechazada") l.est = r.clase;
+    if (r.detener) detener = true;
+  }
+  const porVer = lado => L.filter(l => l.lado === lado && !l.est && l.env);
+  async function sondear(lado, ver) {
+    for (let i = 0; i < SONDEOS && porVer(lado).length; i++) {
+      let cp = null;
+      try { const p = await et.portafolio(); cp = (p && p.clientPortfolio) || p || null; } catch (e) { cp = null; }
+      if (cp) ver(cp);
+      if (porVer(lado).length) await dormir(SONDEO_MS);
     }
-    if (!sinVer().length) break;
-    await dormir(SONDEO_MS);
   }
-  for (const x of enviadas) { x.r.montoUSD = x.r.montoEnviadoUSD; delete x.r.montoEnviadoUSD; }
-  // reanudación: lo resuelto en la corrida anterior se conserva si esta no lo tocó
-  const resultados = ordenes.map(o => { const r = res.get(o.id), p = previos.find(x => x.id === o.id); return p && r.estado === "pendiente" && !r.orderId && p.estado !== "pendiente" ? p : r; });
-  for (const r of resultados) if (!r.detalle || !r.detalle.length) delete r.detalle;
-  const gastado = resultados.filter(r => ordenes.find(o => o.id === r.id).lado === "compra" && ["ejecutada", "pendiente", "desconocida"].includes(r.estado)).reduce((s, r) => s + (r.montoUSD || 0), 0);
-  const incompleto = !!detenido || resultados.some(r => r.estado === "desconocida");
-  return terminar(incompleto ? 3 : 0, incompleto ? "incompleto" : "listo", resultados, { efectivoDespuesUSD: cts(libro.efectivoUSD + ingresos - gastado), detenido });
+
+  // ventas (cierres de lotes del libro)
+  for (const l of L.filter(q => q.lado === "v" && !q.env && !q.est)) await post(l, () => et.cerrar({ positionId: l.posLote, instrumentId: l.i, unidades: l.u, requestId: l.rid }));
+  const enColaV = new Set();
+  await sondear("v", cp => {
+    for (const l of porVer("v")) {
+      const p = (cp.positions || []).find(q => posId(q) === l.posLote), lote = lotes.get(l.posLote);
+      if (!p || (lote && isNum(p.units) && p.units < lote.unidades - 1e-9)) l.est = "vista";
+      else if ((cp.ordersForClose || []).some(o => posId(o) === l.posLote)) enColaV.add(l);
+    }
+  });
+  const vistas = L.filter(l => l.est === "vista");
+  if (vistas.length) {
+    let hist = [], bids = {};
+    try { const h = await et.historial(f); hist = Array.isArray(h) ? h : []; } catch (e) { hist = []; }
+    try { bids = bidsDe(await et.tasas([...new Set(vistas.map(l => l.i))])); } catch (e) { bids = {}; }
+    for (const l of vistas) {
+      const h = hist.find(q => (q.positionId ?? q.positionID) === l.posLote), b = bids[l.i];
+      const px = h && isNum(h.closeRate) ? h.closeRate : precioValido(b, ahora()) ? b.bid : null, lote = lotes.get(l.posLote);
+      const uej = l.u !== null ? l.u : lote ? lote.unidades : null;
+      if (isNum(px) && isNum(uej)) Object.assign(l, { est: "ejecutada", px: precio(px), uej: u6(uej), usdej: usd(uej * px), pos: [l.posLote], err: null });
+      else Object.assign(l, { est: "aceptada", pos: [l.posLote], err: "cerrada en eToro sin precio de cierre: se concilia mañana" });
+    }
+  }
+  for (const l of porVer("v")) Object.assign(l, { est: l.clase === "aceptada" || enColaV.has(l) ? "aceptada" : "incierta", pos: [l.posLote] });
+
+  // compras: efectivo del mandato + cierres confirmados − compras ya enviadas; si no alcanza, se escalan por igual
+  const ingresos = L.filter(l => l.lado === "v" && l.est === "ejecutada").reduce((s, l) => s + l.usdej, 0);
+  const gastado = L.filter(l => l.lado === "c" && l.env && l.est !== "rechazada" && l.est !== "no_enviada").reduce((s, l) => s + (l.usdEnv ?? l.usd), 0);
+  const nuevas = L.filter(l => l.lado === "c" && !l.env && !l.est);
+  const disponible = Math.max(0, libro.efectivoUSD + ingresos - gastado), pedido = nuevas.reduce((s, l) => s + l.usd, 0);
+  const factor = pedido > disponible + 0.005 ? disponible / pedido : 1;
+  for (const l of nuevas) {
+    const monto = piso(l.usd * factor);
+    if (monto < minOrden) { sinPost(l); l.err = "sin efectivo"; continue; }
+    l.usdEnv = monto;
+    await post(l, () => et.comprar({ instrumentId: l.i, montoUSD: monto, requestId: l.rid }));
+  }
+  const tomadas = new Set(), enColaC = new Set();
+  const casa = (l, x) => {
+    const env = Date.parse(l.env), d = Date.parse(x.openDateTime), monto = l.usdEnv ?? l.usd;
+    return instId(x) === l.i && Number.isFinite(d) && d >= env - ANTES_MS && d <= env + DESPUES_MS && isNum(x.amount) && monto > 0 && Math.abs(x.amount / monto - 1) <= 0.01;
+  };
+  await sondear("c", cp => {
+    for (const l of porVer("c")) {
+      const libre = q => !antesPos.has(posId(q)) && !tomadas.has(posId(q));
+      const p = (l.o ? (cp.positions || []).find(q => ordId(q) === l.o && libre(q)) : null)
+        || (cp.positions || []).find(q => (ordId(q) === null || !l.o) && libre(q) && casa(l, q));
+      if (p) {
+        tomadas.add(posId(p));
+        Object.assign(l, { est: "ejecutada", o: l.o ?? ordId(p), pos: [posId(p)], px: precio(isNum(p.openRate) ? p.openRate : p.amount / p.units), uej: u6(p.units), usdej: usd(p.amount), abierta: p.openDateTime, err: null });
+      } else if ((cp.ordersForOpen || []).some(q => (l.o && ordId(q) === l.o) || (!doc.antes.ord.includes(ordId(q)) && casa(l, q)))) enColaC.add(l);
+    }
+  });
+  for (const l of porVer("c")) l.est = l.clase === "aceptada" || enColaC.has(l) ? "aceptada" : "incierta";
+  return terminar();
+
+  function terminar() {
+    const res = L.map(l => ({ id: l.id, k: l.k, est: l.est || "no_enviada", env: l.env, http: l.http, o: l.o ?? null, pos: l.pos, px: l.px, uej: l.uej, usdej: l.usdej,
+      usd: l.lado === "c" && l.env ? l.usdEnv ?? l.usd : null, err: l.err ? String(l.err).slice(0, 80) : null, ...(l.abierta ? { abierta: l.abierta } : {}) }));
+    escribirTrabajo(dir, "ejecucion.json", { doc, res });
+    const n = res.reduce((m, r) => ((m[r.est] = (m[r.est] || 0) + 1), m), {});
+    const incompleto = detener || sinCartera || res.some(r => r.est === "incierta");
+    reg.info(`ejecución: ${incompleto ? "incompleto" : "listo"}`, { estados: n, reanudar });
+    return { codigo: incompleto ? 3 : 0, linea: lineaPaso({ paso: PASO, ok: !incompleto, accion: incompleto ? "incompleto" : "listo", modo, resumen: { lineas: res.length, estados: n } }) };
+  }
+}
+
+export async function main(argv, { transporteEToro = null, ahora = Date.now, dormir = ms => new Promise(r => setTimeout(r, ms)), pagina = null } = {}) {
+  const a = leerArgs(argv, { valores: ["--dir"], banderas: FASES });
+  if (a.ayuda) { process.stdout.write(AYUDA + "\n"); return { codigo: 0, linea: null }; }
+  const fases = FASES.filter(k => a[k.slice(2)]);
+  if (!a.dir || fases.length !== 1) return { codigo: 1, linea: lineaPaso({ paso: PASO, ok: false, accion: "error", resumen: { texto: AYUDA } }) };
+  const dir = path.resolve(a.dir), reg = crearRegistro({ dir, paso: PASO, ahora });
+  const x = contexto(dir, pagina), et = crearEToro({ transporte: transporteEToro || transporteCurl() });
+  if (fases[0] === "--armar") return armar({ dir, x, et, ahora, dormir, reg });
+  return enviar({ dir, x, et, ahora, dormir, reg, reanudar: fases[0] === "--reanudar" });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) correrCli(main, PASO);

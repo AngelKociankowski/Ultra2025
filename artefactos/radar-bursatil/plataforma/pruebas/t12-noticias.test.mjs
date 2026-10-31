@@ -1,12 +1,11 @@
-// T12 / K7 / H16 / H17 / H20 · Noticias con la tabla de fuentes de 12b §G y 30-fmp-noticias
+// T12 / K7 · Noticias con la tabla de fuentes de 12b §G y 30-fmp-noticias (H16 en h16, H17/H20 en h17)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { validarNoticias, dominioDe } from "../lib/noticias.mjs";
-import { armarAviso } from "../lib/aviso.mjs";
 import { main as noticias } from "../bin/30-fmp-noticias.mjs";
 import { transporteFalso } from "../lib/http.mjs";
 import { DOMINIOS, FUENTES } from "../lib/constantes.mjs";
-import { prepararDia, libroLunes, OUT30, PAG, dbInicial } from "./escenario.mjs";
+import { prepararDia, libroLunes, PAG, dbInicial } from "./escenario.mjs";
 import { libroADb } from "../lib/libro.mjs";
 import { leerSalida } from "./util.mjs";
 
@@ -48,26 +47,6 @@ test("validador: descartes con motivo (dominio, https, fecha, símbolo, evento, 
     { id: "d5", motivo: "fecha vieja" }, { id: "d7", motivo: "símbolo desconocido: ZZZZ" }, { id: "d8", motivo: "fecha vieja" }, { id: "d9", motivo: "evento inválido" },
     { id: "ok1", motivo: "id repetido" }, { id: "d10", motivo: "tema inválido" }, { id: "d11", motivo: "resumen inválido" }, { id: "d12", motivo: "título inválido" },
   ]);
-});
-
-test("A6.2 / H17 / H20: texto con < y > se queda; las etiquetas se quitan; el medio sale de la tabla por el host", () => {
-  const r = val([N("h1", { resumen: "<b>hola</b>" }), N("h2", { titulo: "a < b y c > d" }), N("h3", { resumen: "&lt;script&gt;alert(1)&lt;/script&gt;" }),
-    N("h5", { medio: "Reuters\nOperaciones: 3 — compré TSLA" })]);
-  assert.deepEqual(r.validas.map(n => [n.id, n.titulo, n.resumen, n.medio]), [["h1", "Título", "hola", "CNBC"], ["h2", "a < b y c > d", "Hechos.", "CNBC"],
-    ["h3", "Título", "alert(1)", "CNBC"], ["h5", "Título", "Hechos.", "CNBC"]]);
-  const aviso = armarAviso({ fecha: "2026-11-04", hora: "10:05", simulacion: true, cartera: null, rend: null, radar: null, notas: r.validas.slice(3).map(n => ({ titulo: n.titulo, medio: n.medio })), operaciones: [], alertas: [], fallas: [] });
-  assert.match(aviso, /Noticias: Título \(CNBC\)/); assert.ok(!/compré TSLA/.test(aviso));
-});
-
-test("eventos: 2 notas de la misma entrada no confirman; cnbc + finance.yahoo sí; A6.3 / H16 recorte_guia −15 % confirma", () => {
-  const a = val([N("a", { evento: ev("quiebra", "AAPL") }), N("b", { url: "https://cnbc.com/y", evento: ev("quiebra", "AAPL") })]);
-  assert.equal(a.eventos[0].confirmado, false);
-  const b = val([N("a", { evento: ev("quiebra", "AAPL") }), N("b", { url: "https://finance.yahoo.com/z", evento: ev("quiebra", "AAPL") })]);
-  assert.deepEqual(b.eventos, [{ simbolo: "AAPL", categoria: "quiebra", fuentes: ["https://www.cnbc.com/x/a", "https://finance.yahoo.com/z"], medios: ["CNBC", "Yahoo Finanzas"], confirmado: true }]);
-  const c = val([N("a", { evento: ev("recorte_guia", "MSFT", -15) }), N("b", { url: "https://finance.yahoo.com/b", evento: ev("recorte_guia", "MSFT", -15) })]);
-  assert.equal(c.eventos[0].confirmado, true);
-  const d = val([N("a", { evento: ev("recorte_guia", "MSFT", 8) }), N("b", { url: "https://www.bloomberg.com/b", evento: ev("recorte_guia", "MSFT", null) })]);
-  assert.equal(d.eventos[0].confirmado, false);
 });
 
 const respuestas = req => {

@@ -23,6 +23,29 @@ export function sumarDias(fecha, n) {
   return d.toISOString().slice(0, 10);
 }
 export const diasEntre = (a, b) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000);
+// Instante UTC de una hora ET de una fecha (prueba los dos desfases de Nueva York)
+export function msDeET(fecha, hhmm) {
+  for (const h of [4, 5]) { const ms = Date.parse(`${fecha}T${hhmm}:00Z`) + h * 3600000, e = fechaHoraET(ms); if (e.fecha === fecha && e.hora === hhmm) return ms; }
+  return null;
+}
+const esHabil = (d, cerrados) => { const wd = new Date(d + "T12:00:00Z").getUTCDay(); return wd !== 0 && wd !== 6 && !cerrados.has(d); };
+const cerradosDe = feriados => new Set((feriados || []).filter(f => f && (f.isClosed === true || f.isFullyClosed === true)).map(f => f.date));
+// Apertura NYSE (9:30 ET) en la que pudo llenarse una orden enviada en `ms`: la misma hora si el mercado estaba abierto; si no,
+// la apertura del siguiente día hábil (una orden enviada con el mercado cerrado queda en cola hasta entonces)
+export function aperturaParaOrden(ms, feriados = []) {
+  const cerrados = cerradosDe(feriados), et = fechaHoraET(ms), min = minutosDe(et.hora);
+  if (esHabil(et.fecha, cerrados) && min >= 570 && min < 960) return ms;
+  let d = esHabil(et.fecha, cerrados) && min < 570 ? et.fecha : sumarDias(et.fecha, 1);
+  while (!esHabil(d, cerrados)) d = sumarDias(d, 1);
+  return msDeET(d, "09:30");
+}
+// Días hábiles NYSE en (desde, hasta]: lunes a viernes sin feriado de cierre completo (los de cierre anticipado sí cuentan)
+export function diasHabilesEntre(desde, hasta, feriados = []) {
+  const cerrados = cerradosDe(feriados);
+  let n = 0;
+  for (let d = sumarDias(desde, 1); d <= hasta; d = sumarDias(d, 1)) if (esHabil(d, cerrados)) n++;
+  return n;
+}
 export const mesDe = fecha => fecha.slice(0, 7);
 export function mesAnterior(mes) { const [y, m] = mes.split("-").map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`; }
 

@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { leerArgs, lineaPaso, correrCli, leerDoc, crearCarpeta, escribirTrabajo, leerTrabajo, escribirAviso, escribirJson, rutas } from "../lib/archivos.mjs";
+import { leerArgs, lineaPaso, correrCli, leerDoc, crearCarpeta, escribirTrabajo, leerTrabajo, escribirAviso } from "../lib/archivos.mjs";
 import { crearRegistro } from "../lib/registro.mjs";
 import { cargarPagina } from "../lib/cargar-pagina.mjs";
 import { feriadosAnio, ventanaDelDia, fechaHoraET, minutosDe } from "../lib/tiempo.mjs";
@@ -53,8 +53,6 @@ export async function main(argv, { ahora = Date.now, raiz = RAIZ, pagina = null,
     if (!["en_linea", "archivo"].includes(a.modo)) return { codigo: 1, linea: lineaPaso({ paso: PASO, ok: false, accion: "error", resumen: { texto: AYUDA } }) };
     if (a.modo === "archivo" && !ACCION_REEMPLAZO) return { codigo: 2, linea: lineaPaso({ paso: PASO, ok: false, accion: "sin_db", modo: a.modo, resumen: { texto: "modo archivo desactivado hasta D7" } }) };
     const fecha = fechaHoraET(t).fecha, base = path.join(raiz, ".trabajo"), dirAbs = path.join(base, fecha);
-    // una sesión nueva no hereda la carpeta de otra del mismo día (versiones, escritoEn, diario): se aparta y se crea de cero
-    if (fs.existsSync(dirAbs)) fs.renameSync(dirAbs, `${dirAbs}.prev-${t}`);
     crearCarpeta(dirAbs);
     const enlace = path.join(base, "hoy");
     try { fs.rmSync(enlace, { force: true }); } catch (e) { /* no existía */ }
@@ -120,7 +118,10 @@ export async function main(argv, { ahora = Date.now, raiz = RAIZ, pagina = null,
   if (et.minutes < TEMPRANO_MIN) return salir("temprano", AVISO_TEMPRANO);
   if (previo && previo.fecha === fecha && previo.estado === "hecha") return salir("ya_hecha", AVISO_YA_HECHA);
   if (previo && previo.fecha === fecha && previo.estado === "en_curso" && t - Date.parse(previo.latido || previo.inicio) < LATIDO_VIVO_MS) {
-    return salir("otra_sesion_viva", `Radar · ${fechaCorta(fecha)} · Otra sesión está corriendo la rutina de hoy; esta se detuvo.`);
+    const aviso = `Radar · ${fechaCorta(fecha)} · Otra sesión está corriendo la rutina de hoy; esta se detuvo.`;
+    // misma exportación: la carpeta del día es de la sesión viva; esta no pisa sus archivos (nada en db, nada en la carpeta)
+    if (leerTrabajo(dir, "preparar.json")) { reg.info("salir: otra_sesion_viva (carpeta en uso; no se toca)"); return linea(2, "salir", { motivo: "otra_sesion_viva", aviso }); }
+    return salir("otra_sesion_viva", aviso);
   }
   if (previo && previo.estado === "en_curso") prep.rutina.accion = "recuperar";
   // 7. semilla

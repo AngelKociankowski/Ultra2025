@@ -9,6 +9,9 @@ y deja todo en `db` del artefacto. Diseño y contratos: `12-plan-plataforma.md` 
   red del entorno: ningún archivo de aquí las lee, las pone ni las guarda.
 - Solo eToro **Demo**: la ruta Real no existe en el código. `rutina-config.operar = false` (simulación) hasta que el director
   lo active.
+- Órdenes (12b §F): `50-ejecutar --armar` crea el reclamo `ejecucion-<hoy>` (sin `ifVersion`), `--enviar` manda a lo más un
+  POST por línea con el diario sincronizado a disco antes de cada uno, y `--reanudar` (una vez) nunca reenvía una línea con
+  envío. Lo dudoso cuenta como enviado (`incierta`, efectivo provisional) hasta que eToro lo muestre o pasen 3 días hábiles.
 - La rutina corre una **exportación** del commit de la etiqueta `rutina-aprobada` de `origin` (paso 0 del RUNBOOK), nunca el
   árbol de trabajo. El director mueve esa etiqueta después de revisar.
 
@@ -44,6 +47,9 @@ Sigue `RUNBOOK.md` paso a paso (es lo mismo que hace la tarea programada con `PR
 
 - `node bin/semilla.mjs --dir <carpeta>`: siembra única (grupo `semilla`: `rutina-config`, `cartera-libro`, `etoro-mapa`,
   `ops-2026-10-30`, `punto-2026-10-30`); se niega si `cartera-libro` existe o no se pudo leer (D2).
+- `node bin/db.mjs config --dir <carpeta> --operar true|false --activado <iso>|null`: arma `salida/config/db_write.json` con
+  `rutina-config` nuevo (`ifVersion` de la lectura, `h` válido) para activar o apagar las órdenes (T20; 00n). Antes, LEER
+  `rutina-config` e `importar` en esa carpeta; después, ESCRIBIR el grupo `config` y `registrar`.
 - `node bin/humo-etoro.mjs`: prueba de humo de eToro, solo lecturas (GET).
 - `node bin/humo-fmp.mjs`: prueba de humo de FMP (22 llamadas; T00b).
 - `compat.json`: huellas de la página con la que se validó el corredor. Republicar la página exige repetir la paridad (T05)

@@ -14,13 +14,19 @@ export class ErrorHttp extends Error {
 
 const postPermitido = url => url === POST_ORDENES || (url.startsWith(POST_CIERRE) && /^\d{1,15}$/.test(url.slice(POST_CIERRE.length)));
 
+// 12b §F.8 (H18): se rechaza antes de parsear lo que WHATWG y curl podrían leer distinto; curl recibe u.href, no el texto recibido
 function validarUrl(metodo, url) {
   if (metodo !== "GET" && metodo !== "POST") throw new ErrorHttp("metodo_prohibido", `método no permitido: ${metodo}`);
+  if (typeof url !== "string" || /[\\@\s\x00-\x1f\x7f]/.test(url)) throw new ErrorHttp("url_invalida", "URL con \\, @, espacios o caracteres de control");
+  if (/%(2f|5c|40)/i.test(url.replace(/^https?:\/\/[^/?#]*/i, "").split(/[?#]/)[0])) throw new ErrorHttp("url_invalida", "ruta con %2F, %5C o %40");
   let u;
   try { u = new URL(url); } catch (e) { throw new ErrorHttp("url_invalida", "URL inválida"); }
   if (u.protocol !== "https:" || !HOSTS.includes(u.hostname) || u.username || u.password || u.port) throw new ErrorHttp("host_prohibido", `host no permitido: ${u.hostname}`);
+  if (u.pathname.startsWith("/api/") && u.pathname !== u.pathname.toLowerCase()) throw new ErrorHttp("ruta_prohibida", "ruta /api/ con mayúsculas");
   if (/\/trading\//.test(u.pathname) && !/\/demo\//.test(u.pathname)) throw new ErrorHttp("ruta_prohibida", "ruta de trading sin /demo/");
-  if (metodo === "POST" && !postPermitido(url)) throw new ErrorHttp("ruta_prohibida", "POST fuera de las rutas Demo de ejecución");
+  // un POST va solo a una de las dos rutas exactas, escrita ya en su forma normalizada
+  if (metodo === "POST" && (u.href !== url || !postPermitido(u.href))) throw new ErrorHttp("ruta_prohibida", "POST fuera de las rutas Demo de ejecución");
+  return u;
 }
 
 function validarEncabezados(enc) {
@@ -65,9 +71,9 @@ export function transporteFalso(manejador) {
 export function crearHttp({ transporte }) {
   if (typeof transporte !== "function") throw new ErrorHttp("sin_transporte", "falta el transporte");
   const enviar = async (metodo, url, cuerpo, { encabezados = {}, timeoutMs = 20000 } = {}) => {
-    validarUrl(metodo, url);
+    const u = validarUrl(metodo, url);
     validarEncabezados(encabezados);
-    return transporte({ metodo, url, encabezados, cuerpo, timeoutMs });
+    return transporte({ metodo, url: u.href, encabezados, cuerpo, timeoutMs });
   };
   return {
     get: (url, o) => enviar("GET", url, null, o),

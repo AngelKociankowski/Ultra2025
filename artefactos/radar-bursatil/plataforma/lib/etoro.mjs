@@ -1,4 +1,4 @@
-// Cliente eToro solo Demo (12-plan §5.7): 6 lecturas y 2 escrituras con rutas fijas. No hay ruta Real ni método genérico.
+// Cliente eToro solo Demo (12-plan §5.7, 12b §F.1): 6 lecturas y 2 escrituras con rutas fijas. No hay ruta Real ni método genérico.
 import crypto from "node:crypto";
 import { crearHttp, ErrorHttp } from "./http.mjs";
 
@@ -25,12 +25,12 @@ export function crearEToro({ transporte, base = "https://public-api.etoro.com", 
     }
   }
 
-  async function pedir(metodo, ruta, cuerpo, requestId) {
+  // GET (12 §5.7): errores tipificados; quien llama decide si reintenta (leer no cambia nada)
+  async function pedir(ruta, requestId) {
     await turno();
     const encabezados = { "x-request-id": requestId };
-    if (metodo === "POST") encabezados["Content-Type"] = "application/json";
     let r;
-    try { r = metodo === "GET" ? await http.get(base + ruta, { encabezados }) : await http.post(base + ruta, cuerpo, { encabezados }); }
+    try { r = await http.get(base + ruta, { encabezados }); }
     catch (e) {
       if (e instanceof ErrorHttp) throw { codigo: "etoro_prohibido", mensaje: e.message };
       throw { codigo: "etoro_caido", reintentable: true, mensaje: String(e && e.message || e).slice(0, 200) };
@@ -50,7 +50,28 @@ export function crearEToro({ transporte, base = "https://public-api.etoro.com", 
     try { return JSON.parse(r.texto); }
     catch (e) { throw { codigo: "etoro_caido", reintentable: true, http: h, mensaje: "respuesta no JSON" }; }
   }
-  const get = ruta => pedir("GET", ruta, null, uuid());
+  // F.1 (12b): un POST nunca lanza por la respuesta ni se reenvía; se clasifica. Solo lo que lib/http.mjs rechaza antes de salir
+  // es no_enviada; lo que pudo llegar a eToro (cuerpo ilegible, sin orderId, errorRed, 3xx, 5xx, sin respuesta) es incierta.
+  async function postClasificado(ruta, cuerpo, requestId, idDe) {
+    await turno();
+    let r;
+    try { r = await http.post(base + ruta, cuerpo, { encabezados: { "x-request-id": requestId, "Content-Type": "application/json" } }); }
+    catch (e) {
+      if (e instanceof ErrorHttp) return { clase: "no_enviada", http: null, orderId: null, motivo: `bloqueado: ${e.codigo}`, detener: false };
+      return { clase: "incierta", http: null, orderId: null, motivo: String((e && e.message) || e).slice(0, 80), detener: false };
+    }
+    const h = r.http || 0;
+    if (!h && (r.conectar === 403 || r.conectar === 407)) return { clase: "rechazada", http: 0, orderId: null, motivo: "proxy: host bloqueado", detener: true };
+    if (h === 401 || h === 403) return { clase: "rechazada", http: h, orderId: null, motivo: `HTTP ${h}`, detener: true };
+    if (h === 429) return { clase: "rechazada", http: h, orderId: null, motivo: "ritmo", detener: false };
+    let j = null;
+    try { j = JSON.parse(r.texto); } catch (e) { j = null; }
+    if (h >= 400 && h < 500) return j !== null ? { clase: "rechazada", http: h, orderId: null, motivo: `HTTP ${h}`, detener: false } : { clase: "incierta", http: h, orderId: null, motivo: `HTTP ${h} sin cuerpo legible`, detener: false };
+    const orderId = h >= 200 && h < 300 && j ? idDe(j) : null;
+    if (Number.isSafeInteger(orderId) && orderId > 0 && !r.errorRed) return { clase: "aceptada", http: h, orderId, motivo: null, detener: false };
+    return { clase: "incierta", http: h, orderId: Number.isSafeInteger(orderId) && orderId > 0 ? orderId : null, motivo: r.errorRed || (h ? `HTTP ${h}${j ? " sin orderId" : " cuerpo ilegible"}` : "sin respuesta"), detener: false };
+  }
+  const get = ruta => pedir(ruta, uuid());
   const requerirId = id => { if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id)) throw { codigo: "etoro_argumento", mensaje: "requestId determinista obligatorio" }; return id; };
 
   return Object.freeze({
@@ -66,12 +87,13 @@ export function crearEToro({ transporte, base = "https://public-api.etoro.com", 
     comprar: async ({ instrumentId, montoUSD, requestId }) => {
       if (!(typeof montoUSD === "number" && montoUSD > 0 && Number.isFinite(montoUSD))) throw { codigo: "etoro_argumento", mensaje: "monto inválido" };
       const cuerpo = { instrumentId: entero(instrumentId, "instrumentId"), transaction: "buy", orderType: "mkt", amount: centavos(montoUSD), leverage: 1 };
-      return pedir("POST", "/api/v2/trading/execution/demo/orders", cuerpo, requerirId(requestId));
+      return postClasificado("/api/v2/trading/execution/demo/orders", cuerpo, requerirId(requestId), j => j.orderId ?? j.orderID);
     },
     cerrar: async ({ positionId, instrumentId, unidades, requestId }) => {
       if (!(unidades === null || (typeof unidades === "number" && unidades > 0 && Number.isFinite(unidades)))) throw { codigo: "etoro_argumento", mensaje: "unidades inválidas" };
       const cuerpo = { InstrumentId: entero(instrumentId, "instrumentId"), UnitsToDeduct: unidades === null ? null : seisDecimales(unidades) };
-      return pedir("POST", `/api/v1/trading/execution/demo/market-close-orders/positions/${entero(positionId, "positionId")}`, cuerpo, requerirId(requestId));
+      return postClasificado(`/api/v1/trading/execution/demo/market-close-orders/positions/${entero(positionId, "positionId")}`, cuerpo, requerirId(requestId),
+        j => (j.orderForClose ? j.orderForClose.orderID ?? j.orderForClose.orderId : undefined));
     },
   });
 }

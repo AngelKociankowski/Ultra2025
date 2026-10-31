@@ -9,16 +9,34 @@ import { crearEToro } from "../lib/etoro.mjs";
 import { crearFmp } from "../lib/fmp-rest.mjs";
 import { transporteCurl } from "../lib/http.mjs";
 import { cargarPagina } from "../lib/cargar-pagina.mjs";
-import { conciliar, valuar, bidsDe, libroDeDb, mapaDeDb, opsValidas, aplicarEventosOps } from "../lib/libro.mjs";
+import { conciliar, conciliarEjecucion, valuar, bidsDe, libroDeDb, mapaDeDb, opsValidas, opsNuevo, aplicarEventosOps } from "../lib/libro.mjs";
 import { indicesDelDia, rendimientosRefs, composicion } from "../lib/rendimientos.mjs";
 import { leerVersiones, usd, fx4, precio as px, i8 } from "../lib/db.mjs";
 import { objetivoDelDia, configEfectiva } from "../lib/reglas.mjs";
-import { fechaHoraET, sumarDias, diasEntre } from "../lib/tiempo.mjs";
+import { fechaHoraET, sumarDias, diasEntre, feriadosAnio } from "../lib/tiempo.mjs";
 
 const PASO = "20-cartera";
 const AYUDA = "Uso: node bin/20-cartera.mjs --dir <carpeta>";
 const isNum = v => typeof v === "number" && Number.isFinite(v);
 const copia = o => JSON.parse(JSON.stringify(o));
+
+// ejecucion-<f> leídas sin `fin` que no son el reclamo de esta sesión (12b §F.5: se concilian sin diario)
+function ejecucionesAbiertas(dir) {
+  const out = [];
+  for (const [id, v] of Object.entries(leerVersiones(dir))) {
+    const m = id.match(/^ejecucion-(\d{4}-\d{2}-\d{2})$/);
+    if (!m || v.estado !== "ok" || v.escritoEn === "pre-ejecucion") continue;
+    const r = leerDoc(dir, id);
+    if (r.estado === "ok" && r.doc.fin === null) out.push({ f: m[1], doc: r.doc });
+  }
+  return out.sort((a, b) => (a.f < b.f ? -1 : 1));
+}
+// filas NYSE del año en curso y del anterior (plazos de §F.7 que cruzan el año)
+function feriadosDe(dir, hoy) {
+  const anio = Number(hoy.slice(0, 4)), filas = [];
+  for (const y of [anio - 1, anio]) { const d = leerDoc(dir, `feriados-${y}`); filas.push(...(feriadosAnio({ anio: y, docDb: d.estado === "ok" ? d.doc : null }).filas || [])); }
+  return filas;
+}
 
 // ops-<f> importados con estado ok (para la regla 2 de pertenencia y para resolver pendientes de esos días)
 function opsLeidas(dir) {
@@ -103,8 +121,9 @@ export async function main(argv, { transporteEToro = null, transporteFmp = null,
   for (const p of libro0.pendientes) if (p.lado === "compra" && p.orderId && !cola.has(p.orderId) && !conPos.has(p.orderId)) {
     try { ordenes[p.orderId] = await et.orden(p.orderId); } catch (e) { reg.aviso("orden() falló", { orderId: p.orderId, codigo: e.codigo }); }
   }
+  const abiertas = ejecucionesAbiertas(dir);
   let historial = [];
-  if (libro0.posiciones.some(p => p.lotes.length) || libro0.pendientes.some(p => p.lado === "venta")) {
+  if (libro0.posiciones.some(p => p.lotes.length) || libro0.pendientes.some(p => p.lado === "venta") || abiertas.length) {
     const desde = [libro0.mandato.inicio, sumarDias(hoy, -30)].sort()[1];
     try { const h = await et.historial(desde); historial = Array.isArray(h) ? h : []; }
     catch (e) { alertas.push(`Historial de eToro no disponible (${e.codigo}).`); }
@@ -112,6 +131,7 @@ export async function main(argv, { transporteEToro = null, transporteFmp = null,
   const ids = new Set([3000, 63]);
   for (const p of libro0.posiciones) ids.add(p.instrumentId);
   for (const p of libro0.pendientes) ids.add(p.instrumentId);
+  for (const e of abiertas) for (const l of e.doc.lineas || []) if (Number.isSafeInteger(l.i)) ids.add(l.i);
   let tasas;
   try { tasas = await et.tasas([...ids]); }
   catch (e) {
@@ -120,11 +140,20 @@ export async function main(argv, { transporteEToro = null, transporteFmp = null,
   }
   // entradas malas de db (lotes, pend, ops): se descartan con alerta y el día cierra degradado (H15)
   const malas = conv.alertas.slice();
-  const bids = bidsDe(tasas), opsDocs = opsLeidas(dir);
+  const bids = bidsDe(tasas), opsDocs = opsLeidas(dir), feriados = feriadosDe(dir, hoy);
   for (const [f, d] of Object.entries(opsDocs)) opsDocs[f] = Object.assign({}, d, { ops: opsValidas(d, malas) });
-  const opsTodas = Object.values(opsDocs).flatMap(d => d.ops);
   alertas.push(...malas.slice(conv.alertas.length));
-  const conc = conciliar({ libro: libro0, portafolio, historial, ahora: t, ordenes, ops: opsTodas, bids });
+  // ejecuciones abiertas de días anteriores (o de una sesión de hoy que murió): primero, para que sus líneas entren al libro
+  let libroE = libro0;
+  const ejecuciones = {};
+  for (const { f, doc } of abiertas) {
+    const ce = conciliarEjecucion({ libro: libroE, doc, opsDoc: opsDocs[f] || opsNuevo(f), portafolio, historial, bids, ahora: t, feriados });
+    libroE = ce.libro; opsDocs[f] = ce.ops; ejecuciones[f] = ce.doc;
+    const n = ce.doc.res.reduce((m, r) => ((m[r.est] = (m[r.est] || 0) + 1), m), {});
+    alertas.push(`Ejecución del ${f} conciliada sin diario: ${Object.entries(n).map(([k, v]) => `${v} ${k}`).join(", ")}.`);
+  }
+  const opsTodas = Object.values(opsDocs).flatMap(d => d.ops);
+  const conc = conciliar({ libro: libroE, portafolio, historial, ahora: t, ordenes, ops: opsTodas, bids, feriados });
   alertas.push(...conc.alertas);
   const ev = aplicarEventosOps({ docs: opsDocs, eventos: conc.eventos, ahora: t });
   alertas.push(...ev.alertas);
@@ -179,9 +208,9 @@ export async function main(argv, { transporteEToro = null, transporteFmp = null,
   const filas = {};
   for (const r of (out && out.rows) || []) filas[r.symbol] = r;
   const comp = composicion({ valuacion, libro: conc.libro, filas });
-  const opsTocados = Object.fromEntries(ev.tocados.map(f => [f, ev.docs[f]]));
+  const opsTocados = Object.fromEntries([...new Set(ev.tocados.concat(Object.keys(ejecuciones)))].sort().map(f => [f, ev.docs[f]]));
   return fin(0, "listo", { estado: "listo", libro: conc.libro, eventos: conc.eventos, alertas, valuacion, mapa, mapaCambio: JSON.stringify(mapa) !== mapa0,
-    rendimientos: rend, composicion: comp, punto, ops: opsTocados, llamadasFmp, bloqueos: { mapa: rm.estado !== "ok" }, datosMalos: malas.length });
+    rendimientos: rend, composicion: comp, punto, ops: opsTocados, ejecuciones, llamadasFmp, bloqueos: { mapa: rm.estado !== "ok" }, datosMalos: malas.length });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) correrCli(main, PASO);
