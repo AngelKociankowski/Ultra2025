@@ -1,23 +1,24 @@
-// RUNBOOK.md y PROMPT-TAREA.md salen de 12b §L y §M con un solo cambio, decidido en 00m (1): el código que corre la rutina
-// es la etiqueta `rutina-aprobada` de origin (la mueve el director al revisar), no la punta de la rama.
-const FETCH_RAMA = 'git fetch origin claude/busy-hawking-0oxy6l; echo "fetch=$?"';
-const FETCH_TAG = 'git fetch --force origin "refs/tags/rutina-aprobada:refs/tags/rutina-aprobada"; echo "fetch=$?"';
-const REV_RAMA = "C=$(git rev-parse origin/claude/busy-hawking-0oxy6l)", REV_TAG = 'C=$(git rev-parse "rutina-aprobada^{commit}")';
-const ETIQUETA = [[FETCH_RAMA, FETCH_TAG], [REV_RAMA, REV_TAG]];
+// RUNBOOK.md y PROMPT-TAREA.md salen de 12b §L y §M con los cambios de abajo. Paso 0 (00p §1, reemplaza la etiqueta de 00m §1):
+// el código que corre la rutina es el commit escrito en `artefactos/radar-bursatil/plataforma/APROBADO` de la rama (40 hex,
+// ancestro de la rama); solo el director cambia ese archivo.
+const REV_RAMA = "C=$(git rev-parse origin/claude/busy-hawking-0oxy6l) && X=";
+export const LEER_APROBADO = "C=$(git show origin/claude/busy-hawking-0oxy6l:artefactos/radar-bursatil/plataforma/APROBADO | tr -d '[:space:]') && " +
+  "echo \"$C\" | grep -Eqx '[0-9a-f]{40}' && git merge-base --is-ancestor \"$C\" origin/claude/busy-hawking-0oxy6l && X=";
+const APROBADO = [[REV_RAMA, LEER_APROBADO]];
 const FALLA_EXPORTAR = "Radar · Falla: no pude preparar el código de la rutina; sin operaciones.";
-// N10 (17, desvío N-10 del reporte 16): el rescate de "repo inexistente" y la falta de etiqueta también en el prompt y en el paso 0
-export const CAMBIOS_PROMPT = Object.freeze(ETIQUETA.concat([
+// el rescate trae la rama completa: merge-base y git archive necesitan el commit aprobado, que puede no ser la punta
+const RESCATE = "git init /home/user/Ultra2025 && cd /home/user/Ultra2025 && git remote add origin https://github.com/angelkociankowski/ultra2025 && git fetch origin claude/busy-hawking-0oxy6l";
+// N10 (17, desvío N-10 del reporte 16): el rescate de "repo inexistente" y la falta de commit= también en el prompt y en el paso 0
+export const CAMBIOS_PROMPT = Object.freeze(APROBADO.concat([
   ["1. Exporta el código aprobado y prepara la carpeta (en Bash, una línea a la vez):\n",
-    "1. Exporta el código aprobado y prepara la carpeta (en Bash, una línea a la vez). Si /home/user/Ultra2025 no existe, antes:\n" +
-    '   git init /home/user/Ultra2025 && cd /home/user/Ultra2025 && git remote add origin https://github.com/angelkociankowski/ultra2025 && git fetch --depth=1 origin "refs/tags/rutina-aprobada:refs/tags/rutina-aprobada"\n'],
+    "1. Exporta el código aprobado y prepara la carpeta (en Bash, una línea a la vez). Si /home/user/Ultra2025 no existe, antes:\n" + `   ${RESCATE}\n`],
   ["2. Lee completo /home/user/rutina/actual", "   Si no aparece la línea commit=, no sigas: termina con el mensaje de falla de abajo.\n2. Lee completo /home/user/rutina/actual"],
 ]));
-export const CAMBIOS_RUNBOOK = Object.freeze(ETIQUETA.concat([
-  ["git fetch --depth=1 origin claude/busy-hawking-0oxy6l` y repite.", 'git fetch --depth=1 origin "refs/tags/rutina-aprobada:refs/tags/rutina-aprobada"` y repite.'],
-  ["sigue con el último `origin/claude/busy-hawking-0oxy6l` conocido y anótalo", "sigue con la última `rutina-aprobada` conocida y anótalo"],
-  // N10: sin etiqueta el segundo comando no imprime commit= y `actual` sigue en la exportación anterior
-  ["- Node menor que 22 o `PRUEBAS_FALLO`: F11.", "- El segundo comando no imprimió `commit=` (no hay etiqueta `rutina-aprobada`): no corras ningún paso más. Último mensaje (y\n" +
-    `  PushNotification): \`${FALLA_EXPORTAR}\`\n- Node menor que 22 o \`PRUEBAS_FALLO\`: F11.`],
+export const CAMBIOS_RUNBOOK = Object.freeze(APROBADO.concat([
+  ["git fetch --depth=1 origin claude/busy-hawking-0oxy6l` y repite.", "git fetch origin claude/busy-hawking-0oxy6l` y repite."],
+  // N10 / 00p: sin APROBADO válido el segundo comando no imprime commit= y `actual` sigue en la exportación anterior
+  ["- Node menor que 22 o `PRUEBAS_FALLO`: F11.", "- El segundo comando no imprimió `commit=` (falta `APROBADO`, su sha no tiene 40 hex o no es ancestro de la rama): no corras\n" +
+    `  ningún paso más. Último mensaje (y PushNotification): \`${FALLA_EXPORTAR}\`\n- Node menor que 22 o \`PRUEBAS_FALLO\`: F11.`],
   // N-5b (00o): lectura posterior a escribir (rutina-estado, cartera-libro y, si hubo envíos, ejecucion-<hoy>) y marca de revisión
   ["`D/trabajo/verificar.json` (es `rutina-estado`) y corre:", "`D/trabajo/verificar.json` (`rutina-estado`, `cartera-libro` y, si hubo envíos, `ejecucion-<hoy>`) y corre:"],
   ["node bin/db.mjs presupuesto --dir .trabajo/hoy\n```\n\n### 10. Avisar",

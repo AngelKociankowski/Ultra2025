@@ -12,8 +12,9 @@ y deja todo en `db` del artefacto. Diseño y contratos: `12-plan-plataforma.md` 
 - Órdenes (12b §F): `50-ejecutar --armar` crea el reclamo `ejecucion-<hoy>` (sin `ifVersion`), `--enviar` manda a lo más un
   POST por línea con el diario sincronizado a disco antes de cada uno, y `--reanudar` (una vez) nunca reenvía una línea con
   envío. Lo dudoso cuenta como enviado (`incierta`, efectivo provisional) hasta que eToro lo muestre o pasen 3 días hábiles.
-- La rutina corre una **exportación** del commit de la etiqueta `rutina-aprobada` de `origin` (paso 0 del RUNBOOK), nunca el
-  árbol de trabajo. El director mueve esa etiqueta después de revisar.
+- La rutina corre una **exportación** del commit escrito en `APROBADO` (una línea, sha de 40 hex, ancestro de
+  `origin/claude/busy-hawking-0oxy6l`; paso 0 del RUNBOOK), nunca el árbol de trabajo ni la punta de la rama. Solo el director
+  cambia `APROBADO`, después de revisar (00p §1).
 
 ## `db` (12b §D–§E)
 

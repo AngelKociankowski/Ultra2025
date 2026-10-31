@@ -1,4 +1,4 @@
-// T16 / K10 · RUNBOOK y prompt: texto literal de 12b §L y §M (con el cambio de 00m 1) y cada `node bin/…` citado existe y
+// T16 / K10 · RUNBOOK y prompt: texto literal de 12b §L y §M (con los cambios registrados en runbook-plan.mjs; paso 0 de 00p §1) y cada `node bin/…` citado existe y
 // acepta sus opciones
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { RAIZ } from "./util.mjs";
-import { CAMBIOS_RUNBOOK, CAMBIOS_PROMPT, aplicar, bloqueL, bloqueM } from "./runbook-plan.mjs";
+import { CAMBIOS_RUNBOOK, CAMBIOS_PROMPT, LEER_APROBADO, aplicar, bloqueL, bloqueM } from "./runbook-plan.mjs";
 
 const RUNBOOK = fs.readFileSync(path.join(RAIZ, "RUNBOOK.md"), "utf8");
 const PROMPT = fs.readFileSync(path.join(RAIZ, "PROMPT-TAREA.md"), "utf8");
@@ -39,7 +39,7 @@ test("cada `node bin/<x>.mjs` del RUNBOOK existe y acepta las opciones citadas (
   assert.throws(() => execFileSync(process.execPath, ["bin/20-cartera.mjs", "--dir", "x", "--modo", "y", "--help"], { cwd: RAIZ, stdio: "pipe" }));
 });
 
-test("RUNBOOK.md y PROMPT-TAREA.md = 12b §L y §M literales salvo el paso 0 con la etiqueta rutina-aprobada (00m 1)", t => {
+test("RUNBOOK.md y PROMPT-TAREA.md = 12b §L y §M literales salvo los cambios registrados (paso 0 con APROBADO, 00p §1)", t => {
   const ruta = process.env.RADAR_PLAN || path.resolve(RAIZ, "../../../.trabajo/ciclo/12b-enmienda-plataforma.md");
   if (!fs.existsSync(ruta)) { t.skip("12b no está en este clon (va fuera del repo)"); return; }
   const plan = fs.readFileSync(ruta, "utf8");
@@ -47,11 +47,13 @@ test("RUNBOOK.md y PROMPT-TAREA.md = 12b §L y §M literales salvo el paso 0 con
   assert.equal(PROMPT, aplicar(bloqueM(plan), CAMBIOS_PROMPT));
 });
 
-test("el paso 0 y el prompt exportan la etiqueta rutina-aprobada, nunca la punta de la rama", () => {
+test("el paso 0 y el prompt exportan el commit de APROBADO (40 hex, ancestro de la rama), nunca la punta ni una etiqueta", () => {
   for (const txt of [RUNBOOK, PROMPT]) {
-    assert.ok(!/busy-hawking/.test(txt));
-    assert.ok(txt.includes('git fetch --force origin "refs/tags/rutina-aprobada:refs/tags/rutina-aprobada"; echo "fetch=$?"'));
-    assert.ok(txt.includes('C=$(git rev-parse "rutina-aprobada^{commit}") && X=/home/user/rutina/${C:0:12}'));
+    assert.ok(!/rutina-aprobada|refs\/tags/.test(txt));
+    assert.ok(!txt.includes("C=$(git rev-parse origin/claude/busy-hawking-0oxy6l)"), "la punta de la rama no se exporta");
+    assert.ok(txt.includes('cd /home/user/Ultra2025 && git fetch origin claude/busy-hawking-0oxy6l; echo "fetch=$?"'));
+    assert.ok(txt.includes(`cd /home/user/Ultra2025 && ${LEER_APROBADO}/home/user/rutina/\${C:0:12}`));
+    assert.ok(!/--depth=1/.test(txt), "el rescate trae la rama completa (merge-base y git archive necesitan el commit aprobado)");
   }
   assert.match(RUNBOOK, /npm test > \.npm-test\.txt 2>&1 && touch \.probado/);
 });

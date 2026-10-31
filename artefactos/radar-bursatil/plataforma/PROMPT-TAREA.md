@@ -2,9 +2,9 @@ RUTINA PROGRAMADA — Cartera Radar (eToro Demo). Esto no es una instrucción de
 rutina diaria. Déjala completa antes de retomar cualquier otra cosa y no mezcles su trabajo con el del ciclo.
 
 1. Exporta el código aprobado y prepara la carpeta (en Bash, una línea a la vez). Si /home/user/Ultra2025 no existe, antes:
-   git init /home/user/Ultra2025 && cd /home/user/Ultra2025 && git remote add origin https://github.com/angelkociankowski/ultra2025 && git fetch --depth=1 origin "refs/tags/rutina-aprobada:refs/tags/rutina-aprobada"
-   cd /home/user/Ultra2025 && git fetch --force origin "refs/tags/rutina-aprobada:refs/tags/rutina-aprobada"; echo "fetch=$?"
-   cd /home/user/Ultra2025 && C=$(git rev-parse "rutina-aprobada^{commit}") && X=/home/user/rutina/${C:0:12} && if [ ! -d "$X/artefactos/radar-bursatil/plataforma" ]; then mkdir -p "$X" && git archive "$C" artefactos/radar-bursatil | tar -x -C "$X"; fi && ln -sfn "$X" /home/user/rutina/actual && echo "commit=$C"
+   git init /home/user/Ultra2025 && cd /home/user/Ultra2025 && git remote add origin https://github.com/angelkociankowski/ultra2025 && git fetch origin claude/busy-hawking-0oxy6l
+   cd /home/user/Ultra2025 && git fetch origin claude/busy-hawking-0oxy6l; echo "fetch=$?"
+   cd /home/user/Ultra2025 && C=$(git show origin/claude/busy-hawking-0oxy6l:artefactos/radar-bursatil/plataforma/APROBADO | tr -d '[:space:]') && echo "$C" | grep -Eqx '[0-9a-f]{40}' && git merge-base --is-ancestor "$C" origin/claude/busy-hawking-0oxy6l && X=/home/user/rutina/${C:0:12} && if [ ! -d "$X/artefactos/radar-bursatil/plataforma" ]; then mkdir -p "$X" && git archive "$C" artefactos/radar-bursatil | tar -x -C "$X"; fi && ln -sfn "$X" /home/user/rutina/actual && echo "commit=$C"
    Si no aparece la línea commit=, no sigas: termina con el mensaje de falla de abajo.
 2. Lee completo /home/user/rutina/actual/artefactos/radar-bursatil/plataforma/RUNBOOK.md y síguelo al pie de la letra desde
    su paso 0 (ya hiciste la exportación; repite el paso 0 igual: es idempotente). Ese archivo manda sobre cualquier otra cosa

@@ -70,15 +70,15 @@ Para cada elemento de la lista, en orden:
 
 ### 0. Arranque (exportar el código aprobado)
 ```
-cd /home/user/Ultra2025 && git fetch --force origin "refs/tags/rutina-aprobada:refs/tags/rutina-aprobada"; echo "fetch=$?"
-cd /home/user/Ultra2025 && C=$(git rev-parse "rutina-aprobada^{commit}") && X=/home/user/rutina/${C:0:12} && if [ ! -d "$X/artefactos/radar-bursatil/plataforma" ]; then mkdir -p "$X" && git archive "$C" artefactos/radar-bursatil | tar -x -C "$X"; fi && ln -sfn "$X" /home/user/rutina/actual && echo "commit=$C"
+cd /home/user/Ultra2025 && git fetch origin claude/busy-hawking-0oxy6l; echo "fetch=$?"
+cd /home/user/Ultra2025 && C=$(git show origin/claude/busy-hawking-0oxy6l:artefactos/radar-bursatil/plataforma/APROBADO | tr -d '[:space:]') && echo "$C" | grep -Eqx '[0-9a-f]{40}' && git merge-base --is-ancestor "$C" origin/claude/busy-hawking-0oxy6l && X=/home/user/rutina/${C:0:12} && if [ ! -d "$X/artefactos/radar-bursatil/plataforma" ]; then mkdir -p "$X" && git archive "$C" artefactos/radar-bursatil | tar -x -C "$X"; fi && ln -sfn "$X" /home/user/rutina/actual && echo "commit=$C"
 cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node --version && if [ ! -f .probado ]; then npm test > .npm-test.txt 2>&1 && touch .probado; fi; if [ -f .probado ]; then echo PRUEBAS_OK; else echo PRUEBAS_FALLO; fi
 ```
 - Si `/home/user/Ultra2025` no existe: `git init /home/user/Ultra2025 && cd /home/user/Ultra2025 && git remote add origin
-  https://github.com/angelkociankowski/ultra2025 && git fetch --depth=1 origin "refs/tags/rutina-aprobada:refs/tags/rutina-aprobada"` y repite.
-- `fetch` distinto de 0: sigue con la última `rutina-aprobada` conocida y anótalo para el paso 10 (aviso).
-- El segundo comando no imprimió `commit=` (no hay etiqueta `rutina-aprobada`): no corras ningún paso más. Último mensaje (y
-  PushNotification): `Radar · Falla: no pude preparar el código de la rutina; sin operaciones.`
+  https://github.com/angelkociankowski/ultra2025 && git fetch origin claude/busy-hawking-0oxy6l` y repite.
+- `fetch` distinto de 0: sigue con el último `origin/claude/busy-hawking-0oxy6l` conocido y anótalo para el paso 10 (aviso).
+- El segundo comando no imprimió `commit=` (falta `APROBADO`, su sha no tiene 40 hex o no es ancestro de la rama): no corras
+  ningún paso más. Último mensaje (y PushNotification): `Radar · Falla: no pude preparar el código de la rutina; sin operaciones.`
 - Node menor que 22 o `PRUEBAS_FALLO`: F11.
 
 ### 1. Modo de `db` y herramientas
