@@ -51,9 +51,11 @@ Sigue `RUNBOOK.md` paso a paso (es lo mismo que hace la tarea programada con `PR
 - `node bin/db.mjs config --dir <carpeta> --operar true|false --activado <iso>|null`: arma `salida/config/db_write.json` con
   `rutina-config` nuevo (`ifVersion` de la lectura, `h` válido) para activar o apagar las órdenes (T20; 00n). Antes, LEER
   `rutina-config` e `importar` en esa carpeta; después, ESCRIBIR el grupo `config` y `registrar`.
-- `node bin/db.mjs revisado --dir <carpeta>`: quita la marca `revisar` de `rutina-estado` (la pone `verificar` cuando lo releído
-  tras escribir no quedó como se preparó; mientras exista, la rutina no opera). Antes, LEER `rutina-estado` e `importar`;
-  después, ESCRIBIR el grupo `revisado` y `registrar` (00o).
+- `node bin/db.mjs revisado --dir <carpeta> --libro <archivo>`: repone el `cartera-libro` que preparó la rutina y quita la marca
+  `revisar` de `rutina-estado`, en una sola escritura (la marca la pone `verificar` cuando lo releído tras escribir no quedó como
+  se preparó; mientras exista, la rutina no opera). `--libro` es el `salida/final/cartera-libro.json` de la carpeta del día
+  marcado: se valida su esquema, su `h` y que sea el `h` esperado; sin `--libro` se niega. Antes, LEER `rutina-estado` y
+  `cartera-libro` e `importar`; después, ESCRIBIR el grupo `revisado` y `registrar` (00o, 00p R2).
 - `node bin/humo-etoro.mjs`: prueba de humo de eToro, solo lecturas (GET).
 - `node bin/humo-fmp.mjs`: prueba de humo de FMP (22 llamadas; T00b).
 - `compat.json`: huellas de la página con la que se validó el corredor. Republicar la página exige repetir la paridad (T05)

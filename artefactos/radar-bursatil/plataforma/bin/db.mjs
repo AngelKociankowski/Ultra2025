@@ -5,13 +5,12 @@
 //   node bin/db.mjs presupuesto --dir D
 //   node bin/db.mjs config      --dir D --operar true|false --activado <iso>|null   (solo el director, T20; 00n)
 //   node bin/db.mjs revisado    --dir D --libro <archivo>   (solo el director: repone cartera-libro y quita la marca `revisar`; 00o, 00p R2)
+import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { leerArgs, lineaPaso, correrCli, modoDe } from "../lib/archivos.mjs";
-import fs from "node:fs";
+import { leerArgs, lineaPaso, correrCli, modoDe, leerDoc } from "../lib/archivos.mjs";
 import { importar, registrar, verificarEstado, presupuesto, armarGrupo, leerVersiones, hOk, ts } from "../lib/db.mjs";
 import { validarDoc } from "../lib/esquemas.mjs";
-import { leerDoc } from "../lib/archivos.mjs";
 import { configEfectiva } from "../lib/reglas.mjs";
 import { crearRegistro } from "../lib/registro.mjs";
 

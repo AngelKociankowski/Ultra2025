@@ -8,7 +8,7 @@ import path from "node:path";
 import { main as cerrar } from "../bin/60-cerrar.mjs";
 import { main as dbCli } from "../bin/db.mjs";
 import { leerTrabajo } from "../lib/archivos.mjs";
-import { registrar, TEXTO_REVISION } from "../lib/db.mjs";
+import { registrar, conH, TEXTO_REVISION } from "../lib/db.mjs";
 import { DB_RUTA } from "../lib/constantes.mjs";
 import { semilla } from "../lib/libro.mjs";
 import { prepararDia, dbInicial, tasasA, OUT30, copia } from "./escenario.mjs";
@@ -37,7 +37,7 @@ async function diaConCopiaMala(variante, db) {
 }
 
 for (const variante of ["ruta", "numero"]) {
-  test(`x06 (${variante}) · día 1: verificar detecta la copia mala, marca el día y el aviso lo dice; día 2 no opera; el director quita la marca`, async () => {
+  test(`x06/x18 (${variante}) · día 1: verificar marca el día y el aviso lo dice; día 2 no opera; revisado --libro repone el libro y quita la marca; día 3 opera`, async () => {
     const db = dbInicial(operar());
     const d1 = await diaConCopiaMala(variante, db);
     assert.deepEqual(leerTrabajo(d1.dir, "verificar.json").lecturas.map(l => l.id), ["rutina-estado", "cartera-libro"]);
@@ -58,19 +58,31 @@ for (const variante of ["ruta", "numero"]) {
       assert.ok(leerSalida(d2.dir, "salida/final/db_write.json").ops.find(o => o.path.endsWith("/rutina-estado")).data.revisar);
       assert.equal(d2.S.escribir("final").accion, "listo");
     }
-    // el director revisa y quita la marca
-    const dir = carpetaConDb({ "rutina-estado": db.doc("rutina-estado") }, null, { versiones: { "rutina-estado": db.version("rutina-estado") } });
-    const q = await dbCli(["revisado", "--dir", dir], { ahora: () => T2 + 3 * 3600000 });
+    // R2: el director repone el libro que preparó la rutina (salida/final del día marcado) y quita la marca, juntos
+    const dir = carpetaConDb({ "rutina-estado": db.doc("rutina-estado"), "cartera-libro": db.doc("cartera-libro") }, null,
+      { versiones: { "rutina-estado": db.version("rutina-estado"), "cartera-libro": db.version("cartera-libro") } });
+    const sinLibro = await dbCli(["revisado", "--dir", dir], { ahora: () => T2 + 3 * 3600000 });
+    assert.deepEqual([sinLibro.codigo, sinLibro.linea.accion], [1, "error"]);
+    const otro = path.join(dir, "otro-libro.json");
+    fs.writeFileSync(otro, JSON.stringify(conH(semilla()["cartera-libro"])));
+    const malo = await dbCli(["revisado", "--dir", dir, "--libro", otro], { ahora: () => T2 + 3 * 3600000 });
+    assert.equal(malo.codigo, 1); assert.match(malo.linea.resumen.texto, /no es el que preparó la rutina/);
+    assert.ok(!fs.existsSync(path.join(dir, "salida/revisado")));
+    const bueno = path.join(d1.dir, "salida/final/cartera-libro.json");
+    const q = await dbCli(["revisado", "--dir", dir, "--libro", bueno], { ahora: () => T2 + 3 * 3600000 });
     assert.deepEqual([q.codigo, q.linea.escribir], [0, "salida/revisado/db_write.json"]);
-    const wq = leerSalida(dir, "salida/revisado/db_write.json").ops[0];
-    assert.equal(wq.ifVersion, db.version("rutina-estado")); assert.equal(wq.data.revisar, undefined);
+    const wq = leerSalida(dir, "salida/revisado/db_write.json").ops;
+    assert.deepEqual(wq.map(o => [o.path.split("/").pop(), o.ifVersion]), [["cartera-libro", db.version("cartera-libro")], ["rutina-estado", db.version("rutina-estado")]]);
+    assert.equal(wq[1].data.revisar, undefined); assert.equal(wq[1].data.escritos["cartera-libro"], wq[0].data.h);
     assert.ok(!db.write(leerSalida(dir, "salida/revisado/db_write.json")).error);
-    assert.equal(db.doc("rutina-estado").revisar, undefined);
-    // día 3: ya no hay bloqueo por revisión (con `numero` el director también debe reparar el libro en db)
-    if (variante === "ruta") {
-      const d3 = await prepararDia({ db, t: T3, out: outXle(), etoro: et(T3) });
-      assert.ok(!leerTrabajo(d3.dir, "preparar.json").alertas.some(a => /marcado para revisión/.test(a)));
-    }
+    assert.equal(db.doc("rutina-estado").revisar, undefined); assert.equal(db.doc("cartera-libro").lotes.length, 5);
+    // día 3: sin marca y con el libro repuesto, el día opera (x18)
+    const d3 = await prepararDia({ db, t: T3, out: outXle(), etoro: et(T3) });
+    const p3 = leerTrabajo(d3.dir, "preparar.json");
+    assert.equal(d3.preparar.codigo, 0);
+    assert.ok(!p3.alertas.some(a => /marcado para revisión|no es el que escribió/.test(a)), JSON.stringify(p3.alertas));
+    assert.notEqual(leerTrabajo(d3.dir, "decisiones.json").modo, "bloqueado");
+    assert.equal(d3.decidir.linea.accion, "ejecutar");
   });
 }
 
