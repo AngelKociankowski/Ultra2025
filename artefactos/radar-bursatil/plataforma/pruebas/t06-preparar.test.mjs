@@ -91,7 +91,10 @@ test("reglas 4–6 · hecha hoy → ya_hecha; en_curso con latido < 30 min → o
   assert.equal(c.w.ops[0].ifVersion, 5); assert.equal(c.w.ops[0].data.sesion, "s-nuevo");
   const ayer = await correr(LUN, { "rutina-estado": estado({ fecha: "2026-10-30", estado: "en_curso", fin: null }) });
   assert.equal(ayer.p.rutina.accion, "recuperar");
-  assert.deepEqual(ayer.lm, ["ops-2026-10-30"]); // los pendientes del 30-oct; nada del día porque la sesión caída no era de hoy
+  // N1: la ejecución que pudo dejar la sesión caída del 30-oct entra como candidata (y sus ops); nada del día de hoy
+  assert.deepEqual(ayer.lm, ["ejecucion-2026-10-30", "ops-2026-10-30"]);
+  assert.deepEqual(ayer.p.recuperacion, { ejecuciones: ["2026-10-30"] });
+  assert.deepEqual(ayer.w.ops[0].data.ejecucionesAbiertas, ["2026-10-30"]);
 });
 
 test("regla 7 · sin cartera-libro → sin_semilla; regla 8 · continuar con un solo set de rutina-estado", async () => {

@@ -11,7 +11,8 @@ import { actualizarRefs } from "../lib/rendimientos.mjs";
 import { validarNoticias } from "../lib/noticias.mjs";
 import { resumenRadar, previoDe } from "../lib/radar-resumen.mjs";
 import { armarAviso } from "../lib/aviso.mjs";
-import { armarGrupo, leerVersiones, conH, lectura, presupuesto, bytes, usd, u6, p4, r6, precio, ts } from "../lib/db.mjs";
+import { armarGrupo, leerVersiones, conH, lectura, presupuesto, bytes, usd, u6, p4, r6, precio, ts, sesionDe, escritoPorEstaSesion } from "../lib/db.mjs";
+import { leerDiario, resDesdeDiario } from "../lib/diario.mjs";
 import { fechaHoraET } from "../lib/tiempo.mjs";
 import { esFecha } from "../lib/esquemas.mjs";
 import { DOC_TOPES, PRESUPUESTO_DIA } from "../lib/constantes.mjs";
@@ -71,9 +72,11 @@ function cerrar({ dir, a, t, reg }) {
   const ver = leerVersiones(dir);
   const simulacion = decis ? decis.simulacion : !config.operar;
   const plan = planDoc && Array.isArray(planDoc.ordenes) ? planDoc.ordenes : [];
-  // ejecución de hoy: escrita en pre-ejecución por esta sesión y sin ejecucion.json → queda abierta (F.5)
-  const ejecHoy = ver[`ejecucion-${fecha}`] && ver[`ejecucion-${fecha}`].escritoEn === "pre-ejecucion";
-  const abierta = ejecHoy && !(ejec && Array.isArray(ejec.res));
+  // ejecución de hoy: escrita en pre-ejecución por ESTA sesión (N2: en carpeta compartida, la de otra sesión la concilia
+  // 20-cartera) y sin ejecucion.json de esta sesión → queda abierta (F.5)
+  const sesion = sesionDe(dir), ejecHoy = escritoPorEstaSesion(dir, `ejecucion-${fecha}`, "pre-ejecucion");
+  const ejecP = ejec && Array.isArray(ejec.res) && ejec.sesion === sesion ? ejec : null;
+  const abierta = ejecHoy && !ejecP;
   const docs = [];
   const poner = (id, data) => docs.push({ id, data });
 
@@ -84,7 +87,7 @@ function cerrar({ dir, a, t, reg }) {
     const hoyLeido = leerDoc(dir, `ops-${fecha}`);
     let opsHoy = (cartera.ops && cartera.ops[fecha]) || (hoyLeido.estado === "ok" ? hoyLeido.doc : opsNuevo(fecha));
     opsHoy = Object.assign({}, opsHoy, { ops: opsValidas(opsHoy, alertas) });
-    const res = ejec && Array.isArray(ejec.res) ? ejec.res : [];
+    const res = ejecP ? ejecP.res : [];
     if (plan.length && (simulacion || res.length)) {
       const r = aplicarResultados({ libro, opsHoy, plan, res, simulacion, ahora: t });
       libro = r.libro; opsHoy = r.ops;
@@ -94,7 +97,12 @@ function cerrar({ dir, a, t, reg }) {
     if (opsHoy.ops.length) poner(`ops-${fecha}`, opsHoy);
     // cierre de ejecuciones: las abiertas que 20-cartera concilió (F.5) y la de hoy de esta sesión
     for (const [f, d] of Object.entries(cartera.ejecuciones || {})) poner(`ejecucion-${f}`, d);
-    if (ejecHoy && ejec && Array.isArray(ejec.res) && ejec.doc) poner(`ejecucion-${fecha}`, Object.assign({}, ejec.doc, { res: ejec.res, fin: ts(t) }));
+    if (ejecHoy && ejecP && ejecP.doc) poner(`ejecucion-${fecha}`, Object.assign({}, ejecP.doc, { res: ejecP.res, fin: ts(t) }));
+    // N11: abierta → queda sin fin, pero con lo que el diario sabe (qué salió, cuándo, con qué monto) para conciliarla mañana
+    if (abierta) {
+      const doc = leerTrabajo(dir, "ejecucion-doc.json");
+      if (doc && conH(doc).h === ver[`ejecucion-${fecha}`].h) poner(`ejecucion-${fecha}`, Object.assign({}, doc, { res: resDesdeDiario(doc, leerDiario(path.join(rutas(dir).trabajo, "diario-ejecucion.jsonl"))), fin: null }));
+    }
     for (const x of libro.pendientes) alertas.push(alertaPendiente(x));
     const faltantes = decis ? decis.decisiones.filter(d => /dato faltante/.test(d.razonOmision || "")).map(d => d.sym) : [];
     const completo = !!(out && !out.partial && decis && decis.objetivo && decis.objetivo.estado === "ok");
@@ -118,7 +126,12 @@ function cerrar({ dir, a, t, reg }) {
 
   // ---- qué se puede escribir (sin lectura registrada no se escribe: H24) ----
   const delDia = [`punto-${fecha}`, `radar-${fecha}`, `bitacora-${fecha}`, `ops-${fecha}`, `ejecucion-${fecha}`];
-  const accionDia = prep.rutina ? prep.rutina.accion : null;
+  // N3: recuperar la sesión caída de OTRO día es la primera sesión de hoy (los documentos de hoy no existen): como continuar
+  const previoDia = prep.rutina && prep.rutina.previo ? prep.rutina.previo.fecha : null;
+  const accionDia = prep.rutina ? (prep.rutina.accion === "recuperar" && previoDia !== fecha ? "continuar" : prep.rutina.accion) : null;
+  // N5: lo que no coincidió con lo escrito por la sesión anterior no se reescribe hoy
+  const desact = (prep.bloqueos && prep.bloqueos.desactualizados) || [];
+  for (const id of desact) alertas.push(`${id} no se escribe hoy: no coincide con el que escribió la sesión anterior.`);
   const escribible = id => { const v = ver[id]; return (v && (v.estado === "ok" || v.estado === "no_existe")) || (!v && delDia.includes(id) && accionDia === "continuar"); };
   const bmId = `bitacora-mes-${mes}`;
   for (const id of docs.map(d => d.id).concat([`bitacora-${fecha}`, bmId])) if (!escribible(id)) alertas.push(`no se leyó ${id}; no se escribe`);
@@ -127,7 +140,7 @@ function cerrar({ dir, a, t, reg }) {
   const v = carteraOk ? cartera.valuacion : null, rend = carteraOk ? cartera.rendimientos : null;
   const opsAviso = simulacion ? plan.map(o => ({ sym: o.sym, lado: o.lado, regla: o.regla, est: "simulada" }))
     : resultadosOps.map(o => ({ sym: o.sym, lado: o.lado === "c" ? "compra" : "venta", regla: o.regla, est: o.est, motivo: o.err || (o.est === "no_enviada" ? "no enviada" : o.est) }));
-  if (!simulacion && !resultadosOps.length && plan.length && !ejec) for (const o of plan) opsAviso.push({ sym: o.sym, lado: o.lado, regla: o.regla, est: "no_enviada", motivo: abierta ? "sin confirmar" : "no enviada" });
+  if (!simulacion && !resultadosOps.length && plan.length && !ejecP) for (const o of plan) opsAviso.push({ sym: o.sym, lado: o.lado, regla: o.regla, est: "no_enviada", motivo: abierta ? "sin confirmar" : "no enviada" });
   const pri = c => (c[1] !== "senal" ? 0 : (radar.obj || []).some(x => x[0] === c[0]) || tenidos.includes(c[0]) ? 1 : 2);
   const notasAviso = nv.eventos.filter(e => e.confirmado).map(e => nv.validas.find(n => n.evento && n.evento.simbolo === e.simbolo && n.evento.categoria === e.categoria))
     .concat(nv.validas.filter(n => n.tema === "macro" || n.tema === "mercado").sort((x, y) => (x.fecha < y.fecha ? 1 : -1))).filter(Boolean);
@@ -173,18 +186,29 @@ function cerrar({ dir, a, t, reg }) {
   const nReales = simulacion ? 0 : resultadosOps.filter(o => ["ejecutada", "aceptada", "incierta"].includes(o.est)).length;
   const bm = { kind: "bitacoraMes", v: 1, mes, d: previas.filter(x => x[0] !== fecha).concat([[fecha, estado, v ? usd(v.valorUSD) : null, rend && isNum(rend.usd[0]) ? r6(rend.usd[0]) : null, nReales, simulacion ? 1 : 0]]).sort((x, y) => (x[0] < y[0] ? -1 : 1)) };
   docs.push({ id: `bitacora-${fecha}`, data: bit }, { id: bmId, data: bm });
-  for (const d of docs.slice()) if (!escribible(d.id)) docs.splice(docs.indexOf(d), 1);
+  for (const d of docs.slice()) if (!escribible(d.id) || desact.includes(d.id)) docs.splice(docs.indexOf(d), 1);
   // presupuesto estimado del día (lecturas + grupos anteriores + este grupo)
   const p0 = presupuesto(dir), finalBytes = docs.reduce((s, d) => s + bytes(conH(d.data)), 0) + 1600;
   // §E.10/§O: la bitácora lleva el presupuesto estimado del día (lo medido después lo da db.mjs presupuesto)
   bit.presupuesto = p0.total + finalBytes;
   if (bit.presupuesto > PRESUPUESTO_DIA) { bit.alertas.unshift(`Presupuesto de copia del día ≈ ${bit.presupuesto} B (> ${PRESUPUESTO_DIA})`); recortarBitacora(bit); }
   // ---- rutina-estado (último) ----
-  // una ejecución deja de estar abierta solo si su cierre (con fin) va en este grupo
+  // ejecuciones abiertas (N1, N2): las de la lista previa, toda ejecucion-<f> leída sin fin y la de hoy si quedó abierta;
+  // salen solo si su cierre (con fin) va en este grupo o si se leyó que no existe
   const cerradas = new Set(docs.filter(d => /^ejecucion-/.test(d.id) && d.data.fin).map(d => d.id.slice("ejecucion-".length)));
-  let abiertas = (estadoPrevio && Array.isArray(estadoPrevio.ejecucionesAbiertas) ? estadoPrevio.ejecucionesAbiertas : []).filter(f => !cerradas.has(f) && (f !== fecha || abierta));
-  if (abierta && !abiertas.includes(fecha)) abiertas.push(fecha);
+  const leidasAbiertas = [], noExisten = new Set();
+  for (const [id, v] of Object.entries(ver)) {
+    const m = id.match(/^ejecucion-(\d{4}-\d{2}-\d{2})$/);
+    if (!m) continue;
+    if (v.estado === "no_existe") noExisten.add(m[1]);
+    else if (v.estado === "ok") { const r = leerDoc(dir, id); if (r.estado === "ok" && r.doc.fin === null) leidasAbiertas.push(m[1]); }
+  }
+  const abiertas = [...new Set((estadoPrevio && Array.isArray(estadoPrevio.ejecucionesAbiertas) ? estadoPrevio.ejecucionesAbiertas : []).concat(leidasAbiertas, abierta ? [fecha] : []))]
+    .filter(f => esFecha(f) && !cerradas.has(f) && !noExisten.has(f) && (f !== fecha || abierta || leidasAbiertas.includes(f))).sort();
+  // escritos (§E.5.1): h de este grupo + los de los documentos de lectura diaria que hoy no se reescribieron (salvo los desactualizados)
   const escritos = Object.fromEntries(docs.map(d => [d.id, conH(d.data).h]));
+  const persistentes = id => id === "cartera-libro" || id === "etoro-mapa" || /^bitacora-mes-/.test(id);
+  for (const [id, h] of Object.entries((estadoPrevio && estadoPrevio.escritos) || {})) if (persistentes(id) && !(id in escritos) && !desact.includes(id) && typeof h === "string") escritos[id] = h;
   const estadoFin = { kind: "rutinaEstado", v: 2, fecha, estado: degradada ? "degradada" : "hecha", paso: "cerrar", sesion: (prep.rutina && prep.rutina.sesion) || "s-desconocida",
     inicio: (prep.rutina && prep.rutina.inicio) || ts(t), latido: ts(t), fin: ts(t), commit: prep.commit || null, modo, ejecucionesAbiertas: abiertas,
     previo: previoDe(radar) || (estadoPrevio ? estadoPrevio.previo || null : null), escritos, motivo: a.degradado ? `degradado: ${a.degradado}` : null };

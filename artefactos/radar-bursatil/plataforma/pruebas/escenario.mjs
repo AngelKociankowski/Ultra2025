@@ -34,7 +34,8 @@ export function dbInicial(extra = {}) {
 }
 
 // Pasos 2–4 (lista, LEER, decidir, ESCRIBIR ahora, leer-mas). Devuelve la carpeta del día.
-export async function abrirDia({ db, t, raiz = carpetaTemporal(), pagina = PAG, sesion = "s-prueba1", omitir = [], corromper = null }) {
+let nSesion = 0;
+export async function abrirDia({ db, t, raiz = carpetaTemporal(), pagina = PAG, sesion = `s-prueba${++nSesion}`, omitir = [], corromper = null }) {
   const l = await preparar(["--fase", "lista", "--modo", "en_linea"], { ahora: () => t, raiz });
   const dir = path.join(raiz, ".trabajo", l.linea.fecha);
   const S = crearSesion({ db, dir, omitir, corromper });

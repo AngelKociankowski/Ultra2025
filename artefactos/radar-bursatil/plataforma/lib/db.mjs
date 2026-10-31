@@ -9,14 +9,19 @@ import { validarDoc, kindDeId, esDePagina } from "./esquemas.mjs";
 import { rutas, leerJson, escribirJson, ErrorArchivo } from "./archivos.mjs";
 
 // ---- canónico, integridad y precisión (§E.3) ----
-export function canon(x) {
-  if (Array.isArray(x)) return "[" + x.map(canon).join(",") + "]";
-  if (x && typeof x === "object") return "{" + Object.keys(x).sort().map(k => JSON.stringify(k) + ":" + canon(x[k])).join(",") + "}";
+// N4: el canónico se toma de la forma JSON del documento, que es lo que llega a db (undefined en un arreglo → null, en un
+// objeto → clave fuera; Date → texto ISO; NaN/Infinity → null; -0 → 0). Así el h sobrevive el viaje.
+const comoJson = x => JSON.parse(JSON.stringify(x));
+function canonJson(x) {
+  if (Array.isArray(x)) return "[" + x.map(canonJson).join(",") + "]";
+  if (x && typeof x === "object") return "{" + Object.keys(x).sort().map(k => JSON.stringify(k) + ":" + canonJson(x[k])).join(",") + "}";
   return JSON.stringify(x);
 }
+export const canon = x => canonJson(comoJson(x));
 const sinH = doc => { const o = Object.assign({}, doc); delete o.h; return o; };
 export const hDe = doc => crypto.createHash("sha256").update(canon(sinH(doc))).digest("hex").slice(0, 16);
-export const conH = doc => Object.assign(sinH(doc), { h: hDe(doc) });
+// el documento que se escribe es su forma JSON con su h (el mismo objeto que verá quien lo lea)
+export const conH = doc => { const d = comoJson(sinH(doc)); d.h = hDe(d); return d; };
 export const hOk = doc => !!doc && typeof doc.h === "string" && doc.h === hDe(doc);
 
 export const red = (x, d) => { if (typeof x !== "number" || !Number.isFinite(x)) return x; const r = Number(x.toFixed(d)); return Object.is(r, -0) ? 0 : r; };
@@ -41,6 +46,15 @@ export function lectura(id, { obligatoria = true, dirAbs }) {
 const rutaVersiones = dir => path.join(rutas(dir).entradaDb, "_versiones.json");
 export const leerVersiones = dir => leerJson(rutaVersiones(dir)) || {};
 const escribirVersiones = (dir, v) => escribirJson(rutaVersiones(dir), v);
+// sesión dueña de la carpeta ahora (la de trabajo/preparar.json). N2: en una carpeta compartida, lo que registró otra sesión
+// (escritoEn) no cuenta como propio.
+export function sesionDe(dir) {
+  try { const p = leerJson(path.join(rutas(dir).trabajo, "preparar.json")); return (p && p.rutina && p.rutina.sesion) || null; } catch (e) { return null; }
+}
+export function escritoPorEstaSesion(dir, id, grupo) {
+  const v = leerVersiones(dir)[id], s = sesionDe(dir);
+  return !!(v && v.estado === "ok" && v.escritoEn === grupo && s && v.sesion === s);
+}
 
 // ids que los pasos pidieron como obligatorios (listas de lectura escritas en trabajo/)
 function requeridosDe(dir) {
@@ -71,7 +85,7 @@ export function importar(dir, { requeridos = null } = {}) {
   for (const [id, o] of ultima) {
     if (esDePagina(id) || !kindDeId(id)) { res.ignorados.push(id); continue; }
     const previo = ver[id] || {};
-    const poner = x => { ver[id] = Object.assign({ estado: null, version: null, h: null, escritoEn: previo.escritoEn || null }, x); };
+    const poner = x => { ver[id] = Object.assign({ estado: null, version: null, h: null, escritoEn: previo.escritoEn || null, sesion: previo.sesion || null }, x); };
     if (o.error !== undefined) { poner({ estado: "fallo", codigo: String(o.error).slice(0, 80) }); res.fallos.push(id); continue; }
     if (o.exists === false) { poner({ estado: "no_existe" }); res.no_existen.push(id); fs.rmSync(path.join(R.entradaDb, id + ".json"), { force: true }); continue; }
     if (o.exists !== true || !Number.isInteger(o.version) || o.version < 1) { poner({ estado: "fallo", codigo: "linea_invalida" }); res.fallos.push(id); continue; }
@@ -162,9 +176,10 @@ export function registrar({ dir, grupo, verificar = false, reintento = false }) 
   if (!meta) throw new ErrorArchivo("sin_grupo", `no hay salida/${grupo}/_grupo.json`);
   const ver = leerVersiones(dir), modo = meta.modo;
   const res = { escritos: [], conflictos: [], sin_confirmar: [], reintento: null };
-  const marcar = (e, version) => { ver[e.id] = { estado: "ok", version, h: e.h, escritoEn: grupo }; res.escritos.push({ id: e.id, version }); };
+  const sesion = sesionDe(dir);
+  const marcar = (e, version) => { ver[e.id] = { estado: "ok", version, h: e.h, escritoEn: grupo, sesion }; res.escritos.push({ id: e.id, version }); };
   const fin = (codigo, accion) => { escribirVersiones(dir, ver); escribirJson(path.join(g, "_grupo.json"), meta); return { codigo, accion, resumen: res }; };
-  const pendientes = verificar || reintento ? meta.ops.filter(e => !(ver[e.id] && ver[e.id].escritoEn === grupo && ver[e.id].h === e.h)) : meta.ops;
+  const pendientes = verificar || reintento ? meta.ops.filter(e => !(ver[e.id] && ver[e.id].escritoEn === grupo && ver[e.id].sesion === sesion && ver[e.id].h === e.h)) : meta.ops;
 
   if (reintento) {
     const r = leerRespuesta(g, modo, "resultado-reintento"), lista = meta.reintentoOps || [];

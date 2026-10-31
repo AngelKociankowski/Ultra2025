@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { main as cerrar } from "../bin/60-cerrar.mjs";
 import { ejecutar, diaReal, etoroGuion, reloj, posts, sinEspera, resDe, planDe } from "./ejecucion.mjs";
-import { escribirTrabajo, escribirJson } from "../lib/archivos.mjs";
+import { escribirTrabajo, escribirJson, leerTrabajo } from "../lib/archivos.mjs";
 import { armarAviso } from "../lib/aviso.mjs";
 import { prepararDia } from "./escenario.mjs";
 import { aviso, docDe, NOTAS, outXleEvitar, operarDb, T_CIERRE, cts } from "./cierre.mjs";
@@ -42,7 +42,8 @@ test("aviso H12: simulación; real ejecutada; A4.2 compra sin efectivo → ningu
     const d = await prepararDia({ out: outXleEvitar(), notas: NOTAS, dbExtra: operarDb() });
     assert.equal(d.decidir.linea.accion, "ejecutar");
     if (res.plan) escribirJson(path.join(d.dir, "trabajo/plan-ordenes.json"), { fecha: "2026-11-02", simulacion: false, ordenes: res.plan });
-    escribirTrabajo(d.dir, "ejecucion.json", { doc: null, res: res.res });
+    // ejecucion.json de esta sesión (60-cerrar ignora el de otra sesión en una carpeta compartida, N2)
+    escribirTrabajo(d.dir, "ejecucion.json", { doc: null, sesion: leerTrabajo(d.dir, "preparar.json").rutina.sesion, res: res.res });
     assert.equal((await cerrar(["--dir", d.dir], { ahora: () => T_CIERRE(d) })).codigo, 0);
     return d;
   };

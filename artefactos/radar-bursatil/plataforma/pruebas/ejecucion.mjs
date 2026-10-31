@@ -29,7 +29,8 @@ export const COMPRA = [orden(Object.assign({}, PLAN[2]), 0)];
 export function montar({ plan = PLAN, efectivo = 5000, simulacion = false, alterar = false, f = F } = {}) {
   const libro = libroLunes();
   if (efectivo !== null) libro.efectivoUSD = efectivo;
-  const dir = carpetaConDb({});
+  // rutina-config con operar activado tal como llega de db (50-ejecutar lo exige, N9)
+  const dir = carpetaConDb({ "rutina-config": Object.assign(semilla()["rutina-config"], { operar: true, activadoEl: "2026-11-03T12:00:00Z" }) });
   escribirTrabajo(dir, "preparar.json", { fechaET: f, modo: "en_linea", rutina: { accion: "continuar", sesion: "s-prueba1" }, config: CONFIG });
   escribirTrabajo(dir, "cartera.json", { estado: "listo", libro, valuacion: valuar({ libro, tasas: leerFix("etoro/lunes-tasas.json"), fx: { valor: 18.7, fuente: "etoro" } }) });
   escribirTrabajo(dir, "plan-ordenes.json", { fecha: f, simulacion, ordenes: plan });

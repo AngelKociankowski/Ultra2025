@@ -77,6 +77,8 @@ cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node --versi
 - Si `/home/user/Ultra2025` no existe: `git init /home/user/Ultra2025 && cd /home/user/Ultra2025 && git remote add origin
   https://github.com/angelkociankowski/ultra2025 && git fetch --depth=1 origin "refs/tags/rutina-aprobada:refs/tags/rutina-aprobada"` y repite.
 - `fetch` distinto de 0: sigue con la última `rutina-aprobada` conocida y anótalo para el paso 10 (aviso).
+- El segundo comando no imprimió `commit=` (no hay etiqueta `rutina-aprobada`): no corras ningún paso más. Último mensaje (y
+  PushNotification): `Radar · Falla: no pude preparar el código de la rutina; sin operaciones.`
 - Node menor que 22 o `PRUEBAS_FALLO`: F11.
 
 ### 1. Modo de `db` y herramientas
@@ -98,7 +100,8 @@ Haz LEER con su lista `lecturas`.
 ```
 cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/00-preparar.mjs --dir .trabajo/hoy --fase decidir
 ```
-- **Código 2** (`salir`): si la línea trae `escribir`, haz ESCRIBIR del grupo `ahora`. Luego ve al paso 10. Fin.
+- **Código 2** (`salir`): si `resumen.motivo` es `otra_sesion_viva`, F4 (no leas `aviso.txt`: puede ser de la otra sesión). Si
+  no, si la línea trae `escribir`, haz ESCRIBIR del grupo `ahora`. Luego ve al paso 10. Fin.
 - **Código 0** (`continuar` o `recuperar`): haz ESCRIBIR del grupo `ahora`. Si `registrar` dijo `otra_sesion`, F4. Después,
   haz LEER con la lista de `D/trabajo/leer-mas.json` (si está vacía, nada).
 - **Código 1**: F8 con paso `preparar`.

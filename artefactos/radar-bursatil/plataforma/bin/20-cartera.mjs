@@ -11,7 +11,7 @@ import { transporteCurl } from "../lib/http.mjs";
 import { cargarPagina } from "../lib/cargar-pagina.mjs";
 import { conciliar, conciliarEjecucion, valuar, bidsDe, libroDeDb, mapaDeDb, opsValidas, opsNuevo, aplicarEventosOps } from "../lib/libro.mjs";
 import { indicesDelDia, rendimientosRefs, composicion } from "../lib/rendimientos.mjs";
-import { leerVersiones, usd, fx4, precio as px, i8 } from "../lib/db.mjs";
+import { leerVersiones, escritoPorEstaSesion, usd, fx4, precio as px, i8 } from "../lib/db.mjs";
 import { objetivoDelDia, configEfectiva } from "../lib/reglas.mjs";
 import { fechaHoraET, sumarDias, diasEntre, feriadosAnio } from "../lib/tiempo.mjs";
 
@@ -25,7 +25,7 @@ function ejecucionesAbiertas(dir) {
   const out = [];
   for (const [id, v] of Object.entries(leerVersiones(dir))) {
     const m = id.match(/^ejecucion-(\d{4}-\d{2}-\d{2})$/);
-    if (!m || v.estado !== "ok" || v.escritoEn === "pre-ejecucion") continue;
+    if (!m || v.estado !== "ok" || escritoPorEstaSesion(dir, id, "pre-ejecucion")) continue;
     const r = leerDoc(dir, id);
     if (r.estado === "ok" && r.doc.fin === null) out.push({ f: m[1], doc: r.doc });
   }
@@ -95,12 +95,25 @@ export async function main(argv, { transporteEToro = null, transporteFmp = null,
     return { codigo, linea: lineaPaso({ paso: PASO, ok: codigo === 0, accion, modo, resumen: { valorUSD: cuerpo.valuacion ? cuerpo.valuacion.valorUSD : null, alertas: cuerpo.alertas.length, eventos: cuerpo.eventos.length } }) };
   };
   const rl = leerDoc(dir, "cartera-libro"), rm = leerDoc(dir, "etoro-mapa");
+  const desact = (prep.bloqueos && prep.bloqueos.desactualizados) || [], mapaBloqueado = rm.estado !== "ok" || desact.includes("etoro-mapa");
+  // N7: lo pedido en leer-mas que llegó dañado o no se pudo leer bloquea las órdenes de hoy (RUNBOOK F6)
+  let leerMas = [];
+  try { leerMas = ((leerTrabajo(dir, "leer-mas.json") || {}).lecturas || []).map(l => l.id); } catch (e) { leerMas = []; }
+  const verLm = leerVersiones(dir), danados = leerMas.filter(id => verLm[id] && ["corrupto", "fallo"].includes(verLm[id].estado));
+  const bloqueoOrdenes = danados.length ? `${danados.join(", ")} llegó dañado o no se pudo leer de db` : null;
+  for (const id of danados) alertas.push(`${id} llegó dañado o no se pudo leer de db: hoy no se opera.`);
   const mapa = rm.estado === "ok" ? mapaDeDb(rm.doc) : { instrumentos: {}, rechazados: {} };
   const mapa0 = JSON.stringify(mapa);
   if (rm.estado !== "ok") alertas.push("etoro-mapa no se pudo leer: hoy no se guarda el mapa.");
-  const vacio = { libro: null, eventos: [], valuacion: null, mapa, mapaCambio: false, rendimientos: null, composicion: null, punto: null, ops: {}, llamadasFmp: 0, bloqueos: { mapa: rm.estado !== "ok" } };
+  const vacio = { libro: null, eventos: [], valuacion: null, mapa, mapaCambio: false, rendimientos: null, composicion: null, punto: null, ops: {}, llamadasFmp: 0, bloqueos: { mapa: mapaBloqueado, ordenes: bloqueoOrdenes } };
   if (rl.estado !== "ok" || (prep.bloqueos && prep.bloqueos.libro)) {
     alertas.push("cartera-libro no se pudo leer: sin conciliación ni valuación hoy.");
+    return fin(3, "sin_libro", Object.assign({ estado: "sin_libro", alertas }, vacio));
+  }
+  // N7: una ejecución abierta que llegó dañada puede llevar dinero ya enviado: sin ella el libro miente → hoy no se concilia
+  // ni se escribe el libro (la fecha sigue en ejecucionesAbiertas para mañana)
+  if (danados.some(id => id.startsWith("ejecucion-"))) {
+    alertas.push("Sin conciliación ni valuación hoy: una ejecución abierta llegó dañada (se reintenta mañana).");
     return fin(3, "sin_libro", Object.assign({ estado: "sin_libro", alertas }, vacio));
   }
   const conv = libroDeDb(rl.doc), libro0 = conv.libro;
@@ -210,7 +223,7 @@ export async function main(argv, { transporteEToro = null, transporteFmp = null,
   const comp = composicion({ valuacion, libro: conc.libro, filas });
   const opsTocados = Object.fromEntries([...new Set(ev.tocados.concat(Object.keys(ejecuciones)))].sort().map(f => [f, ev.docs[f]]));
   return fin(0, "listo", { estado: "listo", libro: conc.libro, eventos: conc.eventos, alertas, valuacion, mapa, mapaCambio: JSON.stringify(mapa) !== mapa0,
-    rendimientos: rend, composicion: comp, punto, ops: opsTocados, ejecuciones, llamadasFmp, bloqueos: { mapa: rm.estado !== "ok" }, datosMalos: malas.length });
+    rendimientos: rend, composicion: comp, punto, ops: opsTocados, ejecuciones, llamadasFmp, bloqueos: { mapa: mapaBloqueado, ordenes: bloqueoOrdenes }, datosMalos: malas.length });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) correrCli(main, PASO);

@@ -14,9 +14,11 @@ import { transporteCurl } from "../lib/http.mjs";
 import { cargarPagina } from "../lib/cargar-pagina.mjs";
 import { bidsDe, precioValido } from "../lib/libro.mjs";
 import { configEfectiva } from "../lib/reglas.mjs";
-import { armarGrupo, leerVersiones, conH, ts, usd, u6, precio } from "../lib/db.mjs";
+import { armarGrupo, conH, ts, usd, u6, precio, sesionDe, escritoPorEstaSesion, leerVersiones } from "../lib/db.mjs";
+const leerVersionesDe = (dir, id) => leerVersiones(dir)[id] || {};
 import { feriadosAnio, ventanaDelDia, fechaHoraET } from "../lib/tiempo.mjs";
 import { shaArchivo } from "./40-decidir.mjs";
+import { leerDiario, anotarSync } from "../lib/diario.mjs";
 
 const PASO = "50-ejecutar";
 const AYUDA = "Uso: node bin/50-ejecutar.mjs --dir <carpeta> --armar | --enviar | --reanudar";
@@ -27,16 +29,6 @@ const isNum = v => typeof v === "number" && Number.isFinite(v);
 const piso = x => Math.floor(x * 100 + 1e-7) / 100;
 const posId = p => p.positionID ?? p.positionId ?? null, ordId = p => p.orderID ?? p.orderId ?? null, instId = p => p.instrumentID ?? p.instrumentId ?? null;
 const FASES = ["--armar", "--enviar", "--reanudar"];
-
-function leerDiario(ruta) {
-  if (!fs.existsSync(ruta)) return [];
-  // una última línea cortada por una caída se ignora: el envío se anota y sincroniza antes del POST
-  return fs.readFileSync(ruta, "utf8").split("\n").filter(Boolean).map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
-}
-function anotarSync(ruta, linea) {
-  const fd = fs.openSync(ruta, "a");
-  try { fs.writeSync(fd, JSON.stringify(linea) + "\n"); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-}
 
 // líneas de la ejecución (§E.5.10): una por cierre de lote y una por compra
 export function lineasDe(plan) {
@@ -56,7 +48,10 @@ function contexto(dir, pagina) {
   const config = configEfectiva(prep.config || null).config, { C } = pagina || cargarPagina();
   const rutaPlan = path.join(R.trabajo, "plan-ordenes.json");
   const planOk = !!(dec && plan && fs.existsSync(rutaPlan) && dec.planSha === shaArchivo(rutaPlan));
-  return { R, prep, dec, plan, cartera, config, C, planOk, rutaDiario: path.join(R.trabajo, "diario-ejecucion.jsonl"), rutaEjec: path.join(R.trabajo, "ejecucion.json") };
+  // N9: la compuerta operar se toma de rutina-config tal como llegó de db (con h válido), no solo de plan.simulacion
+  const rc = leerDoc(dir, "rutina-config"), cdb = rc.estado === "ok" ? configEfectiva(rc.doc).config : null;
+  const operar = !!(cdb && cdb.operar === true && cdb.activadoEl && config.operar === true);
+  return { R, prep, dec, plan, cartera, config, C, planOk, operar, sesion: sesionDe(dir), rutaDiario: path.join(R.trabajo, "diario-ejecucion.jsonl"), rutaEjec: path.join(R.trabajo, "ejecucion.json") };
 }
 // F.2.1 / F.3.2: mercado abierto y dentro de la ventana con el reloj de ahora y el calendario (sin calendario: no)
 function enHorario({ dir, C, config, t }) {
@@ -84,11 +79,12 @@ async function armar({ dir, x, et, ahora, dormir, reg }) {
   if (fs.existsSync(x.rutaDiario) || fs.existsSync(x.rutaEjec)) return { codigo: 3, linea: lineaPaso({ paso: PASO, ok: false, accion: "ya_ejecutado", modo, resumen: { motivo: "ya hay diario o ejecucion.json en esta carpeta" } }) };
   const lineas = x.plan ? lineasDe(x.plan) : [];
   const nada = err => {
-    if (lineas.length && err) escribirTrabajo(dir, "ejecucion.json", { doc: null, res: resNoEnviada(lineas, err) });
+    if (lineas.length && err) escribirTrabajo(dir, "ejecucion.json", { doc: null, sesion: x.sesion, res: resNoEnviada(lineas, err) });
     reg.info(`armar: nada (${err || "sin órdenes reales"})`);
     return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "nada", modo, resumen: { motivo: err || "sin órdenes reales", lineas: lineas.length } }) };
   };
   if (!x.plan || !lineas.length || x.plan.simulacion || (x.dec && x.dec.simulacion)) return nada(null);
+  if (!x.operar) return nada("rutina-config.operar no está activado");
   if (!enHorario({ dir, C: x.C, config: x.config, t })) return nada("fuera de horario");
   if (!x.planOk) return nada("plan alterado");
   if (!lineas.every(lineaValida)) return nada("línea de plan inválida");
@@ -114,8 +110,9 @@ async function enviar({ dir, x, et, ahora, dormir, reg, reanudar }) {
   if (reanudar && !fs.existsSync(x.rutaDiario)) return salir("sin diario en esta carpeta: no hay nada que reanudar");
   if (reanudar && diario0.some(l => l.fase === "reanudar")) return salir("ya se reanudó una vez");
   // barrera 4 de F.6: el reclamo ejecucion-<hoy> lo escribió esta sesión y es el mismo documento armado
-  const doc = leerTrabajo(dir, "ejecucion-doc.json"), v = leerVersiones(dir)[`ejecucion-${f}`];
-  if (!doc || !v || v.estado !== "ok" || v.escritoEn !== "pre-ejecucion" || v.h !== conH(doc).h) return salir("ejecucion-<hoy> no la escribió esta sesión (sin reclamo de envío)");
+  const doc = leerTrabajo(dir, "ejecucion-doc.json"), id = `ejecucion-${f}`;
+  if (!doc || !escritoPorEstaSesion(dir, id, "pre-ejecucion") || leerVersionesDe(dir, id).h !== conH(doc).h) return salir("ejecucion-<hoy> no la escribió esta sesión (sin reclamo de envío)");
+  if (!x.operar || x.plan.simulacion || (x.dec && x.dec.simulacion)) return salir("rutina-config.operar no está activado (o el plan es de simulación)", "incompleto");
   if (!x.planOk || JSON.stringify(lineasDe(x.plan)) !== JSON.stringify(doc.lineas)) return salir("el plan no coincide con el armado", "incompleto");
   const anotar = l => anotarSync(x.rutaDiario, Object.assign({ t: ts(ahora()) }, l));
   if (reanudar) anotar({ fase: "reanudar" });
@@ -223,7 +220,7 @@ async function enviar({ dir, x, et, ahora, dormir, reg, reanudar }) {
   function terminar() {
     const res = L.map(l => ({ id: l.id, k: l.k, est: l.est || "no_enviada", env: l.env, http: l.http, o: l.o ?? null, pos: l.pos, px: l.px, uej: l.uej, usdej: l.usdej,
       usd: l.lado === "c" && l.env ? l.usdEnv ?? l.usd : null, err: l.err ? String(l.err).slice(0, 80) : null, ...(l.abierta ? { abierta: l.abierta } : {}) }));
-    escribirTrabajo(dir, "ejecucion.json", { doc, res });
+    escribirTrabajo(dir, "ejecucion.json", { doc, sesion: x.sesion, res });
     const n = res.reduce((m, r) => ((m[r.est] = (m[r.est] || 0) + 1), m), {});
     const incompleto = detener || sinCartera || res.some(r => r.est === "incierta");
     reg.info(`ejecución: ${incompleto ? "incompleto" : "listo"}`, { estados: n, reanudar });

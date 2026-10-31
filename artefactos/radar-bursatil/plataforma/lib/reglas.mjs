@@ -62,7 +62,7 @@ const PRIORIDAD = { V1: 0, N2: 0, V2: 1, R1: 2, C1: 3 };
 
 // Entradas:
 //  analisis: trabajo/analisis.json · cartera: trabajo/cartera.json · eventos: eventos validados de noticias (con `confirmado`)
-//  config: configEfectiva · contexto: { fecha, mercadoAbierto, ventanaDentro, bloqueoLibro, calendarioAusente, cetesPct, nowMs }
+//  config: configEfectiva · contexto: { fecha, mercadoAbierto, ventanaDentro, bloqueoLibro, bloqueoDatos, calendarioAusente, cetesPct, nowMs }
 // objetivo: solo pruebas (escenarios con pesos fijos); en la rutina siempre sale de buildPortfolio
 export function decidir({ C, analisis, cartera, eventos = [], config, contexto, objetivo: objetivoFijo = null }) {
   const alertas = [], decisiones = [];
@@ -85,6 +85,7 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
   let bloqueo = null;
   if (!cartera || cartera.estado !== "listo" || !libro || !val) bloqueo = "sin datos de eToro o del libro";
   else if (contexto.bloqueoLibro) bloqueo = "cartera-libro no se pudo leer";
+  else if (contexto.bloqueoDatos) bloqueo = contexto.bloqueoDatos;
   else if (contexto.calendarioAusente) bloqueo = "falta el calendario NYSE del año";
   else if (!contexto.mercadoAbierto) bloqueo = "mercado cerrado";
   else if (!contexto.ventanaDentro) bloqueo = "fuera de la ventana de órdenes";

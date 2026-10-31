@@ -98,9 +98,15 @@ export async function main(argv, { ahora = Date.now, raiz = RAIZ, pagina = null,
     reg.info(`salir: ${motivo}`);
     return linea(2, "salir", { motivo }, escribir);
   };
+  // N1: una sesión que murió (rutina-estado en_curso de otro día) pudo dejar ejecucion-<su fecha> sin cerrar: su fecha entra a la
+  // lista de ejecuciones abiertas como candidata (60-cerrar la quita si no existe o ya tiene fin), así no se pierde aunque esta
+  // sesión también muera
+  const abiertas = [...new Set((previo && Array.isArray(previo.ejecucionesAbiertas) ? previo.ejecucionesAbiertas : [])
+    .concat(previo && previo.estado === "en_curso" && previo.fecha !== fecha ? [previo.fecha] : []))].filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f)).sort();
+  // N5: los h de lo que escribió la última sesión se conservan hasta el próximo final (para compararlos al leer)
+  const escritosPrevios = previo && previo.escritos && typeof previo.escritos === "object" ? previo.escritos : {};
   const estadoBase = extra => Object.assign({ kind: "rutinaEstado", v: 2, fecha, estado: "en_curso", paso: "preparar", sesion: prep.rutina.sesion, inicio: ts(t), latido: ts(t), fin: null,
-    commit: prep.commit, modo, ejecucionesAbiertas: previo && Array.isArray(previo.ejecucionesAbiertas) ? previo.ejecucionesAbiertas : [], previo: previo ? previo.previo || null : null,
-    escritos: {}, motivo: null }, extra);
+    commit: prep.commit, modo, ejecucionesAbiertas: abiertas, previo: previo ? previo.previo || null : null, escritos: escritosPrevios, motivo: null }, extra);
 
   // 1. integridad de los obligatorios
   const malos = Object.entries(docs).filter(([, d]) => d.estado === "corrupto" || d.estado === "fallo" || d.estado === "sin_leer");
@@ -127,8 +133,15 @@ export async function main(argv, { ahora = Date.now, raiz = RAIZ, pagina = null,
   // 7. semilla
   if (docs["cartera-libro"].estado === "no_existe") return salir("sin_semilla", AVISO_SIN_SEMILLA);
 
+  // N5 (§E.5.1): lo leído hoy debe ser lo que escribió la última sesión; si no, no se usa para escribir ni para operar
+  const desactualizados = [];
+  for (const [id, d] of Object.entries(docs)) {
+    const h = escritosPrevios[id];
+    if (d.estado === "ok" && typeof h === "string" && d.doc.h !== h) { desactualizados.push(id); alertas.push(`${id} no es el que escribió la sesión anterior (h ${String(d.doc.h).slice(0, 8)} ≠ ${h.slice(0, 8)}): hoy no se usa para escribir ni para operar.`); }
+  }
+  prep.bloqueos.desactualizados = desactualizados;
+  if (desactualizados.includes("cartera-libro")) prep.bloqueos.libro = true;
   // continuar / recuperar: un solo set de rutina-estado (con ifVersion si existía)
-  const abiertas = (previo && Array.isArray(previo.ejecucionesAbiertas) ? previo.ejecucionesAbiertas : []).filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f));
   prep.recuperacion = { ejecuciones: abiertas };
   const g = armarGrupo({ dir, grupo: "ahora", docs: [{ id: "rutina-estado", data: estadoBase({ motivo: prep.rutina.accion === "recuperar" ? `recuperación de ${previo.fecha}` : null }) }], modo });
   // leer-mas: ejecuciones abiertas, ops de esas fechas y de los pendientes; con recuperar de hoy, los documentos del día

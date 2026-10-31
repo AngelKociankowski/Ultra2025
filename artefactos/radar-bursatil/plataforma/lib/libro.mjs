@@ -71,10 +71,10 @@ export function libroDeDb(doc) {
 }
 export function libroADb(L, atMs) {
   const lotes = [];
-  for (const p of L.posiciones) for (const l of p.lotes) lotes.push([p.sym, p.instrumentId, l.positionId, l.orderId ?? null, u6(l.unidades), usd(l.costoUSD), ts(Date.parse(l.abiertaEl)) || l.abiertaEl]);
+  for (const p of L.posiciones) for (const l of p.lotes) lotes.push([p.sym, p.instrumentId, l.positionId, l.orderId ?? null, u6(l.unidades), usd(l.costoUSD), ts(Date.parse(l.abiertaEl)) || l.abiertaEl || null]);
   const pend = L.pendientes.map(x => ({ id: x.opId, dia: x.dia || x.opId.slice(0, 10), sym: x.sym, i: x.instrumentId, lado: LADO_DB[x.lado], o: x.orderId ?? null,
     usd: x.montoUSD === null || x.montoUSD === undefined ? null : usd(x.montoUSD), u: x.unidades === null || x.unidades === undefined ? null : u6(x.unidades), pos: x.positionId ?? null,
-    env: ts(Date.parse(x.enviadaEl)) || x.enviadaEl, est: x.estado === "incierta" ? "incierta" : "aceptada" }));
+    env: ts(Date.parse(x.enviadaEl)) || x.enviadaEl || null, est: x.estado === "incierta" ? "incierta" : "aceptada" }));
   const fuera = Object.fromEntries(Object.entries(L.fueraDelObjetivo || {}).map(([s, v]) => [s, [v.desde, v.dias]]));
   const precios = Object.fromEntries(Object.entries(L.precios || {}).map(([s, v]) => [s, [px(v[0]), v[1]]]));
   return { kind: "carteraLibro", v: 2, at: ts(atMs), mandato: copia(L.mandato), efectivo: usd(L.efectivoUSD), realizado: usd(L.realizadoUSD), lotes, pend, fuera, precios, refs: copia(L.refs) };
@@ -133,7 +133,7 @@ function agregarLote(L, { sym, instrumentId, positionId, orderId, unidades, cost
   let p = L.posiciones.find(x => x.sym === sym);
   if (!p) { p = { sym, instrumentId, lotes: [] }; L.posiciones.push(p); }
   if (L.posiciones.some(x => x.lotes.some(l => l.positionId === positionId))) return false;
-  p.lotes.push({ positionId, orderId, unidades, costoUSD: cts(costoUSD), abiertaEl });
+  p.lotes.push({ positionId, orderId: orderId ?? null, unidades, costoUSD: cts(costoUSD), abiertaEl: abiertaEl || null });
   return true;
 }
 function registrarVenta(L, { sym, positionId, unidades, precio }) {
@@ -176,7 +176,7 @@ export function conciliar({ libro, portafolio, historial, ahora, ordenes = {}, o
       const posIds = [];
       let u = 0, costo = 0;
       for (const x of match) {
-        agregarLote(L, { sym: pend.sym, instrumentId: pend.instrumentId, positionId: posId(x), orderId: pend.orderId !== null ? pend.orderId : ordId(x), unidades: num(x.units), costoUSD: num(x.amount, pend.montoUSD), abiertaEl: x.openDateTime });
+        agregarLote(L, { sym: pend.sym, instrumentId: pend.instrumentId, positionId: posId(x), orderId: pend.orderId !== null ? pend.orderId : ordId(x), unidades: num(x.units), costoUSD: num(x.amount, pend.montoUSD), abiertaEl: x.openDateTime || pend.enviadaEl || null });
         asignadas.add(posId(x)); posIds.push(posId(x)); u += num(x.units) || 0; costo += num(x.amount, pend.montoUSD) || 0;
       }
       L.pendientes.splice(L.pendientes.indexOf(pend), 1);
@@ -184,7 +184,18 @@ export function conciliar({ libro, portafolio, historial, ahora, ordenes = {}, o
         ejecucion: { precio: u > 0 ? Math.round(costo / u * 1e4) / 1e4 : null, unidades: seis(u), montoUSD: cts(costo), at: match[0].openDateTime } });
       continue;
     }
-    if (pend.orderId !== null && colaIds.has(pend.orderId)) { pend.estado = "aceptada"; continue; } // en cola: se respeta, no se reenvía
+    if (pend.orderId !== null && colaIds.has(pend.orderId)) {
+      // F.7 (N12): en cola se respeta hasta el día hábil siguiente; después se avisa a diario y al 3.er día hábil se libera
+      const n = diasHabilesEntre(diaDe(pend), hoy, feriados);
+      pend.estado = "aceptada";
+      if (n <= 1) continue;
+      if (n < DIAS_INCIERTA) { alertas.push(`Compra de ${pend.sym} del ${diaDe(pend)} sigue en cola en eToro (${n} días hábiles).`); continue; }
+      L.efectivoUSD = cts(L.efectivoUSD + pend.montoUSD);
+      L.pendientes.splice(L.pendientes.indexOf(pend), 1);
+      eventos.push({ tipo: "no_ejecutada", lado: "compra", opId: pend.opId, orderId: pend.orderId, sym: pend.sym, error: `en cola sin llenar ${n} días hábiles` });
+      alertas.push(`Compra de ${pend.sym} del ${diaDe(pend)} sigue en cola tras ${n} días hábiles: se da por no ejecutada y vuelven US$ ${cts(pend.montoUSD).toFixed(2)}; cancela la orden ${pend.orderId} a mano en eToro para que no se llene fuera del mandato.`);
+      continue;
+    }
     const o = pend.orderId !== null ? ordenes[pend.orderId] : null;
     const err = o && (num(o.errorCode) > 0 || (typeof o.errorCode === "string" && o.errorCode && o.errorCode !== "0"));
     const vencida = diasHabilesEntre(diaDe(pend), hoy, feriados) >= DIAS_INCIERTA; // F.7: sin rastro al 3.er día hábil
@@ -313,26 +324,32 @@ export function conciliarEjecucion({ libro, doc, opsDoc, portafolio, historial =
   const cp = cpDe(portafolio), posiciones = Array.isArray(cp.positions) ? cp.positions : [];
   const antesPos = new Set((doc.antes && doc.antes.pos) || []), antesOrd = new Set((doc.antes && doc.antes.ord) || []);
   const armado = Date.parse(doc.armado), tomadas = new Set(libro.posiciones.flatMap(p => p.lotes.map(l => l.positionId)));
-  const enVentana = x => { const d = Date.parse(x.openDateTime); return Number.isFinite(d) && d >= armado - VENTANA_ANTES_MS && d <= armado + VENTANA_DESPUES_MS; };
-  const casa = (l, x) => instId(x) === l.i && enVentana(x) && isNum(x.amount) && isNum(l.usd) && Math.abs(x.amount / l.usd - 1) <= 0.01;
+  // N11: si 60-cerrar dejó en `res` lo que sabía el diario (sin fin), se usa como pista: hora real de envío, monto enviado
+  // (puede venir escalado) y orderId; una línea sin envío en el diario no salió
+  const pista = l => (doc.res || []).find(r => r.id === l.id && r.k === l.k) || null;
+  const enVentana = (x, desde) => { const d = Date.parse(x.openDateTime); return Number.isFinite(d) && d >= desde - VENTANA_ANTES_MS && d <= desde + VENTANA_DESPUES_MS; };
+  const casa = (l, x, desde, monto) => instId(x) === l.i && enVentana(x, desde) && isNum(x.amount) && isNum(monto) && monto > 0 && Math.abs(x.amount / monto - 1) <= 0.01;
   const lote = positionId => libro.posiciones.flatMap(p => p.lotes).find(l => l.positionId === positionId);
-  const hechos = new Set((doc.res || []).map(r => `${r.id}|${r.k}`));
   const res = [];
   for (const l of doc.lineas || []) {
-    if (hechos.has(`${l.id}|${l.k}`)) continue;
-    const r = { id: l.id, k: l.k, est: "incierta", env: doc.armado, http: null, o: null, pos: [], px: null, uej: null, usdej: null, usd: l.lado === "c" ? l.usd : null, err: "sin diario: conciliada al día siguiente" };
+    const h = pista(l);
+    if (h && (h.est === "no_enviada" || h.est === "rechazada")) { res.push(Object.assign({}, h)); continue; }
+    const desde = h && Number.isFinite(Date.parse(h.env)) ? Date.parse(h.env) : armado, monto = l.lado === "c" ? (h && isNum(h.usd) ? h.usd : l.usd) : null, o = h && isNum(h.o) ? h.o : null;
+    const r = { id: l.id, k: l.k, est: "incierta", env: h && h.env ? h.env : doc.armado, http: h ? h.http ?? null : null, o, pos: [], px: null, uej: null, usdej: null, usd: monto,
+      err: h ? "conciliada con el diario de la sesión" : "sin diario: conciliada al día siguiente" };
     if (l.lado === "c") {
-      const p = posiciones.find(x => !antesPos.has(posId(x)) && !tomadas.has(posId(x)) && casa(l, x));
-      if (p) { tomadas.add(posId(p)); Object.assign(r, { est: "ejecutada", o: ordId(p), pos: [posId(p)], px: px(isNum(p.openRate) ? p.openRate : p.amount / p.units), uej: u6(p.units), usdej: usd(p.amount), abierta: p.openDateTime, err: null }); }
+      const libre = x => !antesPos.has(posId(x)) && !tomadas.has(posId(x));
+      const p = (o !== null ? posiciones.find(x => ordId(x) === o && libre(x)) : null) || posiciones.find(x => (ordId(x) === null || o === null) && libre(x) && casa(l, x, desde, monto));
+      if (p) { tomadas.add(posId(p)); Object.assign(r, { est: "ejecutada", o: ordId(p) ?? o, pos: [posId(p)], px: px(isNum(p.openRate) ? p.openRate : p.amount / p.units), uej: u6(p.units), usdej: usd(p.amount), abierta: p.openDateTime || r.env, err: null }); }
       else {
-        const q = (cp.ordersForOpen || []).find(x => !antesOrd.has(ordId(x)) && casa(l, x));
+        const q = (cp.ordersForOpen || []).find(x => !antesOrd.has(ordId(x)) && ((o !== null && ordId(x) === o) || casa(l, x, desde, monto)));
         if (q) Object.assign(r, { est: "aceptada", o: ordId(q), err: null });
       }
     } else {
       const p = posiciones.find(x => posId(x) === l.pos), lt = lote(l.pos);
       r.pos = [l.pos];
       if (lt && (!p || (isNum(p.units) && p.units < lt.unidades - 1e-9))) {
-        const h = filaHistorial(historial, l.pos), precio = num(precioCierre(h), bids[l.i] && isNum(bids[l.i].bid) && bids[l.i].bid > 0 ? bids[l.i].bid : null);
+        const fh = filaHistorial(historial, l.pos), precio = num(precioCierre(fh), bids[l.i] && isNum(bids[l.i].bid) && bids[l.i].bid > 0 ? bids[l.i].bid : null);
         if (precio !== null) Object.assign(r, { est: "ejecutada", px: px(precio), err: null });
         else r.err = "cerrada en eToro sin precio de cierre";
       } else if ((cp.ordersForClose || []).some(x => posId(x) === l.pos)) Object.assign(r, { est: "aceptada", err: null });
@@ -354,7 +371,7 @@ export function conciliarEjecucion({ libro, doc, opsDoc, portafolio, historial =
   }
   const nuevos = new Set(res.map(r => r.id));
   const ap = aplicarResultados({ libro, opsHoy: opsDoc || opsNuevo(doc.f), plan: plan.filter(o => nuevos.has(o.id)), res, simulacion: false, ahora: t, dia: doc.f });
-  return { libro: ap.libro, ops: ap.ops, doc: Object.assign({}, doc, { res: (doc.res || []).concat(res), fin: ts(t) }) };
+  return { libro: ap.libro, ops: ap.ops, doc: Object.assign({}, doc, { res, fin: ts(t) }) };
 }
 
 // Aplica los eventos de conciliar a los documentos ops-<f> ({ "<f>": OpsDoc v2 }). El día de cada operación sale de su id.

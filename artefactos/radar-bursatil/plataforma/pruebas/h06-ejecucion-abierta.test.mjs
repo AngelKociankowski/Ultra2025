@@ -27,7 +27,10 @@ async function dosDias({ visible }) {
   assert.equal((await cerrar(["--dir", e.dir, "--degradado", "ejecutar"], { ahora: () => e.t + 15 * 60000 })).codigo, 0);
   const est1 = opDe(e.dir, "rutina-estado").data;
   assert.deepEqual([est1.estado, est1.ejecucionesAbiertas], ["degradada", [F1]]);
-  assert.ok(!opDe(e.dir, `ejecucion-${F1}`), "--degradado nunca cierra una ejecución abierta");
+  // --degradado nunca cierra una ejecución abierta: va sin fin, con lo que sabe el diario (N11)
+  const ej1 = opDe(e.dir, `ejecucion-${F1}`).data;
+  assert.equal(ej1.fin, null, "--degradado nunca cierra una ejecución abierta");
+  assert.deepEqual(ej1.res.map(r => [r.id, r.est, r.usd]), [[QQQ[0].id, "incierta", 1500]]);
   assert.equal(opDe(e.dir, "bitacora-2026-11-02").data.estado, "degradada");
   assert.equal(opDe(e.dir, "cartera-libro").data.efectivo, 5000);
   assert.equal(e.S.escribir("final").accion, "listo");
@@ -49,7 +52,7 @@ test("A3.2 · posición visible al día siguiente → 1 lote QQQ, efectivo 3 500
   assert.deepEqual(c.libro.posiciones.find(p => p.sym === "QQQ").lotes.map(l => l.positionId), [2800000001]);
   assert.equal(c.libro.pendientes.length, 0);
   const ej = opDe(d.dir, `ejecucion-${F1}`);
-  assert.equal(ej.ifVersion, 1); assert.ok(ej.data.fin); assert.deepEqual(ej.data.res.map(r => [r.id, r.est]), [[QQQ[0].id, "ejecutada"]]);
+  assert.equal(ej.ifVersion, 2, "versión 1 = reclamo, 2 = lo que dejó el cierre degradado"); assert.ok(ej.data.fin); assert.deepEqual(ej.data.res.map(r => [r.id, r.est]), [[QQQ[0].id, "ejecutada"]]);
   assert.deepEqual(opDe(d.dir, `ops-${F1}`).data.ops.map(o => [o.id, o.est, o.usdej]), [[QQQ[0].id, "ejecutada", 1500]]);
   assert.deepEqual(opDe(d.dir, "rutina-estado").data.ejecucionesAbiertas, []);
   assert.equal(d.S.escribir("final").accion, "listo");
