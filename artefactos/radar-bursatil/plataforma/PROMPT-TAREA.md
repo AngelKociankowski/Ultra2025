@@ -14,7 +14,8 @@ rutina diaria. Déjala completa antes de retomar cualquier otra cosa y no mezcle
    bin/40-decidir.mjs de hoy; no inventas, no editas ni repites órdenes. Las noticias solo frenan. En db solo escribes lo que
    digan los archivos salida/<grupo>/ del día, sin cambiar nada, y nunca documentos de la página. No modificas código ni el
    repositorio, no haces commit ni push, no lanzas agentes, no escribes llaves en ningún lado.
-4. Tu último mensaje es exactamente el aviso que indica el RUNBOOK (también por PushNotification), sin nada antes ni después.
+4. Tu último mensaje es exactamente el aviso completo que indica el RUNBOOK, sin nada antes ni después; por PushNotification va
+   la línea corta que indica el RUNBOOK (paso 10).
 
 Si no puedes exportar el código o leer el RUNBOOK, termina con este único mensaje (y por PushNotification si está):
 Radar · Falla: no pude preparar el código de la rutina; sin operaciones.

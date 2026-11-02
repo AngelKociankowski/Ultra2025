@@ -68,3 +68,37 @@ export function armarAviso(d) {
   }
   return txt.length <= MAX_AVISO ? txt : recorta(txt, MAX_AVISO);
 }
+
+// ---- Línea de PushNotification (00q §3): una línea de ≤ 200 caracteres; el aviso completo va en el chat ----
+export const MAX_PUSH = 200;
+export const lineaPush = texto => recorta(String(texto).split("\n").map(x => x.trim()).filter(Boolean).join(" · "), MAX_PUSH);
+export const pushConFalla = (push, falla) => { const suf = ` · ${falla}`; return recorta(String(push), MAX_PUSH - suf.length) + suf; };
+const ESTADO_PUSH = { ejecutada: o => `${PASADO[o.lado]} ${o.sym}`, aceptada: o => `${o.lado} ${o.sym} enviada`, incierta: o => `${o.lado} ${o.sym} sin confirmar` };
+// d: lo mismo que armarAviso. Valor y % del día en USD y en MXN, vs SPY desde inicio, Radar sí/no, operaciones y, si hubo, fallas.
+export function armarPush(d) {
+  const P = [`Radar · ${fechaCorta(d.fecha)}${d.simulacion ? " · SIM" : ""}`];
+  if (d.cartera && isNum(d.cartera.valorUSD)) {
+    const r = d.rend || {}, u = r.usd || [], m = r.mxn || [], sp = r.spy || [];
+    P.push(`US$ ${miles(d.cartera.valorUSD)} (${pct(u[0])} hoy)`);
+    if (isNum(d.cartera.valorMXN)) P.push(`MXN $ ${miles(d.cartera.valorMXN)} (${pct(m[0])} hoy)`);
+    if (isNum(u[4]) && isNum(sp[4])) P.push(`vs SPY desde inicio ${pct(u[4] - sp[4])}`);
+  } else P.push("sin valuación");
+  P.push(`Radar: ${d.radar && !d.radar.sinRadar ? "sí" : "no"}`);
+  const ops = d.operaciones || [];
+  let cuenta, detalle;
+  if (d.simulacion) {
+    cuenta = ops.length ? `${ops.length} ${ops.length > 1 ? "simuladas" : "simulada"}` : "ninguna";
+    detalle = ops.map(o => `${INFIN[o.lado]} ${o.sym}`);
+  } else {
+    const hechas = ops.filter(o => ESTADO_PUSH[o.est]), no = ops.filter(o => o.est === "rechazada" || o.est === "no_enviada");
+    cuenta = [hechas.length ? String(hechas.length) : null, no.length ? `${no.length} sin ejecutar` : null].filter(Boolean).join(", ") || "ninguna";
+    detalle = hechas.map(o => ESTADO_PUSH[o.est](o)).concat(no.map(o => `${o.sym} sin ejecutar`));
+  }
+  const fallas = [...new Set((d.fallas || []).map(f => f.paso))];
+  const base = P.concat([`Ops: ${cuenta}`]).join(" · "), cola = fallas.length ? ` · Falla: ${fallas.join(", ")}` : "";
+  // el detalle de operaciones entra hasta donde quepa; lo que no, queda como "…"
+  const entre = n => (n ? ` (${detalle.slice(0, n).join(", ")}${n < detalle.length ? ", …" : ""})` : "");
+  let n = detalle.length;
+  while (n > 0 && (base + entre(n) + cola).length > MAX_PUSH) n--;
+  return lineaPush(base + entre(n) + cola);
+}

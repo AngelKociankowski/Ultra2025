@@ -1,6 +1,7 @@
 // Carpeta de trabajo del día (12b §D.1): entrada/ (lecturas.jsonl, db/, archivo/, noticias.json), trabajo/, salida/<grupo>/, registro.jsonl.
 import fs from "node:fs";
 import path from "node:path";
+import { MAX_PUSH } from "./aviso.mjs";
 
 const ID_OK = /^[a-z0-9][a-z0-9-]{0,80}$/;
 const NOMBRE_OK = /^[a-z0-9][a-z0-9.-]{0,80}$/;
@@ -62,7 +63,13 @@ const validarNombre = n => { if (typeof n !== "string" || !NOMBRE_OK.test(n)) th
 export function leerTrabajo(dir, nombre) { validarNombre(nombre); return leerJson(path.join(rutas(dir).trabajo, nombre)); }
 export function escribirTrabajo(dir, nombre, obj) { validarNombre(nombre); escribirJson(path.join(rutas(dir).trabajo, nombre), obj); }
 
-export function escribirAviso(dir, texto) { fs.mkdirSync(rutas(dir).salida, { recursive: true }); fs.writeFileSync(path.join(rutas(dir).salida, "aviso.txt"), texto); }
+// aviso.txt (completo, para el chat) y aviso-push.txt (una línea de ≤ 200 para PushNotification; 00q §3)
+export function escribirAviso(dir, texto, push) {
+  if (typeof push !== "string" || !push || push.includes("\n") || push.length > MAX_PUSH) throw new ErrorArchivo("aviso", `la línea de push debe ser una sola línea de 1 a ${MAX_PUSH} caracteres`);
+  fs.mkdirSync(rutas(dir).salida, { recursive: true });
+  fs.writeFileSync(path.join(rutas(dir).salida, "aviso.txt"), texto);
+  fs.writeFileSync(path.join(rutas(dir).salida, "aviso-push.txt"), push);
+}
 
 // ---- Protocolo de los pasos (§5.2): argumentos, una línea JSON en stdout y código de salida ----
 // spec: { valores: ["--dir", "--fase"], banderas: ["--reanudar"], posicionales: n }

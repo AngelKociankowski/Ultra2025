@@ -9,7 +9,7 @@ import { crearEToro } from "../lib/etoro.mjs";
 import { crearFmp } from "../lib/fmp-rest.mjs";
 import { transporteCurl } from "../lib/http.mjs";
 import { cargarPagina } from "../lib/cargar-pagina.mjs";
-import { conciliar, conciliarEjecucion, valuar, bidsDe, libroDeDb, mapaDeDb, opsValidas, opsNuevo, aplicarEventosOps } from "../lib/libro.mjs";
+import { conciliar, conciliarEjecucion, valuar, bidsDe, libroDeDb, mapaDeDb, opsValidas, opsNuevo, aplicarEventosOps, corregirEfectivoInicial } from "../lib/libro.mjs";
 import { indicesDelDia, rendimientosRefs, composicion } from "../lib/rendimientos.mjs";
 import { leerVersiones, escritoPorEstaSesion, usd, fx4, precio as px, i8 } from "../lib/db.mjs";
 import { objetivoDelDia, configEfectiva } from "../lib/reglas.mjs";
@@ -119,8 +119,9 @@ export async function main(argv, { transporteEToro = null, transporteFmp = null,
     const motivo = `${ejDanadas.join(", ")} llegó dañada o no se pudo leer: sin conciliación ni órdenes hoy; se reintenta mañana`;
     return fin(3, "sin_libro", Object.assign({ estado: "sin_libro", motivo, alertas }, vacio));
   }
-  const conv = libroDeDb(rl.doc), libro0 = conv.libro;
+  const conv = libroDeDb(rl.doc), mig = corregirEfectivoInicial(conv.libro), libro0 = mig.libro;
   alertas.push(...conv.alertas);
+  if (mig.alerta) alertas.push(mig.alerta);
   vacio.libro = libro0;
   const et = crearEToro({ transporte: transporteEToro || transporteCurl() });
   let portafolio;

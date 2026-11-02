@@ -31,14 +31,14 @@ fidedignas, decidir con las reglas del código, operar solo en Demo (si está ac
 - **Carpeta del día** (llámala `D`): `.trabajo/hoy` relativa a `P` (la crea el paso 2). Para las herramientas de archivos usa la
   ruta absoluta `/home/user/rutina/actual/artefactos/radar-bursatil/plataforma/.trabajo/hoy`.
 - **Modo de `db`** (se decide en el paso 1 y no cambia en el día):
-  - *archivo*: herramienta `ArtifactData`.
+  - *archivo*: herramienta `ArtifactData` (acciones `get` y `batch`).
   - *en_linea*: `mcp__claude-artifacts__db_get`, `mcp__claude-artifacts__db_write`, `mcp__claude-artifacts__db_whoami`.
   - Artefacto: slug `776fd979-e792-4459-ae2f-00814ef68cde` (en línea) o URL
     `https://claude.ai/artifact/FkRDmR1kpgQTQq7t1eLodw` con colección `data/users/me` (archivo). Usuario:
     `u_Np_5cFP3Ho2rFiXosc9ZPw`.
 - **WebSearch** con `allowed_domains` = la lista `dominios` de `D/trabajo/temas-noticias.json`. **WebFetch** solo a URLs que
   devolvió esa búsqueda y cuyo dominio esté en la lista.
-- **PushNotification** para el aviso final.
+- **PushNotification** para la línea corta del aviso (`aviso-push.txt`, ≤ 200 caracteres); el aviso completo va en el chat.
 
 ### Procedimiento LEER (lista de `Lectura`)
 Para cada elemento de la lista, en orden:
@@ -46,17 +46,20 @@ Para cada elemento de la lista, en orden:
 2. Agrega **una línea** al archivo `D/entrada/lecturas.jsonl` (créalo si no existe; nunca borres líneas):
    - *en_linea*, existe: `{"id":"<id>","exists":true,"version":<version del bloque de aviso>,"data":<el objeto JSON que vino
      entre las etiquetas untrusted-document, copiado exacto, sin las etiquetas>}`
-   - *archivo*, existe: `{"id":"<id>","exists":true,"version":<la versión que dice el texto>,"archivo":"entrada/archivo/data/users/me/<id>.json"}`
-   - no existe: `{"id":"<id>","exists":false}`
-   - error (tras un reintento a los pocos segundos): `{"id":"<id>","error":"<código o texto corto>"}`
+   - *en_linea*, no existe: `{"id":"<id>","exists":false}`
+   - *archivo* (exista o no, aunque el texto sea un error): primero guarda el texto completo de la respuesta, tal cual, en el
+     archivo nuevo `D/<archivo.texto>`; después agrega la línea `archivo.linea` del elemento, copiada exacta. No copies datos
+     ni versiones: `importar` los saca de ese texto y del archivo que `ArtifactData` dejó en `out_dir`.
+   - error sin respuesta (tras un reintento a los pocos segundos): `{"id":"<id>","error":"<código o texto corto>"}`
    Copia el JSON tal cual llegó: no lo reformatees, no redondees, no agregues ni quites campos.
-3. Al terminar la lista: `node bin/db.mjs importar --dir .trabajo/hoy`.
+3. Al terminar la lista: `node bin/db.mjs importar --dir .trabajo/hoy`. Si responde `accion: "identidad"` (en modo archivo, un
+   texto dice que `me` resolvió a otro usuario): F9.
 
 ### Procedimiento ESCRIBIR (grupo `G`)
 1. *en_linea*: lee `D/salida/G/db_write.json` y llama a `mcp__claude-artifacts__db_write` con su `slug` y su `ops`
    **exactos**. Guarda la respuesta, tal cual, en `D/salida/G/resultado.json`.
-   *archivo*: llama a `ArtifactData` con los argumentos exactos de `D/salida/G/artifactdata.json`; guarda el texto de la respuesta
-   en `D/salida/G/resultado.txt`.
+   *archivo*: llama a `ArtifactData` con los argumentos exactos de `D/salida/G/artifactdata.json`; guarda el texto completo de
+   la respuesta, tal cual, en `D/salida/G/resultado.txt`.
 2. `node bin/db.mjs registrar --dir .trabajo/hoy --grupo G`.
 3. Si responde `accion: "releer"`: haz LEER con la lista de `D/trabajo/releer.json` y luego
    `node bin/db.mjs registrar --dir .trabajo/hoy --grupo G --verificar`. Si deja `D/salida/G/db_write-reintento.json` (o
@@ -85,7 +88,7 @@ cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node --versi
 - Carga con ToolSearch `select:mcp__claude-artifacts__db_get,mcp__claude-artifacts__db_write,mcp__claude-artifacts__db_whoami`.
   Si cargaron: modo **en_linea** y llama `db_whoami` con `{"slug":"776fd979-e792-4459-ae2f-00814ef68cde"}`: su `id` debe ser
   `u_Np_5cFP3Ho2rFiXosc9ZPw`; si no, F9.
-- Si no: carga `select:ArtifactData`. Si cargó: modo **archivo** (si el paso 2 responde `sin_db`, F9).
+- Si no: carga `select:ArtifactData`. Si cargó: modo **archivo**.
 - Si no hay ninguna: F9.
 - Carga también `select:PushNotification` (si no carga, sigue; el aviso irá solo en el chat).
 
@@ -94,7 +97,7 @@ cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node --versi
 cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/00-preparar.mjs --fase lista --modo <archivo|en_linea>
 ```
 Haz LEER con su lista `lecturas`.
-(En modo archivo, la primera lectura debe decir que `me` resolvió a `u_Np_5cFP3Ho2rFiXosc9ZPw`; si dice otro id, F9.)
+(En modo archivo, cada texto de `ArtifactData` debe decir que `me` resolvió a `u_Np_5cFP3Ho2rFiXosc9ZPw`: `importar` lo comprueba.)
 
 ### 3. Decidir el día
 ```
@@ -170,13 +173,14 @@ cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/60-
 cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/db.mjs verificar --dir .trabajo/hoy && node bin/db.mjs presupuesto --dir .trabajo/hoy
 ```
 Si `verificar` responde `accion: "marcar"` (lo releído no quedó como se preparó), haz ESCRIBIR del grupo `revision`: marca
-el día para que el siguiente no opere hasta que el director lo revise (`aviso.txt` ya trae la falla).
+el día para que el siguiente no opere hasta que el director lo revise (`aviso.txt` y `aviso-push.txt` ya traen la falla).
 
 ### 10. Avisar
-Lee `D/salida/aviso.txt`. Si `verificar` falló o una escritura no se pudo hacer, agrega al final una línea
-`Falla: no se guardó en db: <ids>`; si el paso 0 no pudo hacer `fetch`, agrega `Aviso: código de <commit corto> (sin fetch)`.
-Llama a `PushNotification` con ese texto (si pide título: `Radar · <día> <d-mes>`). Tu último mensaje es ese mismo texto, sin
-nada antes ni después.
+Lee `D/salida/aviso.txt` (el aviso completo) y `D/salida/aviso-push.txt` (una sola línea de ≤ 200 caracteres). Si `verificar`
+falló o una escritura no se pudo hacer, agrega al final del aviso una línea `Falla: no se guardó en db: <ids>` y usa como línea
+de push `Radar · <día> <d-mes> · Falla: no se guardó en db; detalle en el chat.`; si el paso 0 no pudo hacer `fetch`, agrega al aviso
+`Aviso: código de <commit corto> (sin fetch)`. Llama a `PushNotification` con la línea de push, tal cual (si pide título:
+`Radar · <día> <d-mes>`). Tu último mensaje es el aviso completo, sin nada antes ni después.
 
 ## F. Qué hacer si algo falla
 

@@ -12,9 +12,8 @@ import { cargarPagina } from "../lib/cargar-pagina.mjs";
 import { feriadosAnio, ventanaDelDia, fechaHoraET, minutosDe } from "../lib/tiempo.mjs";
 import { configEfectiva } from "../lib/reglas.mjs";
 import { lectura, armarGrupo, ts } from "../lib/db.mjs";
-import { ACCION_REEMPLAZO } from "../lib/constantes.mjs";
 import { esFecha } from "../lib/esquemas.mjs";
-import { avisoFinDeSemana, avisoFeriado, AVISO_YA_HECHA, AVISO_TEMPRANO, AVISO_SIN_SEMILLA, fechaCorta } from "../lib/aviso.mjs";
+import { avisoFinDeSemana, avisoFeriado, AVISO_YA_HECHA, AVISO_TEMPRANO, AVISO_SIN_SEMILLA, fechaCorta, lineaPush } from "../lib/aviso.mjs";
 
 const PASO = "00-preparar";
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -51,7 +50,6 @@ export async function main(argv, { ahora = Date.now, raiz = RAIZ, pagina = null,
   const reloj = relojDe(a, ahora), t = reloj();
   if (a.fase === "lista") {
     if (!["en_linea", "archivo"].includes(a.modo)) return { codigo: 1, linea: lineaPaso({ paso: PASO, ok: false, accion: "error", resumen: { texto: AYUDA } }) };
-    if (a.modo === "archivo" && !ACCION_REEMPLAZO) return { codigo: 2, linea: lineaPaso({ paso: PASO, ok: false, accion: "sin_db", modo: a.modo, resumen: { texto: "modo archivo desactivado hasta D7" } }) };
     const fecha = fechaHoraET(t).fecha, base = path.join(raiz, ".trabajo"), dirAbs = path.join(base, fecha);
     crearCarpeta(dirAbs);
     const enlace = path.join(base, "hoy");
@@ -94,7 +92,7 @@ export async function main(argv, { ahora = Date.now, raiz = RAIZ, pagina = null,
     if (estadoDoc) escribir = armarGrupo({ dir, grupo: "ahora", docs: [{ id: "rutina-estado", data: estadoDoc }], modo }).escribir;
     escribirTrabajo(dir, "preparar.json", prep);
     escribirTrabajo(dir, "leer-mas.json", { lecturas: [] });
-    escribirAviso(dir, aviso);
+    escribirAviso(dir, aviso, lineaPush(aviso));
     reg.info(`salir: ${motivo}`);
     return linea(2, "salir", { motivo }, escribir);
   };

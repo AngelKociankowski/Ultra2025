@@ -26,13 +26,15 @@ test("(1) canon ordena claves en todos los niveles; h cambia con un carácter", 
 
 test("(2) importar: 4 formas de línea, gana la última, corrupto por h y por kind, no_leido", () => {
   const dir = vacia();
-  const mapa = conH(S["etoro-mapa"]);
-  fs.mkdirSync(path.join(dir, "entrada/archivo/data/users/me"), { recursive: true });
-  fs.writeFileSync(path.join(dir, "entrada/archivo/data/users/me/etoro-mapa.json"), JSON.stringify(mapa));
+  // modo archivo (D7): ArtifactData dejó los datos en out_dir y la sesión guardó el texto de la respuesta
+  const mapa = JSON.stringify(conH(S["etoro-mapa"]), null, 2) + "\n", f = path.join(dir, "entrada/archivo/data/users/me/etoro-mapa.json");
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, mapa);
+  fs.writeFileSync(path.join(dir, "entrada/archivo/etoro-mapa.1.txt"), `- "etoro-mapa"  ${Buffer.byteLength(mapa)} bytes  version 7  "${f}"\n(\`me\` in this path resolved to your user id on this artifact: u_Np_5cFP3Ho2rFiXosc9ZPw)`);
   const libro = conH(S["cartera-libro"]), malo = Object.assign({}, libro, { efectivo: 1.56 });
   lineas(dir, [
     { id: "rutina-config", exists: true, version: 3, data: conH(S["rutina-config"]) },
-    { id: "etoro-mapa", exists: true, version: 7, archivo: "entrada/archivo/data/users/me/etoro-mapa.json" },
+    { id: "etoro-mapa", texto: "entrada/archivo/etoro-mapa.1.txt" },
     { id: "rutina-estado", exists: false },
     { id: "bitacora-mes-2026-11", error: "resource_exhausted" },
     { id: "cartera-libro", exists: true, version: 4, data: malo },     // primero dañado…
@@ -78,11 +80,11 @@ test("(3) respuestas reales de db_write y el texto del modo archivo se registran
   armarGrupo({ dir, grupo: "final", docs: [{ id: "rutina-estado", data: est }], modo: "en_linea" });
   fs.copyFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "fixtures/db/borrado-ok.json"), path.join(dir, "salida/final/resultado.json"));
   assert.equal(registrar({ dir, grupo: "final" }).accion, "releer");
-  // modo archivo: "…The document is now at version 2." → versión 2
+  // modo archivo (texto de batch medido el 2-nov, 00q): `- set "data/users/me"/"<id>" (version N)` → versión N
   const g = path.join(dir, "salida/semilla");
   fs.mkdirSync(g, { recursive: true });
   escribirJson(path.join(g, "_grupo.json"), { grupo: "semilla", modo: "archivo", ops: [{ id: "rutina-config", h: "x", ifVersion: 1 }], omitidos: [], reintento: false });
-  fs.writeFileSync(path.join(g, "resultado.txt"), "Updated rutina-config in data/users/me. The document is now at version 2.");
+  fs.writeFileSync(path.join(g, "resultado.txt"), 'Database batch committed atomically — 1 write; by default readable only by the one user whose data/users subtree they are in:\n- set "data/users/me"/"rutina-config" (version 2)\n28 of 25000 documents used in this artifact\'s database.');
   const ra = registrar({ dir, grupo: "semilla" });
   assert.equal(ra.accion, "listo"); assert.equal(leerVersiones(dir)["rutina-config"].version, 2);
 });
@@ -145,11 +147,15 @@ test("(5) 409: ahora → otra_sesion; pre-ejecucion → ya_hubo_envio; final →
   assert.ok(p.leidos > 0 && p.escritos > 0 && p.total === p.leidos + p.escritos && p.tope === 40000);
 });
 
-test("(6) modo archivo desactivado mientras ACCION_REEMPLAZO sea null", async () => {
+test("(6) D7 · modo archivo activo: la lista sale con ArtifactData y el grupo con batch de file_path", async () => {
   const r = await preparar(["--fase", "lista", "--modo", "archivo"], { ahora: () => Date.parse("2026-11-02T14:47:00Z"), raiz: carpetaTemporal() });
-  assert.equal(r.codigo, 2); assert.equal(r.linea.accion, "sin_db");
+  assert.equal(r.codigo, 0); assert.deepEqual([r.linea.accion, r.linea.modo], ["leer", "archivo"]);
+  assert.ok(r.linea.lecturas.every(l => l.archivo.herramienta === "ArtifactData" && l.archivo.args.action === "get" && l.archivo.texto === `entrada/archivo/${l.id}.1.txt`));
   const dir = carpetaConDb({}, null, { noExisten: ["punto-2026-11-02"] });
-  assert.throws(() => armarGrupo({ dir, grupo: "final", modo: "archivo", docs: [{ id: "punto-2026-11-02", data: Object.assign({}, S["punto-2026-10-30"], { f: "2026-11-02" }) }] }), e => e.codigo === "sin_db");
+  const g = armarGrupo({ dir, grupo: "final", modo: "archivo", docs: [{ id: "punto-2026-11-02", data: Object.assign({}, S["punto-2026-10-30"], { f: "2026-11-02" }) }] });
+  assert.equal(g.escribir, "salida/final/artifactdata.json");
+  const w = JSON.parse(fs.readFileSync(path.join(dir, g.escribir), "utf8")).writes;
+  assert.deepEqual(w.map(x => [x.op, x.collection, x.doc_id, x.if_version]), [["set", "data/users/me", "punto-2026-11-02", undefined]]);
 });
 
 test("00n (desvío 15) · db.mjs config: un set de rutina-config con ifVersion de la lectura y h válido; errores sin escribir", async () => {

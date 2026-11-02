@@ -180,6 +180,9 @@ export function conciliar({ libro, portafolio, historial, ahora, ordenes = {}, o
         asignadas.add(posId(x)); posIds.push(posId(x)); u += num(x.units) || 0; costo += num(x.amount, pend.montoUSD) || 0;
       }
       L.pendientes.splice(L.pendientes.indexOf(pend), 1);
+      // 00q §2: al enviarla se descontó lo pedido; eToro puede llenar por menos (el 2-nov, 31 946.00 de 31 958.53) y lo que no usó
+      // vuelve al efectivo del mandato
+      if (isNum(pend.montoUSD)) L.efectivoUSD = cts(L.efectivoUSD + pend.montoUSD - cts(costo));
       eventos.push({ tipo: "ejecutada", lado: "compra", opId: pend.opId, orderId: pend.orderId, sym: pend.sym, positionIds: posIds,
         ejecucion: { precio: u > 0 ? Math.round(costo / u * 1e4) / 1e4 : null, unidades: seis(u), montoUSD: cts(costo), at: match[0].openDateTime } });
       continue;
@@ -256,6 +259,21 @@ export function conciliar({ libro, portafolio, historial, ahora, ordenes = {}, o
   return { libro: L, eventos, alertas };
 }
 const cts6 = x => Math.round(x * 1e6) / 1e6;
+
+// Migración (00q §2): hasta 43d5d17, conciliar no devolvía al efectivo lo que eToro no usó de una compra pendiente. Solo pasó
+// con las 5 órdenes iniciales (2-nov). Si el libro trae sus lotes y al efectivo le falta exactamente esa diferencia (cuadre:
+// base + realizado − costo de los lotes − compras pendientes), se suma una vez; con el efectivo ya cuadrado no hace nada.
+export function corregirEfectivoInicial(libro) {
+  const lotes = libro.posiciones.flatMap(p => p.lotes);
+  const deuda = cts(ORDENES_INICIALES.filter(o => lotes.some(l => l.orderId === o.o))
+    .reduce((a, o) => a + o.usd - lotes.filter(l => l.orderId === o.o).reduce((b, l) => b + l.costoUSD, 0), 0));
+  const pendientes = libro.pendientes.filter(x => x.lado === "compra").reduce((a, x) => a + (x.montoUSD || 0), 0);
+  const falta = cts(libro.mandato.baseUSD + libro.realizadoUSD - lotes.reduce((a, l) => a + l.costoUSD, 0) - pendientes - libro.efectivoUSD);
+  if (!deuda || Math.abs(falta - deuda) > 0.005) return { libro, alerta: null };
+  const L = copia(libro);
+  L.efectivoUSD = cts(L.efectivoUSD + deuda);
+  return { libro: L, alerta: `Efectivo corregido: +US$ ${deuda.toFixed(2)} que eToro no usó de las compras iniciales (se llenaron por menos de lo pedido).` };
+}
 
 // Precio válido (12b §I, H8): número finito > 0 con fecha de hace < 20 min (si se conoce la hora de la valuación).
 const VIGENCIA_MS = 20 * 60000;

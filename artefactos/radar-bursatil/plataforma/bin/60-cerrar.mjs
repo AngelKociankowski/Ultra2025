@@ -10,7 +10,7 @@ import { actualizarFuera, configEfectiva } from "../lib/reglas.mjs";
 import { actualizarRefs } from "../lib/rendimientos.mjs";
 import { validarNoticias } from "../lib/noticias.mjs";
 import { resumenRadar, previoDe } from "../lib/radar-resumen.mjs";
-import { armarAviso } from "../lib/aviso.mjs";
+import { armarAviso, armarPush } from "../lib/aviso.mjs";
 import { armarGrupo, leerVersiones, conH, lectura, presupuesto, bytes, usd, u6, p4, r6, precio, ts, sesionDe, escritoPorEstaSesion } from "../lib/db.mjs";
 import { leerDiario, resDesdeDiario } from "../lib/diario.mjs";
 import { fechaHoraET } from "../lib/tiempo.mjs";
@@ -159,11 +159,12 @@ function cerrar({ dir, a, t, reg }) {
   malos += alertas.filter(x => /^Operación mal formada/.test(x)).length;
   const degradada = !!a.degradado || !carteraOk || !decis || abierta || malos > 0;
   const estado = degradada ? "degradada" : (!out || out.partial || errores.some(e => e[0] === "30-fmp-noticias" || e[0] === "noticias")) ? "parcial" : "completa";
-  const aviso = armarAviso({
+  const datosAviso = {
     fecha, hora: fechaHoraET(t).hora, simulacion, cartera: v ? { valorUSD: v.valorUSD, valorMXN: v.valorMXN } : null, rend,
     radar: out ? { regimen: radar.reg && radar.reg.l, cambios: (radar.cambios || []).slice().sort((x, y) => pri(x) - pri(y)).map(frase).filter(Boolean) } : { sinRadar: true, motivo: radar.motivo },
     notas: [...new Set(notasAviso)].slice(0, 2).map(n => ({ titulo: n.titulo, medio: n.medio })), operaciones: opsAviso, alertas: alertasTodas, fallas,
-  });
+  };
+  const aviso = armarAviso(datosAviso);
 
   // ---- bitácora ----
   const dec = decis ? decis.decisiones.map(d => [d.sym, d.regla, d.accion, p4(d.pesoActual), p4(d.pesoObjetivo), red2(d.desvPts), d.montoUSD === null ? null : usd(d.montoUSD), corto(d.motivo || d.razonOmision || "", 120)]) : [];
@@ -220,7 +221,7 @@ function cerrar({ dir, a, t, reg }) {
   if (estadoPrevio && estadoPrevio.revisar) estadoFin.revisar = estadoPrevio.revisar; // sigue marcado hasta que el director lo quite
   docs.push({ id: "rutina-estado", data: estadoFin });
   const g = armarGrupo({ dir, grupo: "final", docs, modo, delDia, accionDia });
-  escribirAviso(dir, aviso);
+  escribirAviso(dir, aviso, armarPush(datosAviso));
   // N-5b (00o): tras escribir se releen rutina-estado, cartera-libro y, si hubo envíos, ejecucion-<hoy>
   const releer = ["rutina-estado"].concat(docs.some(d => d.id === "cartera-libro") ? ["cartera-libro"] : [],
     docs.some(d => d.id === `ejecucion-${fecha}` && (d.data.res || []).some(r => r.env)) ? [`ejecucion-${fecha}`] : []);
@@ -234,8 +235,9 @@ const red2 = x => (isNum(x) ? Math.round(x * 100) / 100 : null);
 function cerrarMinimo({ dir, t, error, a }) {
   const prep = (() => { try { return leerTrabajo(dir, "preparar.json") || {}; } catch (e) { return {}; } })();
   const fecha = prep.fechaET || fechaHoraET(t).fecha, mes = fecha.slice(0, 7), modo = prep.modo || "en_linea";
-  const aviso = armarAviso({ fecha, hora: fechaHoraET(t).hora, simulacion: true, cartera: null, rend: null, radar: null, notas: [], operaciones: [], alertas: [],
-    fallas: [{ paso: a.degradado || "cerrar", texto: a.degradado ? textoFalla(a.degradado) : TEXTO_FALLA.cerrar }, ...(a.degradado && a.degradado !== "cerrar" ? [{ paso: "cerrar", texto: TEXTO_FALLA.cerrar }] : [])] });
+  const datosAviso = { fecha, hora: fechaHoraET(t).hora, simulacion: true, cartera: null, rend: null, radar: null, notas: [], operaciones: [], alertas: [],
+    fallas: [{ paso: a.degradado || "cerrar", texto: a.degradado ? textoFalla(a.degradado) : TEXTO_FALLA.cerrar }, ...(a.degradado && a.degradado !== "cerrar" ? [{ paso: "cerrar", texto: TEXTO_FALLA.cerrar }] : [])] };
+  const aviso = armarAviso(datosAviso);
   const re = leerDoc(dir, "rutina-estado"), previo = re.estado === "ok" ? re.doc : null;
   const bit = { kind: "bitacora", v: 2, f: fecha, t: ts(t), estado: "degradada", sim: true, commit: prep.commit || null, modo, mercado: {}, radar: { estado: "sin_radar", motivo: null },
     cartera: {}, rend: {}, comp: {}, notas: [], eventos: [], vetos: [], dec: [], ops: [], alertas: [corto(`Cierre mínimo: ${error}`, 160)], errores: [["cerrar", "datos"]], aviso };
@@ -248,7 +250,7 @@ function cerrarMinimo({ dir, t, error, a }) {
       (prep.recuperacion && Array.isArray(prep.recuperacion.ejecuciones)) ? prep.recuperacion.ejecuciones : [], escritoPorEstaSesion(dir, `ejecucion-${fecha}`, "pre-ejecucion") ? [fecha] : []))].filter(esFecha).sort(),
     previo: previo ? previo.previo || null : null, escritos: {}, motivo: corto(`cierre mínimo: ${error}`, 120), ...(previo && previo.revisar ? { revisar: previo.revisar } : {}) } });
   const g = armarGrupo({ dir, grupo: "final", docs, modo, delDia: [`bitacora-${fecha}`], accionDia: prep.rutina ? prep.rutina.accion : null });
-  escribirAviso(dir, aviso);
+  escribirAviso(dir, aviso, armarPush(datosAviso));
   escribirTrabajo(dir, "verificar.json", { lecturas: [lectura("rutina-estado", { obligatoria: true, dirAbs: path.resolve(dir) })] });
   return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "listo", modo, resumen: { estado: "degradada", minimo: true, docs: g.ops }, escribir: g.escribir }) };
 }

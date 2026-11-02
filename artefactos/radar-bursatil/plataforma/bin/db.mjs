@@ -71,8 +71,9 @@ export async function main(argv, { ahora = Date.now } = {}) {
     const r = importar(dir);
     const malo = r.corruptos.length > 0 || r.fallos.length > 0;
     reg.info("importar", r);
-    return { codigo: malo ? 3 : 0, linea: lineaPaso({ paso: PASO, ok: !malo, accion: malo ? "con_fallas" : "listo", modo,
-      resumen: { ok: r.ok.length, leidos: r.ok.length + r.no_existen.length, no_existen: r.no_existen.length, fallos: r.fallos, corruptos: r.corruptos, bytes: r.bytes, ignorados: r.ignorados } }) };
+    // modo archivo: un texto que dice que `me` resolvió a otro usuario → RUNBOOK F9
+    return { codigo: malo ? 3 : 0, linea: lineaPaso({ paso: PASO, ok: !malo, accion: r.identidad.length ? "identidad" : malo ? "con_fallas" : "listo", modo,
+      resumen: { ok: r.ok.length, leidos: r.ok.length + r.no_existen.length, no_existen: r.no_existen.length, fallos: r.fallos, corruptos: r.corruptos, bytes: r.bytes, ignorados: r.ignorados, identidad: r.identidad } }) };
   }
   if (sub === "registrar") {
     if (!a.grupo) return { codigo: 1, linea: lineaPaso({ paso: PASO, ok: false, accion: "error", resumen: { texto: "falta --grupo" } }) };

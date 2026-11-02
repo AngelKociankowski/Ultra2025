@@ -15,9 +15,8 @@ export const DB_UID = "u_Np_5cFP3Ho2rFiXosc9ZPw";
 export const DB_RUTA = "data/users/" + DB_UID;
 export const ARTEFACTO_URL = "https://claude.ai/artifact/FkRDmR1kpgQTQq7t1eLodw";
 export const COLECCION_ARCHIVO = "data/users/me";
-// Acción de ArtifactData que reemplaza un documento completo desde file_path: la fija D7 con el esquema real.
-// Mientras sea null, el modo archivo está desactivado (00m §2).
-export const ACCION_REEMPLAZO = null;
+// Operación de `batch` de ArtifactData que reemplaza un documento completo desde file_path (D7, medida el 2-nov: 00q).
+export const ACCION_REEMPLAZO = "set";
 export const PRESUPUESTO_DIA = 40000;
 // Topes por kind en bytes compactos (12b §E.5; cartera-libro y ops-<f> según 00n, desvíos 3 y 4; ejecucion según 00o, N8)
 export const DOC_TOPES = congelar({

@@ -12,17 +12,24 @@ y deja todo en `db` del artefacto. Diseño y contratos: `12-plan-plataforma.md` 
 - Órdenes (12b §F): `50-ejecutar --armar` crea el reclamo `ejecucion-<hoy>` (sin `ifVersion`), `--enviar` manda a lo más un
   POST por línea con el diario sincronizado a disco antes de cada uno, y `--reanudar` (una vez) nunca reenvía una línea con
   envío. Lo dudoso cuenta como enviado (`incierta`, efectivo provisional) hasta que eToro lo muestre o pasen 3 días hábiles.
+  Una compra descuenta lo pedido al enviarse; al conciliarla, lo que eToro no usó vuelve al efectivo (00q §2: el 2-nov llenó
+  31 946.00 de 31 958.53). El libro de ese día, que quedó con 0.56, se corrige una sola vez a 13.09 en la corrida siguiente.
+- Aviso: `salida/aviso.txt` (completo, para el chat) y `salida/aviso-push.txt` (una línea de ≤ 200 caracteres para
+  PushNotification: valor y % del día en USD y MXN, vs SPY desde inicio, Radar sí/no y operaciones; 00q §3).
 - La rutina corre una **exportación** del commit escrito en `APROBADO` (una línea, sha de 40 hex, ancestro de
   `origin/claude/busy-hawking-0oxy6l`; paso 0 del RUNBOOK), nunca el árbol de trabajo ni la punta de la rama. Solo el director
   cambia `APROBADO`, después de revisar (00p §1).
 
 ## `db` (12b §D–§E)
 
-- Modo **en línea** (`mcp__claude-artifacts__db_get` / `db_write`): es el único activo. El modo archivo (`ArtifactData`) queda
-  desactivado mientras `ACCION_REEMPLAZO` sea `null` en `lib/constantes.mjs` (D7).
-- Los scripts no hablan con `db`: `00-preparar` da la lista de lecturas; Claude las copia a `entrada/lecturas.jsonl` y
-  `node bin/db.mjs importar` las valida (kind, forma, integridad `h`). Toda escritura sale de `salida/<grupo>/db_write.json`
-  (con `ifVersion` en lo leído) y se registra con `node bin/db.mjs registrar` (409, relectura y un reintento).
+- Dos modos; el RUNBOOK (paso 1) elige según las herramientas que cargue la sesión. **En línea**
+  (`mcp__claude-artifacts__db_get` / `db_write`): Claude copia cada documento leído a `entrada/lecturas.jsonl`. **Archivo**
+  (`ArtifactData`, D7 con los formatos medidos el 2-nov, 00q): `get` deja los datos en `entrada/archivo/data/users/me/<id>.json`;
+  Claude guarda el texto de la respuesta en `entrada/archivo/<id>.<n>.txt` y agrega la línea que trae la lectura; `importar` saca
+  versión, existencia e identidad (`me` = `u_Np_5cFP3Ho2rFiXosc9ZPw`) de ese texto y comprueba que el archivo mida lo que dice.
+- Los scripts no hablan con `db`: `00-preparar` da la lista de lecturas y `node bin/db.mjs importar` las valida (kind, forma,
+  integridad `h`). Toda escritura sale de `salida/<grupo>/db_write.json` o `artifactdata.json` (`batch` atómico con `file_path`;
+  `ifVersion`/`if_version` en lo leído) y se registra con `node bin/db.mjs registrar` (409, relectura y un reintento).
 - Documentos propios (todos con `h`): `rutina-estado`, `rutina-config`, `cartera-libro`, `etoro-mapa`, `bitacora-mes-<mes>`,
   `punto-<f>`, `radar-<f>`, `bitacora-<f>`, `ops-<f>`, `ejecucion-<f>`. La rutina nunca lee ni escribe los de la página
   (`dia-*`, `indice`, `corrida`, `contador-*`, `vivo`, `plan`, `preferencias`); solo lee `feriados-<año>` si

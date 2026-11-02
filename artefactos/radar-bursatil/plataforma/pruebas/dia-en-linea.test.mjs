@@ -158,7 +158,9 @@ test("un carácter cambiado en una lectura → importar la marca corrupta y el d
   assert.deepEqual([s.pasos.preparar.codigo, s.pasos.preparar.linea.resumen.motivo, s.pasos.preparar.linea.escribir], [2, "integridad", null]);
   assert.equal(fs.readFileSync(path.join(s.dir, "salida/aviso.txt"), "utf8"), "Radar · lun 2-nov · Falla: el documento cartera-libro llegó dañado desde db; hoy no se operó.");
   assert.deepEqual(db.escrituras, []);
-  assert.deepEqual(fs.readdirSync(path.join(s.dir, "salida")).filter(x => x !== "aviso.txt"), []);
+  // D7: junto al aviso va su línea de push (la misma, es de una línea); ningún grupo de escritura
+  assert.equal(fs.readFileSync(path.join(s.dir, "salida/aviso-push.txt"), "utf8"), fs.readFileSync(path.join(s.dir, "salida/aviso.txt"), "utf8"));
+  assert.deepEqual(fs.readdirSync(path.join(s.dir, "salida")).filter(x => x !== "aviso.txt" && x !== "aviso-push.txt"), []);
 });
 
 test("H11 · día con órdenes reales (V1 de XLE ejecutada): pre-ejecucion + final aplicados al db falso; presupuesto ≤ 40 000 B", async t => {

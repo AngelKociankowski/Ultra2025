@@ -35,10 +35,10 @@ export function dbInicial(extra = {}) {
 
 // Pasos 2–4 (lista, LEER, decidir, ESCRIBIR ahora, leer-mas). Devuelve la carpeta del día.
 let nSesion = 0;
-export async function abrirDia({ db, t, raiz = carpetaTemporal(), pagina = PAG, sesion = `s-prueba${++nSesion}`, omitir = [], corromper = null }) {
-  const l = await preparar(["--fase", "lista", "--modo", "en_linea"], { ahora: () => t, raiz });
+export async function abrirDia({ db, t, raiz = carpetaTemporal(), pagina = PAG, sesion = `s-prueba${++nSesion}`, omitir = [], corromper = null, modo = "en_linea" }) {
+  const l = await preparar(["--fase", "lista", "--modo", modo], { ahora: () => t, raiz });
   const dir = path.join(raiz, ".trabajo", l.linea.fecha);
-  const S = crearSesion({ db, dir, omitir, corromper });
+  const S = crearSesion({ db, dir, omitir, corromper, modo });
   S.leer(l.linea.lecturas);
   const p = await preparar(["--dir", dir, "--fase", "decidir"], { ahora: () => t, pagina, sesion });
   let ahora = null;
@@ -60,10 +60,10 @@ export function ponerAnalisis(dir, { out = OUT30, parcial = false, sinRadar = fa
   escribirTrabajo(dir, "radar-resumen.json", resumenRadar({ out: o, estado: parcial ? "parcial" : "listo", llamadas: { total: 626 }, t, f: prep.fechaET }));
 }
 
-// opciones: t, db, dbExtra, out, parcial, sinRadar, notas, portafolio, tasas, etoro, fmp, omitir, corromper
+// opciones: t, db, dbExtra, out, parcial, sinRadar, notas, portafolio, tasas, etoro, fmp, omitir, corromper, modo
 export async function prepararDia(o = {}) {
   const t = o.t || LUNES, db = o.db || dbInicial(o.dbExtra || {});
-  const d = await abrirDia({ db, t, raiz: o.raiz, omitir: o.omitir, corromper: o.corromper });
+  const d = await abrirDia({ db, t, raiz: o.raiz, omitir: o.omitir, corromper: o.corromper, modo: o.modo });
   if (d.preparar.codigo !== 0) return Object.assign(d, { t, db });
   ponerAnalisis(d.dir, { out: o.out || OUT30, parcial: o.parcial, sinRadar: o.sinRadar, t });
   const et = o.etoro || etoroFalso({ portafolio: o.portafolio || leerFix("etoro/lunes-ejecutado.json"), tasas: o.tasas || tasasA(leerFix("etoro/lunes-tasas.json").rates, t) });

@@ -4,9 +4,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { DB_SLUG, DB_RUTA, ARTEFACTO_URL, COLECCION_ARCHIVO, ACCION_REEMPLAZO, DOC_MAX, DOC_TOPES, PRESUPUESTO_DIA } from "./constantes.mjs";
+import { DB_SLUG, DB_UID, DB_RUTA, ARTEFACTO_URL, COLECCION_ARCHIVO, ACCION_REEMPLAZO, DOC_MAX, DOC_TOPES, PRESUPUESTO_DIA } from "./constantes.mjs";
 import { validarDoc, kindDeId, esDePagina } from "./esquemas.mjs";
 import { rutas, leerJson, escribirJson, ErrorArchivo } from "./archivos.mjs";
+import { lineaPush, pushConFalla } from "./aviso.mjs";
 
 // ---- canónico, integridad y precisión (§E.3) ----
 // N4: el canónico se toma de la forma JSON del documento, que es lo que llega a db (undefined en un arreglo → null, en un
@@ -37,10 +38,42 @@ export const ts = ms => (Number.isFinite(ms) ? new Date(Math.floor(ms / 1000) * 
 export const bytes = x => Buffer.byteLength(JSON.stringify(x), "utf8");
 
 // ---- Lectura (§D.2) ----
+// Modo archivo (D7, 00q): ArtifactData guarda los datos en out_dir y la sesión guarda el texto de la respuesta en `texto` (un
+// archivo nuevo por lectura: nunca reemplaza uno anterior) y agrega `linea` a lecturas.jsonl; importar saca de ese texto la
+// versión, la existencia y la identidad. out_dir va con la ruta real (la exportación `actual` puede moverse en el día).
 export function lectura(id, { obligatoria = true, dirAbs }) {
+  const base = path.join(fs.realpathSync(dirAbs), "entrada", "archivo");
+  let n = 1;
+  while (fs.existsSync(path.join(base, `${id}.${n}.txt`))) n++;
+  const texto = `entrada/archivo/${id}.${n}.txt`;
   return { id, obligatoria,
     en_linea: { herramienta: "mcp__claude-artifacts__db_get", args: { slug: DB_SLUG, path: `${DB_RUTA}/${id}` } },
-    archivo: { herramienta: "ArtifactData", args: { action: "get", url: ARTEFACTO_URL, collection: COLECCION_ARCHIVO, doc_id: id, out_dir: path.join(dirAbs, "entrada", "archivo") } } };
+    archivo: { herramienta: "ArtifactData", args: { action: "get", url: ARTEFACTO_URL, collection: COLECCION_ARCHIVO, doc_id: id, out_dir: base }, texto, linea: JSON.stringify({ id, texto }) } };
+}
+
+// Texto de `get` medido el 2-nov (00q): una línea por documento guardado y la identidad al final.
+//   - "<id>"  <n> bytes  version <V>  "<ruta>"          (<ruta> = <out_dir>/data/users/me/<id>.json, solo los datos)
+//   No document "<id>" in collection "data/users/me".
+//   (`me` in this path resolved to your user id on this artifact: <uid>)
+const RE_IDENTIDAD = /resolved to your user id on this artifact:\s*(u_[A-Za-z0-9_-]+)/g;
+const escRe = x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function lecturaDeTexto(dir, id, rel) {
+  const ruta = path.resolve(dir, rel);
+  if (!ruta.startsWith(path.resolve(dir) + path.sep)) return { error: "ruta_invalida" };
+  let t;
+  try { t = fs.readFileSync(ruta, "utf8"); } catch (e) { return { error: `sin_texto:${e.code || "lectura"}` }; }
+  const uids = [...t.matchAll(RE_IDENTIDAD)].map(m => m[1]);
+  if (!uids.length) return { error: "sin_identidad" };
+  if (uids.some(u => u !== DB_UID)) return { error: "identidad" };
+  if (new RegExp(`^No document "${escRe(id)}" in collection "${escRe(COLECCION_ARCHIVO)}"\\.\\s*$`, "m").test(t)) return { exists: false };
+  const m = t.match(new RegExp(`^- "${escRe(id)}"\\s+(\\d+) bytes\\s+version (\\d+)\\s+"([^"\\n]+)"\\s*$`, "m"));
+  if (!m) return { error: "texto_sin_version" };
+  const version = Number(m[2]), esperado = path.join(rutas(dir).entrada, "archivo", "data", "users", "me", id + ".json");
+  if (!fs.existsSync(m[3]) || !fs.existsSync(esperado)) return { error: "sin_archivo" };
+  if (fs.realpathSync(m[3]) !== fs.realpathSync(esperado)) return { error: "ruta_ajena" };
+  // el archivo guardado mide lo que dice el texto; si no, es de otra lectura o quedó a medias
+  if (fs.statSync(esperado).size !== Number(m[1])) return { corrupto: "tamano", version };
+  return { exists: true, version, rutaDatos: esperado };
 }
 
 const rutaVersiones = dir => path.join(rutas(dir).entradaDb, "_versiones.json");
@@ -81,19 +114,21 @@ export function importar(dir, { requeridos = null } = {}) {
     ultima.set(o.id, o);
   });
   const ver = leerVersiones(dir);
-  const res = { ok: [], no_existen: [], fallos: [], corruptos: [], ignorados: [], bytes: 0, lineasMalas: malas };
-  for (const [id, o] of ultima) {
+  const res = { ok: [], no_existen: [], fallos: [], corruptos: [], ignorados: [], identidad: [], bytes: 0, lineasMalas: malas };
+  for (const [id, o0] of ultima) {
     if (esDePagina(id) || !kindDeId(id)) { res.ignorados.push(id); continue; }
     const previo = ver[id] || {};
     const poner = x => { ver[id] = Object.assign({ estado: null, version: null, h: null, escritoEn: previo.escritoEn || null, sesion: previo.sesion || null }, x); };
-    if (o.error !== undefined) { poner({ estado: "fallo", codigo: String(o.error).slice(0, 80) }); res.fallos.push(id); continue; }
+    // modo archivo: la línea solo nombra el texto guardado; los datos salen del archivo que dejó ArtifactData
+    const deTexto = typeof o0.texto === "string" && o0.error === undefined && o0.exists === undefined ? lecturaDeTexto(dir, id, o0.texto) : null;
+    const o = deTexto || o0;
+    if (o.error !== undefined) { poner({ estado: "fallo", codigo: String(o.error).slice(0, 80) }); res.fallos.push(id); if (o.error === "identidad") res.identidad.push(id); continue; }
+    if (o.corrupto) { poner({ estado: "corrupto", version: o.version, codigo: o.corrupto }); res.corruptos.push(id); continue; }
     if (o.exists === false) { poner({ estado: "no_existe" }); res.no_existen.push(id); fs.rmSync(path.join(R.entradaDb, id + ".json"), { force: true }); continue; }
     if (o.exists !== true || !Number.isInteger(o.version) || o.version < 1) { poner({ estado: "fallo", codigo: "linea_invalida" }); res.fallos.push(id); continue; }
-    let data = o.data;
-    if (data === undefined && typeof o.archivo === "string") {
-      const ruta = path.resolve(dir, o.archivo);
-      if (!ruta.startsWith(path.resolve(dir) + path.sep)) { poner({ estado: "fallo", codigo: "ruta_invalida" }); res.fallos.push(id); continue; }
-      try { data = JSON.parse(fs.readFileSync(ruta, "utf8")); } catch (e) { poner({ estado: "corrupto", version: o.version, codigo: "json_invalido" }); res.corruptos.push(id); continue; }
+    let data = deTexto ? undefined : o.data;
+    if (deTexto) {
+      try { data = JSON.parse(fs.readFileSync(deTexto.rutaDatos, "utf8")); } catch (e) { poner({ estado: "corrupto", version: o.version, codigo: "json_invalido" }); res.corruptos.push(id); continue; }
     }
     const kind = kindDeId(id), problemas = validarDoc(id, data);
     const integro = kind === "feriados" || hOk(data);
@@ -142,9 +177,7 @@ export function armarGrupo({ dir, grupo, docs, modo, crear = [], delDia = [], ac
   let escribir = null;
   if (ops.length) {
     if (modo === "archivo") {
-      if (!ACCION_REEMPLAZO) throw new ErrorArchivo("sin_db", "modo archivo desactivado (D7)");
-      const batch = esperado.map(e => Object.assign({ action: ACCION_REEMPLAZO, doc_id: e.id, file_path: path.resolve(g, e.id + ".json") }, e.ifVersion !== null ? { if_version: e.ifVersion } : {}));
-      fs.writeFileSync(path.join(g, "artifactdata.json"), JSON.stringify({ action: "batch", url: ARTEFACTO_URL, collection: COLECCION_ARCHIVO, batch }));
+      fs.writeFileSync(path.join(g, "artifactdata.json"), JSON.stringify(batchArchivo(g, esperado)));
       escribir = `salida/${grupo}/artifactdata.json`;
     } else {
       fs.writeFileSync(path.join(g, "db_write.json"), JSON.stringify({ slug: DB_SLUG, ops }));
@@ -155,14 +188,26 @@ export function armarGrupo({ dir, grupo, docs, modo, crear = [], delDia = [], ac
   return { escribir, ops: ops.length, omitidos, bytes: esperado.reduce((s, e) => s + e.bytes, 0), esperado };
 }
 
+// Argumentos de `batch` medidos el 2-nov (00q): atómico, un `writes` por documento con su file_path (ruta real) e if_version.
+function batchArchivo(g, lista) {
+  const real = fs.realpathSync(g);
+  return { action: "batch", url: ARTEFACTO_URL, writes: lista.map(e => Object.assign({ op: ACCION_REEMPLAZO, collection: COLECCION_ARCHIVO, doc_id: e.id, file_path: path.join(real, e.id + ".json") },
+    e.ifVersion !== null ? { if_version: e.ifVersion } : {})) };
+}
+
 // ---- registrar (§E.9) ----
-function leerRespuesta(g, modo, nombre) {
+// ids: los del grupo en el orden de escritura. Texto de `batch` medido (00q): `- set "data/users/me"/"<id>" (version <V>)` por
+// escritura. Sin esas líneas completas no se supone nada; el texto de un rechazo por versión no está medido.
+function leerRespuesta(g, modo, nombre, ids) {
   if (modo === "archivo") {
     const f = path.join(g, nombre + ".txt");
     if (!fs.existsSync(f)) return { tipo: "ilegible" };
     const t = fs.readFileSync(f, "utf8");
-    if (/version[_ ]mismatch|409/i.test(t)) return { tipo: "conflicto" };
-    return { tipo: "texto", versiones: [...t.matchAll(/version\s+(\d+)/gi)].map(m => Number(m[1])) };
+    const vistos = [...t.matchAll(/^- set "data\/users\/me"\/"([^"]+)" \(version (\d+)\)\s*$/gm)].map(m => [m[1], Number(m[2])]);
+    if (vistos.length === ids.length && vistos.every(([id], i) => id === ids[i])) return { tipo: "texto", versiones: vistos.map(x => x[1]) };
+    // la cuenta de documentos ("409 of 25000 documents used") no es un código de error
+    if (/version[_ ]?mismatch|conflict|\b409\b|if_version|precondition/i.test(t.replace(/^\d+ of \d+ documents used.*$/gm, ""))) return { tipo: "conflicto" };
+    return { tipo: "ilegible" };
   }
   const f = path.join(g, nombre + ".json");
   if (!fs.existsSync(f)) return { tipo: "ilegible" };
@@ -184,7 +229,7 @@ export function registrar({ dir, grupo, verificar = false, reintento = false }) 
   const pendientes = verificar || reintento ? meta.ops.filter(e => !(ver[e.id] && ver[e.id].escritoEn === grupo && ver[e.id].sesion === sesion && ver[e.id].h === e.h)) : meta.ops;
 
   if (reintento) {
-    const r = leerRespuesta(g, modo, "resultado-reintento"), lista = meta.reintentoOps || [];
+    const lista = meta.reintentoOps || [], r = leerRespuesta(g, modo, "resultado-reintento", lista.map(e => e.id));
     if ((r.tipo === "resultados" || r.tipo === "texto") && r.versiones.length === lista.length && r.versiones.every(Number.isInteger)) {
       lista.forEach((e, i) => marcar(e, r.versiones[i]));
       return fin(0, "listo");
@@ -206,8 +251,7 @@ export function registrar({ dir, grupo, verificar = false, reintento = false }) 
     // un solo reintento con los no escritos y sus versiones actuales
     const ops = noEscritos.map(e => { const data = leerJson(path.join(g, e.id + ".json")), op = { op: "set", path: `${DB_RUTA}/${e.id}`, data }; if (e.ifVersion !== null) op.ifVersion = e.ifVersion; return op; });
     if (modo === "archivo") {
-      const batch = noEscritos.map(e => Object.assign({ action: ACCION_REEMPLAZO, doc_id: e.id, file_path: path.resolve(g, e.id + ".json") }, e.ifVersion !== null ? { if_version: e.ifVersion } : {}));
-      fs.writeFileSync(path.join(g, "artifactdata-reintento.json"), JSON.stringify({ action: "batch", url: ARTEFACTO_URL, collection: COLECCION_ARCHIVO, batch }));
+      fs.writeFileSync(path.join(g, "artifactdata-reintento.json"), JSON.stringify(batchArchivo(g, noEscritos)));
       res.reintento = `salida/${grupo}/artifactdata-reintento.json`;
     } else {
       fs.writeFileSync(path.join(g, "db_write-reintento.json"), JSON.stringify({ slug: DB_SLUG, ops }));
@@ -217,7 +261,7 @@ export function registrar({ dir, grupo, verificar = false, reintento = false }) 
     res.sin_confirmar = noEscritos.map(e => e.id);
     return fin(0, "reintentar");
   }
-  const r = leerRespuesta(g, modo, "resultado");
+  const r = leerRespuesta(g, modo, "resultado", meta.ops.map(e => e.id));
   if ((r.tipo === "resultados" || r.tipo === "texto") && r.versiones.length === meta.ops.length && r.versiones.every(Number.isInteger)) {
     meta.ops.forEach((e, i) => marcar(e, r.versiones[i]));
     return fin(0, "listo");
@@ -234,6 +278,7 @@ export function registrar({ dir, grupo, verificar = false, reintento = false }) 
 // N-5b (00o): además de rutina-estado se releen cartera-libro y, si hubo envíos, ejecucion-<hoy> (trabajo/verificar.json). Si
 // alguno no tiene el h que se preparó, se arma salida/revision/ (rutina-estado con `revisar`: el día siguiente no opera hasta
 // que el director lo revise) y se agrega la falla al aviso.
+export const FALLA_PUSH_REVISION = "Falla: db no quedó como se preparó; no se opera hasta revisión";
 export const TEXTO_REVISION = ids => `Falla: ${ids.join(", ")} no quedó en db como se preparó; no se opera hasta que el director lo revise.`;
 export function verificarEstado(dir) {
   importar(dir, { requeridos: [] });
@@ -256,9 +301,13 @@ export function verificarEstado(dir) {
     const marca = Object.assign({}, doc, { revisar: { f: doc.fecha, motivo: `no quedó en db como se preparó: ${distintos.join(", ")}`, ids: distintos,
       esperado: Object.fromEntries(distintos.map(id => [id, esperado(id).h])) } });
     escribir = armarGrupo({ dir, grupo: "revision", docs: [{ id: "rutina-estado", data: marca }], modo: modoDeCarpeta(dir) }).escribir;
-    const rutaAviso = path.join(R.salida, "aviso.txt"), linea = TEXTO_REVISION(distintos);
+    const rutaAviso = path.join(R.salida, "aviso.txt"), rutaPush = path.join(R.salida, "aviso-push.txt"), linea = TEXTO_REVISION(distintos);
     let aviso = fs.existsSync(rutaAviso) ? fs.readFileSync(rutaAviso, "utf8") : "";
-    if (!aviso.includes(linea)) { aviso = aviso ? `${aviso}\n${linea}` : linea; if (aviso.length > 700) aviso = aviso.slice(0, 700 - linea.length - 2) + "…\n" + linea; fs.writeFileSync(rutaAviso, aviso); }
+    if (!aviso.includes(linea)) {
+      aviso = aviso ? `${aviso}\n${linea}` : linea; if (aviso.length > 700) aviso = aviso.slice(0, 700 - linea.length - 2) + "…\n" + linea; fs.writeFileSync(rutaAviso, aviso);
+      // la línea de push también dice que el día quedó marcado (00q §3)
+      fs.writeFileSync(rutaPush, pushConFalla(fs.existsSync(rutaPush) ? fs.readFileSync(rutaPush, "utf8") : lineaPush(aviso), FALLA_PUSH_REVISION));
+    }
   }
   const ok = hOkay && !!doc && doc.estado !== "en_curso" && !distintos.length;
   return { codigo: ok ? 0 : 3, accion: ok ? "listo" : distintos.length ? "marcar" : "fallo", escribir,
@@ -274,14 +323,16 @@ export function presupuesto(dir) {
   if (fs.existsSync(archivoL)) for (const l of fs.readFileSync(archivoL, "utf8").split("\n").filter(x => x.trim())) {
     let o; try { o = JSON.parse(l); } catch (e) { continue; }
     if (o && o.exists && o.data) sumar(o.id, 0, bytes(o.data));
-    else if (o && o.exists && typeof o.archivo === "string") { try { sumar(o.id, 0, fs.statSync(path.resolve(dir, o.archivo)).size); } catch (e) { /* sin archivo */ } }
+    // modo archivo: por el modelo pasa solo el texto de la respuesta (los datos van de ArtifactData al archivo)
+    else if (o && typeof o.texto === "string") { const f = path.resolve(dir, o.texto); if (fs.existsSync(f)) sumar(o.id, 0, fs.statSync(f).size); }
   }
   if (fs.existsSync(R.salida)) for (const g of fs.readdirSync(R.salida)) {
-    for (const f of ["db_write.json", "db_write-reintento.json"]) {
+    for (const f of ["db_write.json", "db_write-reintento.json", "artifactdata.json", "artifactdata-reintento.json"]) {
       const ruta = path.join(R.salida, g, f);
       if (!fs.existsSync(ruta)) continue;
       let o; try { o = JSON.parse(fs.readFileSync(ruta, "utf8")); } catch (e) { continue; }
       for (const op of o.ops || []) sumar(op.path.split("/").pop(), 1, bytes(op.data));
+      for (const w of o.writes || []) sumar(w.doc_id, 1, bytes(w));
     }
   }
   const leidos = Object.values(porDocumento).reduce((s, x) => s + x[0], 0), escritos = Object.values(porDocumento).reduce((s, x) => s + x[1], 0);
