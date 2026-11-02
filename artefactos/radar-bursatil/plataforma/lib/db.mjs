@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import { DB_SLUG, DB_UID, DB_RUTA, ARTEFACTO_URL, COLECCION_ARCHIVO, ACCION_REEMPLAZO, DOC_MAX, DOC_TOPES, PRESUPUESTO_DIA } from "./constantes.mjs";
 import { validarDoc, kindDeId, esDePagina } from "./esquemas.mjs";
 import { rutas, leerJson, escribirJson, ErrorArchivo } from "./archivos.mjs";
-import { lineaPush, pushConFalla } from "./aviso.mjs";
+import { lineaPush, pushConFalla, avisoConLinea } from "./aviso.mjs";
 
 // ---- canónico, integridad y precisión (§E.3) ----
 // N4: el canónico se toma de la forma JSON del documento, que es lo que llega a db (undefined en un arreglo → null, en un
@@ -335,7 +335,7 @@ export function verificarEstado(dir) {
     const rutaAviso = path.join(R.salida, "aviso.txt"), rutaPush = path.join(R.salida, "aviso-push.txt"), linea = TEXTO_REVISION(distintos);
     let aviso = fs.existsSync(rutaAviso) ? fs.readFileSync(rutaAviso, "utf8") : "";
     if (!aviso.includes(linea)) {
-      aviso = aviso ? `${aviso}\n${linea}` : linea; if (aviso.length > 700) aviso = aviso.slice(0, 700 - linea.length - 2) + "…\n" + linea; fs.writeFileSync(rutaAviso, aviso);
+      aviso = avisoConLinea(aviso, linea); fs.writeFileSync(rutaAviso, aviso);
       // la línea de push también dice que el día quedó marcado (00q §3)
       fs.writeFileSync(rutaPush, pushConFalla(fs.existsSync(rutaPush) ? fs.readFileSync(rutaPush, "utf8") : lineaPush(aviso), FALLA_PUSH_REVISION));
     }

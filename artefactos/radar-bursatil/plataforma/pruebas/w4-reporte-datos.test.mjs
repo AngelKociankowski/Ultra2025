@@ -100,7 +100,7 @@ test("(5) sin ArtifactData o sin Artifact → lista responde saltar (y lo dice e
   assert.ok(datos(e.dir, "alertas").some(a => a.texto === "Reporte sin historial: hoy no hubo ArtifactData."));
 });
 
-test("(6) escribir: /_blob/ de subida-ok (texto real de D-R1), nada de subida-sin-url; versiones de dash-list (00q); artifactdata.json exacto", async () => {
+test("(6) escribir: /_blob/ de subida-ok (texto real de D-R1), nada de subida-sin-url (S4: entonces ninguno); versiones de dash-list (00q); artifactdata.json exacto", async () => {
   const e = await diaCerrado();
   await fase(e.dir, "lista");
   const lr = leerTrabajo(e.dir, "leer-reporte.json");
@@ -112,19 +112,24 @@ test("(6) escribir: /_blob/ de subida-ok (texto real de D-R1), nada de subida-si
   await fase(e.dir, "armar");
   const sub = leerTrabajo(e.dir, "subir-reporte.json").subidas;
   assert.deepEqual(sub[0], { id: "resumen", args: { action: "publish", url: DASH_URL, asset: true, file_path: path.join(fs.realpathSync(e.dir), "salida/reporte/resumen.json") }, texto: "salida/reporte/subida-resumen.txt" });
-  for (const s of sub) fs.writeFileSync(path.join(e.dir, s.texto), fs.readFileSync(path.join(FIX, s.id === "noticias" ? "dash/subida-sin-url.txt" : "dash/subida-ok.txt")));
+  // con todas las subidas buenas (texto real de D-R1): 9 escrituras, versión fijada solo donde dash-list la trae
+  for (const s of sub) fs.writeFileSync(path.join(e.dir, s.texto), fs.readFileSync(path.join(FIX, "dash/subida-ok.txt")));
   const w = await fase(e.dir, "escribir");
-  assert.deepEqual([w.linea.accion, w.linea.resumen.datasets], ["escribir", 8]);
+  assert.deepEqual([w.linea.accion, w.linea.resumen.datasets], ["escribir", 9]);
   const ad = JSON.parse(leerSal(e.dir, "reporte/artifactdata.json")), abs = fs.realpathSync(e.dir);
   assert.deepEqual(Object.keys(ad), ["action", "url", "writes"]); assert.deepEqual([ad.action, ad.url], ["batch", DASH_URL]);
   assert.deepEqual(ad.writes.find(x => x.doc_id === "resumen"), { op: "set", collection: "datasets", doc_id: "resumen", file_path: path.join(abs, "salida/reporte/ds-resumen.json"), if_version: 3 });
   assert.deepEqual(ad.writes.find(x => x.doc_id === "posiciones"), { op: "set", collection: "datasets", doc_id: "posiciones", file_path: path.join(abs, "salida/reporte/ds-posiciones.json") });
-  assert.ok(!ad.writes.some(x => x.doc_id === "noticias"));
   const ds = JSON.parse(leerSal(e.dir, "reporte/ds-resumen.json"));
   assert.deepEqual(Object.keys(ds), ["title", "description", "source", "updated", "schedule", "staleAfterHours"]);
   assert.deepEqual([ds.title, ds.source, ds.updated.by, ds.schedule, ds.staleAfterHours], ["Resumen de la cartera", { kind: "file", url: "/_blob/abf2b98035e66d57ed0080524216bd58", name: "resumen.json", format: "json" },
     "Rutina diaria de Claude", "Cada día hábil, al terminar la rutina de las 9:47 ET", 96]);
   assert.ok(ds.description.endsWith("Archivo que sube la rutina diaria."));
+  // nada de subida-sin-url: ese dataset no se escribe, y tampoco los demás (S4: el dashboard no mezcla cortes)
+  fs.writeFileSync(path.join(e.dir, "salida/reporte/subida-noticias.txt"), fs.readFileSync(path.join(FIX, "dash/subida-sin-url.txt")));
+  assert.equal((await fase(e.dir, "escribir")).linea.accion, "saltar");
+  assert.ok(!fs.existsSync(path.join(e.dir, "salida/reporte/artifactdata.json")));
+  for (const s of sub) fs.writeFileSync(path.join(e.dir, s.texto), fs.readFileSync(path.join(FIX, "dash/subida-ok.txt")));
   // la lista real del dashboard vacío (D-R1): ninguna versión fijada
   fs.writeFileSync(path.join(e.dir, lr.lecturas[2].texto), fs.readFileSync(path.join(FIX, "dash/dash-list-real.txt")));
   await fase(e.dir, "escribir");

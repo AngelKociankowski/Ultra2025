@@ -16,7 +16,7 @@ import { main as dbCli } from "../bin/db.mjs";
 import { leerTrabajo } from "../lib/archivos.mjs";
 import { DATASETS } from "../lib/reporte.mjs";
 import { transporteFalso } from "../lib/http.mjs";
-import { crearSesion, artifactFalso } from "./db-falso.mjs";
+import { crearSesion, artifactFalso, artifactDataFalso } from "./db-falso.mjs";
 import { etoroFalso } from "./etoro-falso.mjs";
 import { PAG, dbInicial, tasasA } from "./escenario.mjs";
 import { docsPagina } from "./pagina-falsa.mjs";
@@ -26,13 +26,13 @@ const T = Date.parse("2026-11-04T14:47:00Z"), MIN = 60000;
 const PAGINA_IDS = ["indice", "dia-2026-10-30", "dia-2026-10-30-p0", "dia-2026-10-30-p1", "dia-2026-10-30-p2", "dia-2026-10-30-p3"];
 const sinFmp = () => transporteFalso(() => ({ http: 0, conectar: 403, texto: "", errorRed: "curl 56" }));
 
-async function miercoles({ modo, herramientas }) {
+async function miercoles({ modo, herramientas, fallaGet = null }) {
   const db = dbInicial(Object.assign({ "cartera-libro": leerFix("db/lunes-real-libro-v2.json"), "rutina-estado": leerFix("db/lunes-real-estado-v2.json") }, docsPagina()));
   const versiones = Object.fromEntries(PAGINA_IDS.map(id => [id, db.version(id)])), raiz = carpetaTemporal();
   const h = herramientas.split(","), P = {};
   // pasos 2 y 3
   const l = await preparar(["--fase", "lista", "--modo", modo, "--herramientas", herramientas], { ahora: () => T, raiz });
-  const dir = path.join(raiz, ".trabajo", l.linea.fecha), S = crearSesion({ db, dir, modo });
+  const dir = path.join(raiz, ".trabajo", l.linea.fecha), S = crearSesion({ db, dir, modo, ad: fallaGet ? artifactDataFalso(db, { fallaGet }) : null });
   S.leer(l.linea.lecturas);
   P.preparar = await preparar(["--dir", dir, "--fase", "decidir"], { ahora: () => T, pagina: PAG, sesion: "s-mie" });
   P.ahora = S.escribir("ahora");
@@ -110,4 +110,15 @@ test("la misma corrida sin la herramienta Artifact: Reporte: sin actualizar (fal
   assert.equal(m.S.ad.dash.size, 0);
   assert.equal(m.db.doc("bitacora-2026-11-04").radar.fu, "pagina");
   for (const id of PAGINA_IDS) assert.equal(m.db.version(id), m.versiones[id], id);
+});
+
+test("S2 (tester ronda 5): sin la parte de series p3 el análisis vale, pero el día dice que no hubo objetivo y por qué", { timeout: 300000 }, async () => {
+  const m = await miercoles({ modo: "archivo", herramientas: "artifactdata,artifact,push", fallaGet: id => id === "dia-2026-10-30-p3" });
+  assert.equal(m.P.radar.linea.accion, "listo");
+  const an = leerTrabajo(m.dir, "analisis.json"), dec = leerTrabajo(m.dir, "decisiones.json");
+  assert.ok(an.alertas.some(a => /sin una parte de series \(dia-2026-10-30-p3\)/.test(a)), JSON.stringify(an.alertas));
+  assert.notEqual(dec.objetivo.estado, "ok");
+  assert.ok(dec.alertas.some(a => a.startsWith("Sin objetivo del Radar hoy (")), JSON.stringify(dec.alertas));
+  assert.match(m.aviso, /\nRadar: análisis de la página del 30-oct \(3 días hábiles\); régimen [^;\n]+; sin objetivo hoy \([^)]+\)/);
+  assert.ok(m.db.doc("bitacora-2026-11-04").alertas.some(a => /^Sin objetivo del Radar hoy/.test(a)));
 });

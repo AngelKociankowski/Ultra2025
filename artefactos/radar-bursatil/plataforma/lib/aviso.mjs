@@ -19,6 +19,7 @@ function lineaRadar(r) {
   else if (r.fuente === "rutina" && r.ant > 0) partes.push(`corrida propia del ${diaMes(r.fa)} (${r.ant} ${r.ant === 1 ? "día hábil" : "días hábiles"})`);
   else if (r.fuente === "rutina") partes.push("corrida propia de hoy");
   partes.push(`régimen ${r.regimen || "—"}`);
+  if (r.sinObjetivo) partes.push(`sin objetivo hoy (${r.sinObjetivo})`);
   if (r.sinCompras) partes.push(`sin compras: el Radar tiene ${r.ant} días`);
   return `Radar: ${partes.concat(r.mismo ? [] : (r.cambios || []).slice(0, 3)).join("; ")}`;
 }
@@ -114,4 +115,16 @@ export function armarPush(d) {
   let n = detalle.length;
   while (n > 0 && (base + entre(n) + cola).length > MAX_PUSH) n--;
   return lineaPush(base + entre(n) + cola);
+}
+
+// S3 (tester ronda 5): agrega una línea al final del aviso sin pasar de 700. Se recortan primero las demás líneas, de abajo hacia
+// arriba y sin tocar la primera; una línea "Falla:" nunca se corta.
+export function avisoConLinea(aviso, linea, max = MAX_AVISO) {
+  const L = (aviso ? String(aviso).split("\n") : []).concat([linea]), largo = () => L.join("\n").length;
+  for (let i = L.length - 2; i >= 1 && largo() > max; i--) {
+    if (L[i].startsWith("Falla:")) continue;
+    const sobra = largo() - max;
+    if (L[i].length - sobra >= 20) L[i] = recorta(L[i], L[i].length - sobra); else L.splice(i, 1);
+  }
+  return largo() <= max ? L.join("\n") : recorta(L.join("\n"), max);
 }

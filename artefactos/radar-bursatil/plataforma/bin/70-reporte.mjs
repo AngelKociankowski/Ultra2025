@@ -14,11 +14,11 @@ import { hOk, reservarNumero } from "../lib/db.mjs";
 import { libroDeDb } from "../lib/libro.mjs";
 import { validarNoticias } from "../lib/noticias.mjs";
 import { DATASETS, armarDatasets, validarDataset } from "../lib/reporte.mjs";
+import { avisoConLinea } from "../lib/aviso.mjs";
 
 const PASO = "70-reporte";
 const AYUDA = "Uso: node bin/70-reporte.mjs --dir <carpeta> --fase lista|armar|escribir|registrar";
 const FASES = ["lista", "armar", "escribir", "registrar"];
-const MAX_AVISO = 700;
 const ts = ms => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 // la forma de 00q para la lista de datasets del dashboard: - "<id>"  <n> bytes  version <V>  "<ruta>"
 const RE_LISTA = /^- "([^"]+)"\s+\d+ bytes\s+version (\d+)\s+"[^"\n]+"\s*$/gm;
@@ -27,10 +27,8 @@ function lineaAviso(dir, linea) {
   const f = path.join(rutas(dir).salida, "aviso.txt");
   let aviso = fs.existsSync(f) ? fs.readFileSync(f, "utf8") : "";
   if (aviso.split("\n").some(l => l.startsWith("Reporte: "))) return;
-  aviso = aviso ? `${aviso}\n${linea}` : linea;
-  if (aviso.length > MAX_AVISO) aviso = aviso.slice(0, MAX_AVISO - linea.length - 2) + "…\n" + linea;
   fs.mkdirSync(path.dirname(f), { recursive: true });
-  fs.writeFileSync(f, aviso);
+  fs.writeFileSync(f, avisoConLinea(aviso, linea));
 }
 // leer un JSON del día sin tumbar el paso: null si falta o no se puede leer
 const leer = ruta => { try { return leerJson(ruta); } catch (e) { return null; } };
@@ -115,15 +113,19 @@ export async function main(argv, { ahora = Date.now } = {}) {
       const versiones = lista === null ? {} : Object.fromEntries([...lista.matchAll(RE_LISTA)].map(m => [m[1], Number(m[2])]));
       if (lista === null || !(Object.keys(versiones).length || /^No documents matched in collection "datasets"\./m.test(lista))) return saltar("no se pudo leer la lista del dashboard");
       const t = ts(ahora()), writes = [];
+      fs.rmSync(path.join(sr, "artifactdata.json"), { force: true });
+      // S4 (tester ronda 5): si una subida no trae su dirección no se escribe ninguno: cada dataset conserva el anterior completo
+      // y el dashboard no mezcla el corte de hoy con el de ayer
+      const urls = Object.fromEntries(sub.subidas.map(s => { const f = path.join(sr, `subida-${s.id}.txt`), m = fs.existsSync(f) ? fs.readFileSync(f, "utf8").match(/\/_blob\/[A-Za-z0-9_-]+/) : null; return [s.id, m]; }));
+      const sinUrl = sub.subidas.filter(s => !urls[s.id]).map(s => s.id);
+      if (sinUrl.length) return saltar(`la subida de ${sinUrl.join(", ")} no devolvió la dirección del archivo; el dashboard sigue con el corte anterior`);
       for (const s of sub.subidas) {
-        const f = path.join(sr, `subida-${s.id}.txt`), m = fs.existsSync(f) ? fs.readFileSync(f, "utf8").match(/\/_blob\/[A-Za-z0-9_-]+/) : null;
-        if (!m) { reg.aviso(`reporte: ${s.id} sin /_blob/ en la respuesta de la subida`); continue; }
+        const m = urls[s.id];
         const d = DATASETS.find(x => x.id === s.id), fds = path.join(sr, `ds-${s.id}.json`);
         escribirJson(fds, { title: d.titulo, description: d.descripcion, source: { kind: "file", url: m[0], name: d.archivo, format: "json" },
           updated: { at: t, by: "Rutina diaria de Claude" }, schedule: "Cada día hábil, al terminar la rutina de las 9:47 ET", staleAfterHours: 96 }, { compacto: true });
         writes.push(Object.assign({ op: "set", collection: "datasets", doc_id: s.id, file_path: path.join(abs, "salida", "reporte", `ds-${s.id}.json`) }, versiones[s.id] ? { if_version: versiones[s.id] } : {}));
       }
-      if (!writes.length) return saltar("ninguna subida devolvió la dirección del archivo");
       fs.writeFileSync(path.join(sr, "artifactdata.json"), JSON.stringify({ action: "batch", url: DASH_URL, writes }));
       return sale("escribir", { datasets: writes.length }, { escribir: "salida/reporte/artifactdata.json" });
     }

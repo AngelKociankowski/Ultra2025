@@ -42,10 +42,10 @@ export function validarManifiesto(C, m, fecha) {
 export function validarDia({ C, fecha, manifiesto, partes, hoy, feriados }) {
   const m = validarManifiesto(C, manifiesto, fecha);
   if (m) return { ok: false, motivo: m };
-  const usadas = [];
+  const usadas = [], sinSeries = [];
   for (const [k, d] of manifiesto.parts.entries()) {
     const p = partes[d.id];
-    if (!p) { if (d.kind === "series") continue; return { ok: false, motivo: "partes_incompletas" }; }
+    if (!p) { if (d.kind === "series") { sinSeries.push(d.id); continue; } return { ok: false, motivo: "partes_incompletas" }; }
     if (!isObj(p) || p.kind !== "diaParte" || p.v !== manifiesto.v || p.dateET !== fecha || p.runId !== manifiesto.runId || p.k !== k) return { ok: false, motivo: "forma" };
     usadas.push(p);
   }
@@ -53,7 +53,7 @@ export function validarDia({ C, fecha, manifiesto, partes, hoy, feriados }) {
   if (!out || !crearValidarSalida(C)(out) || !out.rows.length) return { ok: false, motivo: "forma" };
   const antiguedad = antiguedadDe(out.asOf, hoy, feriados);
   if (antiguedad > MAX_ANTIGUEDAD) return { ok: false, motivo: "analisis_viejo" };
-  return { ok: true, motivo: null, out, antiguedad, parcial: manifiesto.partial === true };
+  return { ok: true, motivo: null, out, antiguedad, parcial: manifiesto.partial === true, sinSeries };
 }
 
 // ---- máquina de estados (§C.4) ----
@@ -116,6 +116,8 @@ export function pasoPagina({ C, dir, sesion, hoy, feriados }) {
   const v = validarDia({ C, fecha, manifiesto: st.manifiesto, partes, hoy, feriados });
   if (!v.ok) return siguienteCandidato(v.motivo);
   const m = st.manifiesto;
+  // S2 (tester ronda 5): sin una parte de series el análisis vale (como en joinDay), pero el día lo dice
+  if (v.sinSeries.length) st.alertas.push(`El análisis de la página llegó sin ${v.sinSeries.length === 1 ? "una parte" : `${v.sinSeries.length} partes`} de series (${v.sinSeries.join(", ")}): puede no haber objetivo hoy.`);
   const analisis = { fuente: "pagina", estado: v.parcial ? "parcial" : "listo", motivo: null, fecha, asOf: v.out.asOf, antiguedad: v.antiguedad, plan: v.out.plan,
     parcial: v.parcial, nowMs: v.out.nowMs, runId: null, runIdFuente: m.runId, guardadoPagina: m.savedAt ?? null, llamadas: { total: 0 }, out: v.out };
   // el análisis completo (≈ 1.3 MB) no se guarda en el estado: queda en analisis.json y en la caché

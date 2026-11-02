@@ -194,12 +194,14 @@ export function crearSesion({ db, dir, corromper = null, omitir = [], modo = "en
 
 // Herramienta Artifact falsa (12c §F.2; texto con la forma medida en D-R1): `publish` con asset:true guarda el archivo y responde
 // con su dirección /_blob/x<n>
-export function artifactFalso() {
+// sinUrl: archivos (nombre sin .json) cuya subida responde sin dirección (texto de error)
+export function artifactFalso({ sinUrl = [] } = {}) {
   const blobs = new Map();
   return {
     blobs,
     publish(a) {
       if (a.action !== "publish" || a.url !== DASH_URL || a.asset !== true || !path.isAbsolute(a.file_path)) throw new Error(`publish inválido ${JSON.stringify(a)}`);
+      if (sinUrl.includes(path.basename(a.file_path, ".json"))) return "db batch write failed (unavailable): the asset store did not respond; nothing was uploaded";
       const txt = fs.readFileSync(a.file_path), id = `x${blobs.size + 1}`;
       blobs.set(id, JSON.parse(txt.toString("utf8")));
       return `Asset uploaded: "${path.basename(a.file_path)}" (${txt.length} bytes, application/json, sha256 ${crypto.createHash("sha256").update(txt).digest("hex")}) is now stored in the artifact as "/_blob/${id}" (id ${id}). Reference it from the page by that url verbatim.`;

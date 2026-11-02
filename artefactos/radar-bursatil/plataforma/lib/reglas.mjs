@@ -82,6 +82,8 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
     if (objetivo.estado !== "ok") { base = "sin_objetivo"; motivoModo = `buildPortfolio: ${objetivo.estado}`; }
     else if (out.partial || (analisis && analisis.parcial)) { base = "restringido"; motivoModo = "análisis parcial"; }
   }
+  // S2 (tester ronda 5): con análisis pero sin objetivo, el día lo dice (no hay compras, rebalanceo ni salidas por V2)
+  if (out && base === "sin_objetivo" && objetivo.estado !== "sin_valuacion") alertas.push(`Sin objetivo del Radar hoy (${motivoModo}): no hay compras, rebalanceo ni salidas por V2.`);
   let bloqueo = null;
   if (!cartera || cartera.estado !== "listo" || !libro || !val) bloqueo = "sin datos de eToro o del libro";
   else if (contexto.bloqueoLibro) bloqueo = "cartera-libro no se pudo leer";

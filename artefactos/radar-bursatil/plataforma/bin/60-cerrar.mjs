@@ -173,7 +173,8 @@ function cerrar({ dir, a, t, reg }) {
   const datosAviso = {
     fecha, hora: fechaHoraET(t).hora, simulacion, cartera: v ? { valorUSD: v.valorUSD, valorMXN: v.valorMXN } : null, rend,
     radar: out ? { regimen: radar.reg && radar.reg.l, cambios: (radar.cambios || []).slice().sort((x, y) => pri(x) - pri(y)).map(frase).filter(Boolean),
-      fuente: radar.fu || null, fa: out.asOf, ant: radar.ant ?? null, mismo: mismoAnalisis(estadoPrevio && estadoPrevio.previo, out.asOf), sinCompras: !!(decis && decis.sinCompras) } : { sinRadar: true, motivo: radar.motivo },
+      fuente: radar.fu || null, fa: out.asOf, ant: radar.ant ?? null, mismo: mismoAnalisis(estadoPrevio && estadoPrevio.previo, out.asOf), sinCompras: !!(decis && decis.sinCompras),
+      sinObjetivo: decis && decis.objetivo && decis.objetivo.estado !== "ok" && decis.objetivo.estado !== "sin_valuacion" ? decis.motivoModo || decis.objetivo.estado : null } : { sinRadar: true, motivo: radar.motivo },
     notas: [...new Set(notasAviso)].slice(0, 2).map(n => ({ titulo: n.titulo, medio: n.medio })), operaciones: opsAviso, alertas: alertasTodas, fallas,
   };
   const aviso = armarAviso(datosAviso);

@@ -44,6 +44,18 @@ export function validarDataset(id, filas) {
   return p;
 }
 
+// S1 (tester ronda 5): los textos del día pueden nombrar posiciones u órdenes de eToro por su número; en el dashboard (archivos que
+// lee cualquiera que pueda abrirlo) van sin él: "la posición de SPY", "la orden", y cualquier otro número de 9+ dígitos → "[id]"
+export function sinIdsEToro(texto) {
+  const sym = (String(texto).match(/^([A-Z0-9^.=-]{1,12}): /) || [])[1];
+  return String(texto)
+    .replace(/\b([Pp])osición \d{6,} \(orden \d{6,}\)/g, (m, p) => (p === "P" ? "Una posición" : "una posición"))
+    .replace(/\b([Pp])osición \d{6,}/g, (m, p) => `${p}osición${sym ? ` de ${sym}` : ""}`)
+    .replace(/\b(la|una|su) orden \d{6,}/g, "$1 orden")
+    .replace(/\d{9,}/g, "[id]");
+}
+const limpiarFilas = filas => filas.map(f => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, typeof v === "string" && k !== "url" ? sinIdsEToro(v) : v])));
+
 // e: { fecha, bit (bitácora final), libro (cartera.json → libro), valuacion, composicion, analisis, resumenRadar, decis, ops: {id: op} (todas,
 //      las de hoy ya encima), puntos: [punto docs], avisoFallas: [texto], alertasReporte: [texto], notas: { validas, eventos } }
 export function armarDatasets(e) {
@@ -129,5 +141,5 @@ export function armarDatasets(e) {
       regimen: conRadar && rr.reg ? rr.reg.l || null : null, simulacion: !!e.bit.sim, estado_dia: e.bit.estado, n_posiciones: posiciones.filter(p => p.simbolo !== "EFECTIVO").length,
       n_operaciones: operaciones.filter(o => o.fecha === e.fecha).length, n_alertas: alertas.length });
   }
-  return { resumen, posiciones, composicion, evolucion, radar, decisiones, operaciones, noticias, alertas };
+  return Object.fromEntries(Object.entries({ resumen, posiciones, composicion, evolucion, radar, decisiones, operaciones, noticias, alertas }).map(([id, filas]) => [id, limpiarFilas(filas)]));
 }
