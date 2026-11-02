@@ -103,3 +103,7 @@ export function cambios12c(planC) {
       "  `Radar · <fecha> · Falla: el código <commit corto> no pasa sus pruebas; la rutina no corrió.`\n" + g7f12 + "\n"],
   ];
 }
+
+// W-5 (director, tras 7eae93d): F7 ya no manda "sigue sin Radar" a secas; con `siguiente: "pagina"` el paso 4 pasa a la página
+export const F7_DIRECTOR = "- **F7 · La página cambió** (`10-radar` con motivo `pagina_cambio`): el Radar no corre por su cuenta hoy. Si la respuesta trae `siguiente: \"pagina\"`, sigue el paso 4 en modo `pagina`; si no, sigue sin Radar.";
+export const CAMBIOS_DIRECTOR = Object.freeze([["- **F7 · La página cambió** (`10-radar` con motivo `pagina_cambio`): sigue sin Radar.", F7_DIRECTOR]]);

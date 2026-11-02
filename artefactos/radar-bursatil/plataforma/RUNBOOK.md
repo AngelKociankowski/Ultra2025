@@ -240,7 +240,7 @@ de push `Radar · <día> <d-mes> · Falla: no se guardó en db; detalle en el ch
   `registrar` termina en `conflicto` (otra escritura cambió un documento) o en `db_no_disponible` (la base no respondió ni en el
   reintento) → no escribas nada más; corre `node bin/60-cerrar.mjs --dir .trabajo/hoy --degradado db` solo para obtener el aviso
   (no escribas su grupo; el aviso ya dice cuál de los dos casos fue) y ve al paso 10.
-- **F7 · La página cambió** (`10-radar` con motivo `pagina_cambio`): sigue sin Radar.
+- **F7 · La página cambió** (`10-radar` con motivo `pagina_cambio`): el Radar no corre por su cuenta hoy. Si la respuesta trae `siguiente: "pagina"`, sigue el paso 4 en modo `pagina`; si no, sigue sin Radar.
 - **F8 · Cualquier otro error** (código 1 inesperado, archivo que no aparece): no corrijas código.
   `node bin/60-cerrar.mjs --dir .trabajo/hoy --degradado <paso>`, haz ESCRIBIR del grupo `final` y paso 10. Si `60-cerrar`
   también falla: último mensaje `Radar · <fecha> · Falla: la rutina no pudo cerrar (<paso>). Sin operaciones nuevas.` y no

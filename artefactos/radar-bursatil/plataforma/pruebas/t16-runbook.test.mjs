@@ -8,7 +8,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { RAIZ } from "./util.mjs";
 import { lectura } from "../lib/db.mjs";
-import { CAMBIOS_RUNBOOK, LEER_APROBADO, FALLA_PUSH_DB, aplicar, bloqueL, cambios12c, bloqueH } from "./runbook-plan.mjs";
+import { CAMBIOS_RUNBOOK, LEER_APROBADO, FALLA_PUSH_DB, aplicar, bloqueL, cambios12c, bloqueH, CAMBIOS_DIRECTOR, F7_DIRECTOR } from "./runbook-plan.mjs";
 
 const RUNBOOK = fs.readFileSync(path.join(RAIZ, "RUNBOOK.md"), "utf8");
 const PROMPT = fs.readFileSync(path.join(RAIZ, "PROMPT-TAREA.md"), "utf8");
@@ -50,7 +50,7 @@ test("RUNBOOK.md = 12b §L + cambios registrados + 12c §G literales (v2.1.0); P
   const rutaC = process.env.RADAR_PLAN_12C || path.resolve(RAIZ, "../../../.trabajo/ciclo/12c-enmienda-radar-reportes.md");
   if (!fs.existsSync(ruta) || !fs.existsSync(rutaC)) { t.skip("12b/12c no están en este clon (van fuera del repo)"); return; }
   const plan = fs.readFileSync(ruta, "utf8"), planC = fs.readFileSync(rutaC, "utf8");
-  assert.equal(RUNBOOK, aplicar(aplicar(bloqueL(plan), CAMBIOS_RUNBOOK), cambios12c(planC)));
+  assert.equal(RUNBOOK, aplicar(aplicar(aplicar(bloqueL(plan), CAMBIOS_RUNBOOK), cambios12c(planC)), CAMBIOS_DIRECTOR));
   assert.equal(PROMPT, bloqueH(planC));
   assert.match(RUNBOOK, /^Versión 2\.1\.0\./m);
 });
@@ -93,4 +93,13 @@ test("D7 · paso 10: por PushNotification va aviso-push.txt (≤ 200); el últim
     assert.ok(!/<[^>]+>/.test(x), `marcador sin valor: ${f}`);
     assert.ok(x.length <= 200 && !x.includes("\n"), `${x.length}: ${x}`);
   }
+});
+
+test("W-5 (director): F7 manda a la página cuando 10-radar trae siguiente: \"pagina\" y si no, sin Radar", () => {
+  const f7 = RUNBOOK.split("\n").filter(l => l.startsWith("- **F7 "));
+  assert.deepEqual(f7, [F7_DIRECTOR]);
+  assert.equal(F7_DIRECTOR, "- **F7 · La página cambió** (`10-radar` con motivo `pagina_cambio`): el Radar no corre por su cuenta hoy. Si la respuesta trae `siguiente: \"pagina\"`, sigue el paso 4 en modo `pagina`; si no, sigue sin Radar.");
+  assert.ok(!RUNBOOK.includes("`pagina_cambio`): sigue sin Radar."));
+  // y es lo que hace el código: con la página incompatible, correr deja siguiente: "pagina" (W2 criterio 6)
+  assert.match(fs.readFileSync(path.join(RAIZ, "bin/10-radar.mjs"), "utf8"), /m === "pagina_cambio"/);
 });
