@@ -111,3 +111,23 @@ test("obtener --corredor: sin FMP (403 del proxy) → sin_radar con su motivo; c
   assert.equal(leerUltimo(cache), null);
   assert.equal((await radar(["--cache", cache, "obtener"], { ahora: AHORA, pagina: PAG })).codigo, 1);
 });
+
+test("salida de texto (prueba del director con la página real): cono en precio, top con posición del ranking aparte, exclusiones resumidas", async () => {
+  const xle = OUT30.rows.find(r => r.symbol === "XLE");
+  const s = (await R("simbolo", "XLE")).texto;
+  assert.ok(s.includes(`cono de precio a 3 meses US$ ${xle.cone.lo.toFixed(2)} a US$ ${xle.cone.hi.toFixed(2)}`), s);
+  assert.ok(s.includes("US$ 62.15 a US$ 82.55") && !/cono[^\n]*%/.test(s), s);
+  assert.deepEqual(JSON.parse((await R("--json", "simbolo", "XLE")).texto).fila.cono, { lo: xle.cone.lo, med: xle.cone.med, hi: xle.cone.hi });
+  const t = (await R("top", "10", "--senal", "compra")).texto.split("\n").slice(1, -1);
+  assert.equal(t.length, 10);
+  t.forEach((l, i) => assert.ok(l.startsWith(`${i + 1}. `), l));
+  const rangos = OUT30.rows.map((r, i) => [r, i + 1]).filter(([r]) => r.signal === 3).slice(0, 10).map(([, n]) => n);
+  t.forEach((l, i) => assert.ok(l.endsWith(` · #${rangos[i]} del ranking`), l));
+  const p = (await R("portafolio")).texto, j = JSON.parse((await R("--json", "portafolio")).texto);
+  const porSenal = j.excluidos.filter(x => /^Señal (Mantener|Evitar)\b/.test(x.motivo)), otras = j.excluidos.filter(x => !/^Señal (Mantener|Evitar)\b/.test(x.motivo));
+  assert.ok(porSenal.length > 0 && otras.length > 0);
+  assert.equal((p.match(/^Fuera: /gm) || []).length, otras.length);
+  assert.ok(p.includes(`\nY ${porSenal.length} más fuera por señal Mantener o Evitar.\n`), p);
+  assert.ok(!porSenal.some(x => p.includes(`Fuera: ${x.id} (`)));
+  assert.equal(j.excluidos.length, porSenal.length + otras.length);
+});

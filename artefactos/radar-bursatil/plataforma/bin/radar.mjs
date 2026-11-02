@@ -32,6 +32,9 @@ const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "o
 const dma = f => { const [a, m, d] = f.split("-"); return `${Number(d)}-${MESES[Number(m) - 1]}-${a}`; };
 const isNum = v => typeof v === "number" && Number.isFinite(v);
 const pct = (x, d = 1) => (isNum(x) ? `${x < 0 ? "−" : "+"}${Math.abs(x * 100).toFixed(d)} %` : "—");
+// precios como en la página: el cono (lo, med, hi) también está en precio, no en rendimiento; las divisas sin "US$"
+const precio = (x, fx) => (!isNum(x) ? "—" : `${fx ? "" : "US$ "}${x.toFixed(fx || Math.abs(x) < 1 ? 4 : 2)}`);
+const SENAL_EXCLUSION = /^Señal (Mantener|Evitar)\b/;
 const claseDe = c => (c === "stock" ? "stock" : c === "etf" ? "etf" : c === "index" || c === "vol" || c === "future" ? "index" : c === "commodity" ? "commodity" : String(c).startsWith("crypto") ? "crypto" : c === "fx" ? "fx" : "otro");
 
 // feriados NYSE del repo (año en curso y anterior) para la antigüedad en días hábiles
@@ -105,7 +108,8 @@ export async function main(argv, { ahora = Date.now, pagina = null, transporteFm
     if (a.senal && !SENAL_DE[a.senal]) return { codigo: 1, texto: AYUDA };
     const filas = out.rows.map(filaTop).filter(f => (!a.senal || f.senal === SENAL[SENAL_DE[a.senal]]) && (!a.clase || f.clase === a.clase)
       && (!a.grupo || (out.rows[f.rango - 1].group === a.grupo))).slice(0, n);
-    return sale(0, Object.assign({}, base, { filas }), texto(filas.map(f => `${f.rango}. ${f.simbolo} · ${f.nombre} · ${f.senal} ${f.pct} % (${f.ref === "sp500" ? "ganarle al S&P 500" : "subir"}) · US$ ${f.precio}`)));
+    // numeración propia de la lista; la posición en el ranking completo va aparte (#n)
+    return sale(0, Object.assign({}, base, { filas }), texto(filas.map((f, i) => `${i + 1}. ${f.simbolo} · ${f.nombre} · ${f.senal} ${f.pct} % (${f.ref === "sp500" ? "ganarle al S&P 500" : "subir"}) · ${precio(f.precio, f.clase === "fx")} · #${f.rango} del ranking`)));
   }
   if (cmd === "simbolo") {
     if (!arg) return { codigo: 1, texto: AYUDA };
@@ -123,8 +127,9 @@ export async function main(argv, { ahora = Date.now, pagina = null, transporteFm
         rendEsperado3m: r.expRet ?? null, rendMediano3m: r.medRet ?? null, cono: r.cone ? { lo: r.cone.lo, med: r.cone.med, hi: r.cone.hi } : null, confianza: r.confidence, cobertura: r.coverage, motivoTope: r.capReason ?? null },
       contribuciones: contrib, impulsores: { pos: ((r.drivers && r.drivers.pos) || []).slice(0, 3).map(x => x.label), neg: ((r.drivers && r.drivers.neg) || []).slice(0, 3).map(x => x.label) },
       banderas: (r.flags || []).map(x => x.text), fundamentales: r.fundamentals || null, motivo: null });
-    return sale(0, o, texto([`${r.symbol} · ${r.name}: ${SENAL[r.signal]} con ${r.pct} % de ${r.ref === "sp500" ? "ganarle al S&P 500" : "subir"} a 3 meses. Precio US$ ${r.price}.`,
-      `Rendimiento esperado a 3 meses ${pct(r.expRet)} (cono ${pct(r.cone && r.cone.lo)} a ${pct(r.cone && r.cone.hi)}); confianza ${r.confidence}.`,
+    const fx = claseDe(r.cls) === "fx";
+    return sale(0, o, texto([`${r.symbol} · ${r.name}: ${SENAL[r.signal]} con ${r.pct} % de ${r.ref === "sp500" ? "ganarle al S&P 500" : "subir"} a 3 meses. Precio ${precio(r.price, fx)}.`,
+      `Rendimiento esperado a 3 meses ${pct(r.expRet)}; cono de precio a 3 meses ${precio(r.cone && r.cone.lo, fx)} a ${precio(r.cone && r.cone.hi, fx)}; confianza ${r.confidence}.`,
       `A favor: ${o.impulsores.pos.join("; ") || "—"}. En contra: ${o.impulsores.neg.join("; ") || "—"}.`, ...o.banderas.map(b => `Ojo: ${b}`)]));
   }
   if (cmd === "portafolio") {
@@ -134,7 +139,9 @@ export async function main(argv, { ahora = Date.now, pagina = null, transporteFm
     const o = Object.assign({}, base, { perfil, montoMXN: monto, fraccional: !a.enteros }, p);
     return sale(0, o, texto([`Portafolio ${perfil} para MXN $ ${monto.toLocaleString("en-US")} (${o.fraccional ? "fraccional" : "títulos enteros"}):`,
       ...o.posiciones.map(x => `${x.id} · ${x.rol} · ${(x.peso * 100).toFixed(2)} % · MXN $ ${Math.round(x.montoMXN).toLocaleString("en-US")}`),
-      ...o.excluidos.map(x => `Fuera: ${x.id} (${x.motivo})`)]));
+      // en texto, solo las exclusiones con un motivo distinto de la señal; las de Mantener/Evitar van en una línea (en --json, todas)
+      ...o.excluidos.filter(x => !SENAL_EXCLUSION.test(x.motivo)).map(x => `Fuera: ${x.id} (${x.motivo})`),
+      ...(() => { const n = o.excluidos.filter(x => SENAL_EXCLUSION.test(x.motivo)).length; return n ? [`Y ${n} más fuera por señal Mantener o Evitar.`] : []; })()]));
   }
   // cambios: contra el análisis anterior de la caché (por asOf) o el de --contra
   const lista = listarAnalisis(dirCache).filter(x => x.asOf < out.asOf).sort((x, y) => (x.asOf < y.asOf ? 1 : -1));
