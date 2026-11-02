@@ -92,16 +92,20 @@ export async function main(argv, { ahora = Date.now } = {}) {
         decis: leerTrabajo(dir, "decisiones.json"), ops, puntos, notas, alertasReporte, avisoFallas: aviso.split("\n").filter(l => l.startsWith("Falla:")) });
       fs.rmSync(sr, { recursive: true, force: true });
       fs.mkdirSync(sr, { recursive: true });
-      const subidas = [], malos = [];
-      for (const d of DATASETS) {
+      // S4-2 (director): todo o nada también aquí; si un dataset no valida no se sube ninguno y el dashboard queda entero en el
+      // corte anterior (el detalle de cada problema va al registro del día)
+      const malos = DATASETS.filter(d => {
         const p = validarDataset(d.id, ds[d.id]);
-        if (p.length) { malos.push(d.id); reg.aviso(`reporte: ${d.id} no valida`, { problemas: p.slice(0, 5) }); continue; }
+        if (p.length) reg.aviso(`reporte: ${d.id} no valida`, { problemas: p.slice(0, 5) });
+        return p.length > 0;
+      }).map(d => d.id);
+      if (malos.length) return saltar(`${malos.join(", ")} no pasó la validación; el dashboard sigue con el corte anterior`);
+      const subidas = DATASETS.map(d => {
         escribirJson(path.join(sr, d.archivo), ds[d.id], { compacto: true });
-        subidas.push({ id: d.id, args: { action: "publish", url: DASH_URL, asset: true, file_path: path.join(abs, "salida", "reporte", d.archivo) }, texto: `salida/reporte/subida-${d.id}.txt` });
-      }
-      if (!subidas.length) return saltar("ningún archivo del reporte pasó la validación");
+        return { id: d.id, args: { action: "publish", url: DASH_URL, asset: true, file_path: path.join(abs, "salida", "reporte", d.archivo) }, texto: `salida/reporte/subida-${d.id}.txt` };
+      });
       escribirTrabajo(dir, "subir-reporte.json", { subidas });
-      return sale("subir", { archivos: subidas.length, no_validan: malos }, { lista: "trabajo/subir-reporte.json" });
+      return sale("subir", { archivos: subidas.length }, { lista: "trabajo/subir-reporte.json" });
     }
 
     if (a.fase === "escribir") {

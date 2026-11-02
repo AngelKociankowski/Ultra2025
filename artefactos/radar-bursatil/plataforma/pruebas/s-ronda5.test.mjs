@@ -96,3 +96,24 @@ test("S4 · una subida sin dirección: no se escribe ningún dataset (cada uno c
   assert.equal([...d1.S.ad.dash.values()].filter(x => x.version === 1).length, DATASETS.length);
   assert.ok(fs.readFileSync(path.join(e.dir, "salida/aviso.txt"), "utf8").endsWith("\nReporte: sin actualizar (la subida de resumen no devolvió la dirección del archivo; el dashboard sigue con el corte anterior)."));
 });
+
+test("S4-2 (director) · un dataset que no valida: ese día no se sube ni se escribe ninguno y el aviso lo dice", async () => {
+  const db = dbInicial(reales());
+  const d1 = await dia({ t: Date.parse("2026-11-04T14:47:00Z"), db });
+  assert.deepEqual(d1.acc, ["leer", "subir", "escribir", "listo"]);
+  const antes = JSON.stringify([...d1.S.ad.dash]);
+  const e = await prepararDia({ db, t: Date.parse("2026-11-05T14:47:00Z"), modo: "archivo", herramientas: "artifactdata,artifact,push", sinRadar: true, ad: d1.S.ad });
+  await cerrar(["--dir", e.dir], { ahora: () => Date.parse("2026-11-05T15:02:00Z") });
+  assert.equal(e.S.escribir("final").accion, "listo");
+  // sin tipo de cambio el valor en pesos es nulo y `resumen` (valor_mxn no admite nulo) no valida
+  const c = leerTrabajo(e.dir, "cartera.json"); c.valuacion.valorMXN = null; escribirTrabajo(e.dir, "cartera.json", c);
+  const fase = f => reporte(["--dir", e.dir, "--fase", f], { ahora: () => Date.parse("2026-11-05T15:07:00Z") });
+  await fase("lista"); e.S.leerReporte(leerTrabajo(e.dir, "leer-reporte.json").lecturas);
+  const a = await fase("armar");
+  assert.deepEqual([a.codigo, a.linea.accion, a.linea.resumen.motivo], [0, "saltar", "resumen no pasó la validación; el dashboard sigue con el corte anterior"]);
+  assert.ok(!fs.existsSync(path.join(e.dir, "trabajo/subir-reporte.json")));
+  assert.ok(!DATASETS.some(d => fs.existsSync(path.join(e.dir, "salida/reporte", d.archivo))));
+  assert.ok(fs.readFileSync(path.join(e.dir, "salida/aviso.txt"), "utf8").endsWith("\nReporte: sin actualizar (resumen no pasó la validación; el dashboard sigue con el corte anterior)."));
+  assert.equal(JSON.stringify([...d1.S.ad.dash]), antes);
+  assert.ok(fs.readFileSync(path.join(e.dir, "registro.jsonl"), "utf8").includes("reporte: resumen no valida"));
+});
