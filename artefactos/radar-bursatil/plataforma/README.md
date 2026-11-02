@@ -19,6 +19,9 @@ y deja todo en `db` del artefacto. Diseño y contratos: `12-plan-plataforma.md` 
   `validOutput`, ≤ 5 días hábiles) y nunca escribe documentos de la página. V2 cuenta análisis distintos; con un análisis de más de
   1 día hábil no hay compras ni rebalanceo (00s). Cada análisis queda en la caché `/home/user/rutina/radar-cache/` (fuera de la
   exportación; las pruebas nunca la tocan).
+- Herramienta (12c §D): `node bin/radar.mjs [--json] fuente|resumen|top|simbolo|portafolio|cambios|obtener` consulta el último
+  análisis de la caché con el núcleo de la página (sin eToro ni db). La skill del proyecto está en `skill/radar/SKILL.md` (12c §E
+  literal); su lugar de uso es `.claude/skills/radar/SKILL.md` en la raíz del repo y lo pone el director.
 - Reporte (12c §F, paso 9b): `bin/70-reporte.mjs` arma 9 datasets (`reporte/datasets.json`) y los sube al dashboard "Cartera Radar";
   la página es `reporte/index.html` (reglas del tipo Dashboard; la guarda el director como `files/index.html`). Nunca detiene el día.
 - Aviso: `salida/aviso.txt` (completo, para el chat) y `salida/aviso-push.txt` (una línea de ≤ 200 caracteres para
