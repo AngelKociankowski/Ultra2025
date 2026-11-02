@@ -196,8 +196,18 @@ function batchArchivo(g, lista) {
 }
 
 // ---- registrar (§E.9) ----
+// Rechazo de `batch` medido el 2-nov (D7-4): la herramienta da un error que empieza con `db batch write failed (<código>)` y
+// nombra la primera escritura que chocó: `writes[i]`, su documento y, si iba fijada, la versión fijada y la actual. Es atómico:
+// no se escribió nada. Con versión vieja: "…was pinned to version 7 and that document is now at version 1…"; sin if_version
+// sobre uno que existe: "…targets data/users/me/<id>, which already exists, and carried no if_version…".
+function rechazoDeTexto(t) {
+  const m = t.match(/db batch write failed \(([a-z_]+)\)/);
+  if (!m) return null;
+  const num = re => { const x = t.match(re); return x ? Number(x[1]) : null; }, doc = t.match(/data\/users\/me\/([a-z0-9][a-z0-9-]*)/);
+  return { codigo: m[1], indice: num(/writes\[(\d+)\]/), id: doc ? doc[1] : null, fijada: num(/pinned to version (\d+)/), actual: num(/is now at version (\d+)/) };
+}
 // ids: los del grupo en el orden de escritura. Texto de `batch` medido (00q): `- set "data/users/me"/"<id>" (version <V>)` por
-// escritura. Sin esas líneas completas no se supone nada; el texto de un rechazo por versión no está medido.
+// escritura. Sin esas líneas completas (un `- delete …` no trae versión) no se supone nada.
 function leerRespuesta(g, modo, nombre, ids) {
   if (modo === "archivo") {
     const f = path.join(g, nombre + ".txt");
@@ -205,8 +215,8 @@ function leerRespuesta(g, modo, nombre, ids) {
     const t = fs.readFileSync(f, "utf8");
     const vistos = [...t.matchAll(/^- set "data\/users\/me"\/"([^"]+)" \(version (\d+)\)\s*$/gm)].map(m => [m[1], Number(m[2])]);
     if (vistos.length === ids.length && vistos.every(([id], i) => id === ids[i])) return { tipo: "texto", versiones: vistos.map(x => x[1]) };
-    // la cuenta de documentos ("409 of 25000 documents used") no es un código de error
-    if (/version[_ ]?mismatch|conflict|\b409\b|if_version|precondition/i.test(t.replace(/^\d+ of \d+ documents used.*$/gm, ""))) return { tipo: "conflicto" };
+    const rechazo = rechazoDeTexto(t);
+    if (rechazo) return { tipo: rechazo.codigo === "version_mismatch" ? "conflicto" : "error", codigo: rechazo.codigo, rechazo };
     return { tipo: "ilegible" };
   }
   const f = path.join(g, nombre + ".json");
@@ -230,6 +240,7 @@ export function registrar({ dir, grupo, verificar = false, reintento = false }) 
 
   if (reintento) {
     const lista = meta.reintentoOps || [], r = leerRespuesta(g, modo, "resultado-reintento", lista.map(e => e.id));
+    if (r.rechazo) res.rechazo = r.rechazo;
     if ((r.tipo === "resultados" || r.tipo === "texto") && r.versiones.length === lista.length && r.versiones.every(Number.isInteger)) {
       lista.forEach((e, i) => marcar(e, r.versiones[i]));
       return fin(0, "listo");
@@ -262,6 +273,7 @@ export function registrar({ dir, grupo, verificar = false, reintento = false }) 
     return fin(0, "reintentar");
   }
   const r = leerRespuesta(g, modo, "resultado", meta.ops.map(e => e.id));
+  if (r.rechazo) res.rechazo = r.rechazo;
   if ((r.tipo === "resultados" || r.tipo === "texto") && r.versiones.length === meta.ops.length && r.versiones.every(Number.isInteger)) {
     meta.ops.forEach((e, i) => marcar(e, r.versiones[i]));
     return fin(0, "listo");

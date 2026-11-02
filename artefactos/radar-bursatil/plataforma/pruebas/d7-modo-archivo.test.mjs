@@ -116,23 +116,33 @@ test("registrar en modo archivo: texto incompleto → releer; rechazo en ahora �
     commit: null, modo: "archivo", ejecucionesAbiertas: [], previo: null, escritos: {}, motivo: null };
   const dir = carpetaConDb({}, null, { noExisten: ["rutina-estado", "punto-2026-11-02"], modo: "archivo" });
   const armar = grupo => armarGrupo({ dir, grupo, modo: "archivo", docs: [{ id: "rutina-estado", data: est }] });
-  armar("ahora");
-  fs.writeFileSync(path.join(dir, "salida/ahora/resultado.txt"), T.batch_1.replace("(version 1)", "(version 1)\n- set \"data/users/me\"/\"otro\" (version 3)"));
-  assert.equal(registrar({ dir, grupo: "ahora" }).accion, "releer");
-  armar("ahora");
-  fs.writeFileSync(path.join(dir, "salida/ahora/resultado.txt"), "Error: version mismatch for \"data/users/me\"/\"rutina-estado\" (if_version). Nothing was written.");
-  assert.equal(registrar({ dir, grupo: "ahora" }).accion, "otra_sesion");
-  armar("pre-ejecucion");
-  fs.writeFileSync(path.join(dir, "salida/pre-ejecucion/resultado.txt"), "Error: conflict: document already exists");
-  assert.equal(registrar({ dir, grupo: "pre-ejecucion" }).accion, "ya_hubo_envio");
-  // la cuenta "409 of 25000 documents used" de un batch bueno no es un conflicto
-  armar("ahora");
-  fs.writeFileSync(path.join(dir, "salida/ahora/resultado.txt"), T.batch_1.replace("28 of 25000", "409 of 25000"));
-  assert.equal(registrar({ dir, grupo: "ahora" }).accion, "listo");
-  // un texto que no se entiende en ahora no se toma como otra sesión: se relee
-  armar("ahora");
-  fs.writeFileSync(path.join(dir, "salida/ahora/resultado.txt"), "Timed out");
-  assert.equal(registrar({ dir, grupo: "ahora" }).accion, "releer");
+  const con = (grupo, texto) => { armar(grupo); fs.writeFileSync(path.join(dir, "salida", grupo, "resultado.txt"), texto); return registrar({ dir, grupo }); };
+  assert.equal(con("ahora", T.batch_1.replace("(version 1)", "(version 1)\n- set \"data/users/me\"/\"otro\" (version 3)")).accion, "releer");
+  // D7-4: textos literales del error de ArtifactData (versión vieja; sin if_version sobre uno que existe)
+  const a = con("ahora", T.rechazo_version_vieja);
+  assert.deepEqual([a.codigo, a.accion, a.resumen.rechazo], [3, "otra_sesion", { codigo: "version_mismatch", indice: 0, id: "ensayo-d7", fijada: 7, actual: 1 }]);
+  const b = con("ahora", T.rechazo_sin_if_version);
+  assert.deepEqual([b.codigo, b.accion, b.resumen.rechazo], [3, "otra_sesion", { codigo: "version_mismatch", indice: 0, id: "ensayo-d7", fijada: null, actual: null }]);
+  assert.equal(con("pre-ejecucion", T.rechazo_sin_if_version).accion, "ya_hubo_envio");
+  assert.equal(con("pre-ejecucion", T.rechazo_version_vieja).accion, "ya_hubo_envio");
+  // en otro grupo, como en línea: no se supone nada, se relee (y verificar decide escrito, reintento o conflicto)
+  const f = con("final", T.rechazo_version_vieja);
+  assert.deepEqual([f.accion, f.resumen.rechazo.actual], ["releer", 1]);
+  // otro código de error del mismo prefijo, una línea de delete (sin versión), texto que no se entiende o la cuenta "409 of 25000"
+  assert.equal(con("ahora", "db batch write failed (rate_limited): try again later").accion, "releer");
+  assert.equal(con("ahora", T.linea_delete.replace("ensayo-d7", "rutina-estado")).accion, "releer");
+  assert.equal(con("ahora", "Timed out").accion, "releer");
+  assert.equal(con("ahora", T.batch_1.replace("28 of 25000", "409 of 25000")).accion, "listo");
+});
+
+test("el ArtifactData falso rechaza con los textos medidos, letra por letra", () => {
+  const db = crearDbFalso({ "ensayo-d7": { x: 1 } }), ad = artifactDataFalso(db), f = path.join(carpetaTemporal(), "e.json");
+  fs.writeFileSync(f, JSON.stringify({ x: 2 }));
+  const w = extra => ({ action: "batch", url: ARTEFACTO_URL, writes: [Object.assign({ op: "set", collection: "data/users/me", doc_id: "ensayo-d7", file_path: f }, extra)] });
+  assert.equal(ad.batch(w({ if_version: 7 })), T.rechazo_version_vieja);
+  assert.equal(ad.batch(w({})), T.rechazo_sin_if_version);
+  assert.deepEqual([db.version("ensayo-d7"), db.escrituras.length], [1, 0]);
+  assert.match(ad.batch(w({ if_version: 1 })), /^Database batch committed atomically — 1 write;[\s\S]*\(version 2\)/);
 });
 
 // ---- días completos: misma sesión que sigue el RUNBOOK, en cada modo ----
@@ -214,7 +224,7 @@ test("día con órdenes reales en modo archivo: reclamo sin if_version, envío, 
   fs.writeFileSync(path.join(e.dir, "salida/pre-ejecucion/artifactdata.json"), copiaGrupo);
   const ad = artifactDataFalso(db);
   fs.writeFileSync(path.join(e.dir, "salida/pre-ejecucion/resultado.txt"), ad.batch(JSON.parse(copiaGrupo)));
-  assert.match(fs.readFileSync(path.join(e.dir, "salida/pre-ejecucion/resultado.txt"), "utf8"), /version mismatch/);
+  assert.match(fs.readFileSync(path.join(e.dir, "salida/pre-ejecucion/resultado.txt"), "utf8"), /^db batch write failed \(version_mismatch\): writes\[0\] \(write 1 of 2\) targets data\/users\/me\/ejecucion-2026-11-02, which already exists/);
   assert.equal(registrar({ dir: e.dir, grupo: "pre-ejecucion" }).accion, "ya_hubo_envio");
   assert.equal(db.version("ejecucion-2026-11-02"), 1);
   // la sesión dueña del reclamo sigue (su reclamo quedó registrado con la versión que devolvió su batch)
@@ -240,4 +250,26 @@ test("if_version en modo archivo: si otro escribe entre la lectura y el final, e
   assert.ok(r.resumen.conflictos.includes("cartera-libro"));
   assert.equal(e.db.doc("cartera-libro").efectivo, 1.23);
   for (const [k, v] of e.db.docs) assert.equal(v.version, antes.get(k), k);
+  // el error medido nombra la escritura que chocó; registrar lo dejó en el registro antes de releer
+  const i = JSON.parse(fs.readFileSync(path.join(e.dir, "salida/final/artifactdata.json"), "utf8")).writes.findIndex(x => x.doc_id === "cartera-libro");
+  assert.match(fs.readFileSync(path.join(e.dir, "salida/final/resultado.txt"), "utf8"), new RegExp(`^db batch write failed \\(version_mismatch\\): .* writes\\[${i}\\] .*"data/users/me/cartera-libro"\\) was pinned to version 1 and that document is now at version 2`));
+});
+
+test("dos sesiones en modo archivo que leen a la vez: la segunda recibe el error medido en `ahora` → otra_sesion (F4) y no escribe", async () => {
+  for (const conEstado of [false, true]) {
+    const db = dbInicial(conEstado ? { "rutina-estado": leerFix("db/lunes-real-estado-v2.json") } : {}), t = Date.parse("2026-11-03T14:47:00Z");
+    const abrir = async () => {
+      const raiz = carpetaTemporal(), l = await preparar(["--fase", "lista", "--modo", "archivo"], { ahora: () => t, raiz });
+      const dir = path.join(raiz, ".trabajo", l.linea.fecha), Ss = crearSesion({ db, dir, modo: "archivo" });
+      Ss.leer(l.linea.lecturas);
+      return { dir, Ss };
+    };
+    const A = await abrir(), B = await abrir();
+    for (const [X, s] of [[A, "s-a"], [B, "s-b"]]) assert.equal((await preparar(["--dir", X.dir, "--fase", "decidir"], { ahora: () => t, pagina: PAG, sesion: s })).codigo, 0);
+    assert.equal(A.Ss.escribir("ahora").accion, "listo");
+    const v = db.version("rutina-estado"), rB = B.Ss.escribir("ahora");
+    assert.deepEqual([rB.codigo, rB.accion, rB.resumen.rechazo.id, rB.resumen.rechazo.fijada, rB.resumen.rechazo.actual], [3, "otra_sesion", "rutina-estado", conEstado ? 1 : null, conEstado ? 2 : null]);
+    assert.match(fs.readFileSync(path.join(B.dir, "salida/ahora/resultado.txt"), "utf8"), conEstado ? /was pinned to version 1 and that document is now at version 2/ : /which already exists, and carried no if_version/);
+    assert.deepEqual([db.version("rutina-estado"), db.doc("rutina-estado").sesion], [v, "s-a"]);
+  }
 });

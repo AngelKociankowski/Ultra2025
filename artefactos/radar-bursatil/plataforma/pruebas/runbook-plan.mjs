@@ -46,7 +46,10 @@ export const CAMBIOS_RUNBOOK = Object.freeze(APROBADO.concat([
   ["3. Al terminar la lista: `node bin/db.mjs importar --dir .trabajo/hoy`.",
     "3. Al terminar la lista: `node bin/db.mjs importar --dir .trabajo/hoy`. Si responde `accion: \"identidad\"` (en modo archivo, un\n" +
     "   texto dice que `me` resolvió a otro usuario): F9."],
-  ["guarda el texto de la respuesta\n   en `D/salida/G/resultado.txt`.", "guarda el texto completo de\n   la respuesta, tal cual, en `D/salida/G/resultado.txt`."],
+  // D7-4: un batch rechazado no regresa texto normal sino un error de la herramienta; su texto se guarda igual
+  ["guarda el texto de la respuesta\n   en `D/salida/G/resultado.txt`.", "guarda el texto completo de\n   la respuesta, tal cual, en `D/salida/G/resultado.txt`. Si la herramienta responde con un error (por ejemplo\n" +
+    "   `db batch write failed (version_mismatch): …`), guarda el texto del error igual, tal cual, en ese mismo archivo."],
+  ["guarda la respuesta en `resultado-reintento.json`\n   (`.txt`) y corre", "guarda la respuesta en `resultado-reintento.json`\n   (`.txt`, también si es un error) y corre"],
   ["Si cargó: modo **archivo** (si el paso 2 responde `sin_db`, F9).", "Si cargó: modo **archivo**."],
   ["(En modo archivo, la primera lectura debe decir que `me` resolvió a `u_Np_5cFP3Ho2rFiXosc9ZPw`; si dice otro id, F9.)",
     "(En modo archivo, cada texto de `ArtifactData` debe decir que `me` resolvió a `u_Np_5cFP3Ho2rFiXosc9ZPw`: `importar` lo comprueba.)"],

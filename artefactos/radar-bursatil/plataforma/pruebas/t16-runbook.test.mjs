@@ -65,7 +65,8 @@ test("D7 · el RUNBOOK lee y escribe en modo archivo con lo que arma el código 
   const L = lectura("cartera-libro", { dirAbs: dir });
   assert.deepEqual(Object.keys(L.archivo).sort(), ["args", "herramienta", "linea", "texto"]);
   assert.equal(L.archivo.herramienta, "ArtifactData");
-  for (const t of ["`D/<archivo.texto>`", "`archivo.linea`", "`out_dir`", "`accion: \"identidad\"`", "`D/salida/G/artifactdata.json`", "`D/salida/G/resultado.txt`", "`artifactdata-reintento.json`"]) assert.ok(RUNBOOK.includes(t), t);
+  for (const t of ["`D/<archivo.texto>`", "`archivo.linea`", "`out_dir`", "`accion: \"identidad\"`", "`D/salida/G/artifactdata.json`", "`D/salida/G/resultado.txt`", "`artifactdata-reintento.json`",
+    "`db batch write failed (version_mismatch): …`), guarda el texto del error igual", "(`.txt`, también si es un error)"]) assert.ok(RUNBOOK.includes(t), t);
   assert.ok(!/sin_db|"version":<la versión que dice el texto>/.test(RUNBOOK), "sin restos del modo archivo desactivado ni de versiones copiadas a mano");
   assert.match(fs.readFileSync(path.join(RAIZ, "bin/db.mjs"), "utf8"), /"identidad"/);
 });

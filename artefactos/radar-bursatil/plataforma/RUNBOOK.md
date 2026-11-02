@@ -59,12 +59,13 @@ Para cada elemento de la lista, en orden:
 1. *en_linea*: lee `D/salida/G/db_write.json` y llama a `mcp__claude-artifacts__db_write` con su `slug` y su `ops`
    **exactos**. Guarda la respuesta, tal cual, en `D/salida/G/resultado.json`.
    *archivo*: llama a `ArtifactData` con los argumentos exactos de `D/salida/G/artifactdata.json`; guarda el texto completo de
-   la respuesta, tal cual, en `D/salida/G/resultado.txt`.
+   la respuesta, tal cual, en `D/salida/G/resultado.txt`. Si la herramienta responde con un error (por ejemplo
+   `db batch write failed (version_mismatch): …`), guarda el texto del error igual, tal cual, en ese mismo archivo.
 2. `node bin/db.mjs registrar --dir .trabajo/hoy --grupo G`.
 3. Si responde `accion: "releer"`: haz LEER con la lista de `D/trabajo/releer.json` y luego
    `node bin/db.mjs registrar --dir .trabajo/hoy --grupo G --verificar`. Si deja `D/salida/G/db_write-reintento.json` (o
    `artifactdata-reintento.json`), haz **una** escritura más con ese archivo, guarda la respuesta en `resultado-reintento.json`
-   (`.txt`) y corre `node bin/db.mjs registrar --dir .trabajo/hoy --grupo G --reintento`.
+   (`.txt`, también si es un error) y corre `node bin/db.mjs registrar --dir .trabajo/hoy --grupo G --reintento`.
 4. Si `registrar` sale con código 3, sigue lo que diga su `accion` (`otra_sesion` → F4; `ya_hubo_envio` → paso 8.3;
    `conflicto` → F6).
 5. Si la escritura llevó más de 10 ops: `node bin/esperar.mjs 2`.

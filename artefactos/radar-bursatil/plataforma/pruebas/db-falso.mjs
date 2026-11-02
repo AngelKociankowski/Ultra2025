@@ -41,11 +41,23 @@ export function crearDbFalso(inicial = {}, { parcial = false } = {}) {
 }
 
 // ArtifactData falso sobre el mismo db, con los formatos medidos el 2-nov (00q): `get` con out_dir guarda solo los datos (claves
-// ordenadas, sangría de 2 y salto final, como el archivo real) en <out_dir>/data/users/me/<id>.json y responde texto; `batch` lee cada file_path y aplica todo o
-// nada con if_version. El texto de un rechazo no está medido: `rechazo` lo fija la prueba.
+// ordenadas, sangría de 2 y salto final, como el archivo real) en <out_dir>/data/users/me/<id>.json y responde texto; `batch` lee
+// cada file_path y aplica todo o nada con if_version. Un rechazo da el texto del error medido (D7-4) de la primera escritura que
+// choca; el de una escritura fijada sobre un documento que no existe no está medido (mismo prefijo).
 const ordenar = x => (Array.isArray(x) ? x.map(ordenar) : x && typeof x === "object" ? Object.fromEntries(Object.keys(x).sort().map(k => [k, ordenar(x[k])])) : x);
 const YO = uid => `(\`me\` in this path resolved to your user id on this artifact: ${uid})`;
-export function artifactDataFalso(db, { uid = DB_UID, rechazo = r => `Error: version mismatch (if_version), current version ${r.error.version}. Nothing was written.` } = {}) {
+const RECHAZO = "db batch write failed (version_mismatch): ";
+function rechazoMedido(db, writes) {
+  const n = writes.length;
+  for (const [i, w] of writes.entries()) {
+    const d = db.docs.get(`${DB_RUTA}/${w.doc_id}`);
+    if (d && w.if_version === undefined) return `${RECHAZO}writes[${i}] (write ${i + 1} of ${n}) targets data/users/me/${w.doc_id}, which already exists, and carried no if_version — the whole batch wrote nothing. Read that document back, re-plan its write on what it holds now with if_version set to the version the read returns, then resend the batch. Other unpinned entries that write existing documents would be refused the same way — read and pin those too before resending`;
+    if (d && w.if_version !== d.version) return `${RECHAZO}the batch is atomic, so nothing was written — none of the writes applied. writes[${i}] (write ${i + 1} of ${n}, "data/users/me/${w.doc_id}") was pinned to version ${w.if_version} and that document is now at version ${d.version}: read it back, re-plan its write against what it holds now and pin to that version. It is the first stale pin the server met; later pinned entries were not checked, so re-read any pinned document you are unsure of too, then resend the batch`;
+    if (!d && w.if_version !== undefined) return `${RECHAZO}writes[${i}] (write ${i + 1} of ${n}, "data/users/me/${w.doc_id}") was pinned to version ${w.if_version} and that document does not exist`;
+  }
+  return null;
+}
+export function artifactDataFalso(db, { uid = DB_UID } = {}) {
   const comprobar = a => { if (a.url !== ARTEFACTO_URL) throw new Error(`url ajena ${a.url}`); };
   return {
     get(a) {
@@ -68,8 +80,10 @@ export function artifactDataFalso(db, { uid = DB_UID, rechazo = r => `Error: ver
         if (w.if_version !== undefined) op.ifVersion = w.if_version;
         return op;
       });
+      const rechazo = rechazoMedido(db, a.writes);
+      if (rechazo) return rechazo;
       const r = db.write({ slug: DB_SLUG, ops });
-      if (r.error) return rechazo(r);
+      if (r.error) throw new Error(`db falso y ArtifactData falso no coinciden: ${JSON.stringify(r.error)}`);
       const n = a.writes.length;
       return `Database batch committed atomically — ${n} write${n > 1 ? "s" : ""}; by default readable only by the one user whose data/users subtree they are in:\n` +
         a.writes.map((w, i) => `- set "data/users/me"/"${w.doc_id}" (version ${r.results[i].version})`).join("\n") + `\n${db.docs.size} of 25000 documents used in this artifact's database.`;
