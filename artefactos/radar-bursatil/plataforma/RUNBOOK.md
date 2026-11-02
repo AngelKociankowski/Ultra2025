@@ -1,6 +1,6 @@
 # RUNBOOK — Rutina diaria de la Cartera Radar (eToro Demo)
 
-Versión 2.0.0. La corre la sesión del director cuando la despierta la tarea programada (lunes a viernes, 9:47 hora de Nueva
+Versión 2.1.0. La corre la sesión del director cuando la despierta la tarea programada (lunes a viernes, 9:47 hora de Nueva
 York). Esta guía es autocontenida: no supongas nada de lo que se haya hablado antes en la conversación.
 Objetivo del día: correr el Radar, leer la Cartera Radar en eToro Demo, medir rendimientos, juntar noticias de fuentes
 fidedignas, decidir con las reglas del código, operar solo en Demo (si está activado), guardar en `db` y avisar.
@@ -19,8 +19,9 @@ fidedignas, decidir con las reglas del código, operar solo en Demo (si está ac
    código ni el repositorio. No haces commit ni push. No lanzas agentes. Si un script falla, no lo arreglas: sigues la sección F.
 6. No escribes llaves, encabezados ni tokens en ningún archivo, documento ni mensaje.
 7. En `db` solo escribes lo que digan los archivos `salida/<grupo>/db_write.json` (o `artifactdata.json`), copiando sus
-   argumentos **sin cambiar nada**, en el orden de esta guía. Nunca borras documentos. Nunca escribes ni lees documentos de la
-   página (`dia-*`, `indice`, `corrida`, `contador-*`, `vivo`). Una llamada de `db` a la vez.
+   argumentos **sin cambiar nada**, en el orden de esta guía. Nunca borras documentos. **Nunca escribes** documentos de la
+   página (`dia-*`, `indice`, `corrida`, `contador-*`, `vivo`); solo los **lees** en el paso 4 con LEER-PÁGINA. En el dashboard
+   "Cartera Radar" solo escribes en el paso 9b. Una llamada de `db` a la vez.
 8. Si algo no está en esta guía, no lo haces: cierras en modo degradado (F8).
 
 ## B. Rutas, herramientas y modos
@@ -38,6 +39,10 @@ fidedignas, decidir con las reglas del código, operar solo en Demo (si está ac
     `u_Np_5cFP3Ho2rFiXosc9ZPw`.
 - **WebSearch** con `allowed_domains` = la lista `dominios` de `D/trabajo/temas-noticias.json`. **WebFetch** solo a URLs que
   devolvió esa búsqueda y cuyo dominio esté en la lista.
+- **ArtifactData** también lee el análisis que guardó la página (paso 4) y el historial del reporte (paso 9b), aunque el modo del
+  día sea *en_linea*: esas lecturas van a archivo y nada de su contenido pasa por ti.
+- **Artifact** (la herramienta de artefactos) solo se usa en el paso 9b, para subir los archivos del reporte al dashboard
+  "Cartera Radar" (https://claude.ai/artifact/GiHN8dtAUzxpDoDSQYdU8s).
 - **PushNotification** para la línea corta del aviso (`aviso-push.txt`, ≤ 200 caracteres); el aviso completo va en el chat.
 
 ### Procedimiento LEER (lista de `Lectura`)
@@ -67,8 +72,17 @@ Para cada elemento de la lista, en orden:
    `artifactdata-reintento.json`), haz **una** escritura más con ese archivo, guarda la respuesta en `resultado-reintento.json`
    (`.txt`, también si es un error) y corre `node bin/db.mjs registrar --dir .trabajo/hoy --grupo G --reintento`.
 4. Si `registrar` sale con código 3, sigue lo que diga su `accion` (`otra_sesion` → F4; `ya_hubo_envio` → paso 8.3;
-   `conflicto` → F6).
+   `conflicto` o `db_no_disponible` → F6).
 5. Si la escritura llevó más de 10 ops: `node bin/esperar.mjs 2`.
+
+### Procedimiento LEER-PÁGINA (lista `lecturas` de `D/trabajo/leer-pagina.json`)
+Para cada elemento, en orden, llama a `ArtifactData` con su `args` exactos. No guardes la respuesta ni copies nada de ella: los
+datos quedan en el `out_dir` de los `args`. Si una llamada da error, sigue con el siguiente elemento. Son documentos de la página:
+solo se leen.
+
+### Procedimiento LEER-REPORTE (lista `lecturas` de `D/trabajo/leer-reporte.json`)
+Para cada elemento, en orden, llama a `ArtifactData` con su `args` exactos. Si el elemento trae `texto`, guarda el texto completo
+de la respuesta (también si es un error), tal cual, en el archivo nuevo `D/<texto>`; si no lo trae, no guardes nada.
 
 ## C. Pasos
 
@@ -91,11 +105,12 @@ cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node --versi
   `u_Np_5cFP3Ho2rFiXosc9ZPw`; si no, F9.
 - Si no: carga `select:ArtifactData`. Si cargó: modo **archivo**.
 - Si no hay ninguna: F9.
-- Carga también `select:PushNotification` (si no carga, sigue; el aviso irá solo en el chat).
+- Carga también, con ToolSearch, `select:ArtifactData` (aunque el modo sea *en_linea*), `select:Artifact` y
+  `select:PushNotification`. Anota cuáles cargaron, con estos nombres: `artifactdata`, `artifact`, `push`.
 
 ### 2. Lista de lectura
 ```
-cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/00-preparar.mjs --fase lista --modo <archivo|en_linea>
+cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/00-preparar.mjs --fase lista --modo <archivo|en_linea> --herramientas <las que cargaron, separadas por comas, o ninguna>
 ```
 Haz LEER con su lista `lecturas`.
 (En modo archivo, cada texto de `ArtifactData` debe decir que `me` resolvió a `u_Np_5cFP3Ho2rFiXosc9ZPw`: `importar` lo comprueba.)
@@ -112,9 +127,17 @@ cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/00-
 
 ### 4. Radar
 ```
-cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/10-radar.mjs --dir .trabajo/hoy --modo <radar.accion de D/trabajo/preparar.json>
+cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/10-radar.mjs --dir .trabajo/hoy --modo correr
 ```
-Tarda de 2 a 5 minutos si corre. Código 3 (`sin_radar`): sigue; hoy no habrá órdenes. Nada se escribe en `db` en este paso.
+- `listo` o `parcial`: paso 5.
+- `sin_radar` con `siguiente: "pagina"`: el Radar no pudo correr hoy; se usa el último análisis que guardó la página:
+  ```
+  cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/10-radar.mjs --dir .trabajo/hoy --modo pagina
+  ```
+  Mientras responda `accion: "leer"`, haz LEER-PÁGINA con la lista de `D/trabajo/leer-pagina.json` y vuelve a correr ese mismo
+  comando (a lo más 6 veces). Termina con `listo`, `parcial` o `sin_radar`.
+- `sin_radar` sin `siguiente`: sigue sin Radar.
+Sin Radar no habrá órdenes hoy. Nada se escribe en `db` en este paso.
 
 ### 5. Cartera
 ```
@@ -176,6 +199,27 @@ cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/db.
 Si `verificar` responde `accion: "marcar"` (lo releído no quedó como se preparó), haz ESCRIBIR del grupo `revision`: marca
 el día para que el siguiente no opere hasta que el director lo revise (`aviso.txt` y `aviso-push.txt` ya traen la falla).
 
+### 9b. Reporte del dashboard
+Solo si el paso 9 terminó sin F6 ni F8. Si cualquier comando de este paso responde `accion: "saltar"`, deja el paso y ve al 10.
+1. ```
+   cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/70-reporte.mjs --dir .trabajo/hoy --fase lista
+   ```
+   Haz LEER-REPORTE con la lista de `D/trabajo/leer-reporte.json`.
+2. ```
+   cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/70-reporte.mjs --dir .trabajo/hoy --fase armar
+   ```
+   Para cada elemento de `subidas` en `D/trabajo/subir-reporte.json`, en orden: llama a `Artifact` con su `args` exactos y guarda
+   el texto completo de la respuesta (también si es un error), tal cual, en el archivo nuevo `D/<texto>`.
+3. ```
+   cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/70-reporte.mjs --dir .trabajo/hoy --fase escribir
+   ```
+   Llama a `ArtifactData` con los argumentos exactos de `D/salida/reporte/artifactdata.json` y guarda el texto completo de la
+   respuesta (también si es un error), tal cual, en `D/salida/reporte/resultado.txt`.
+4. ```
+   cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/70-reporte.mjs --dir .trabajo/hoy --fase registrar
+   ```
+No reintentes nada de este paso. El reporte nunca detiene la rutina.
+
 ### 10. Avisar
 Lee `D/salida/aviso.txt` (el aviso completo) y `D/salida/aviso-push.txt` (una sola línea de ≤ 200 caracteres). Si `verificar`
 falló o una escritura no se pudo hacer, agrega al final del aviso una línea `Falla: no se guardó en db: <ids>` y usa como línea
@@ -192,9 +236,10 @@ de push `Radar · <día> <d-mes> · Falla: no se guardó en db; detalle en el ch
 - **F4 · Otra sesión** (`otra_sesion_viva` en el paso 3 o `otra_sesion` al escribir `ahora`): no escribas nada más. Último mensaje:
   `Radar · <fecha> · Otra sesión está corriendo la rutina de hoy; esta se detuvo.` (también por PushNotification).
 - **F5 · Orden rechazada o sin confirmar**: `50-ejecutar` ya lo registró. No reintentes a mano.
-- **F6 · `db`**: lectura fallida o documento dañado → los scripts bloquean lo que dependa y el día no opera. Conflicto al escribir
-  (`conflicto`) → no escribas nada más; corre `node bin/60-cerrar.mjs --dir .trabajo/hoy --degradado db` solo para obtener el
-  aviso (no escribas su grupo) y ve al paso 10.
+- **F6 · `db`**: lectura fallida o documento dañado → los scripts bloquean lo que dependa y el día no opera. Al escribir, si
+  `registrar` termina en `conflicto` (otra escritura cambió un documento) o en `db_no_disponible` (la base no respondió ni en el
+  reintento) → no escribas nada más; corre `node bin/60-cerrar.mjs --dir .trabajo/hoy --degradado db` solo para obtener el aviso
+  (no escribas su grupo; el aviso ya dice cuál de los dos casos fue) y ve al paso 10.
 - **F7 · La página cambió** (`10-radar` con motivo `pagina_cambio`): sigue sin Radar.
 - **F8 · Cualquier otro error** (código 1 inesperado, archivo que no aparece): no corrijas código.
   `node bin/60-cerrar.mjs --dir .trabajo/hoy --degradado <paso>`, haz ESCRIBIR del grupo `final` y paso 10. Si `60-cerrar`
@@ -206,3 +251,5 @@ de push `Radar · <día> <d-mes> · Falla: no se guardó en db; detalle en el ch
   repiten órdenes.
 - **F11 · El código no arranca** (Node < 22 o `PRUEBAS_FALLO`): no corras ningún paso más. Último mensaje (y PushNotification):
   `Radar · <fecha> · Falla: el código <commit corto> no pasa sus pruebas; la rutina no corrió.`
+- **F12 · Reporte** (paso 9b): una herramienta que falta, una subida que falla o un error de escritura en el dashboard terminan
+  en `saltar`; no reintentes y ve al paso 10. El aviso dice que el reporte quedó sin actualizar.

@@ -8,12 +8,12 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { RAIZ } from "./util.mjs";
 import { lectura } from "../lib/db.mjs";
-import { CAMBIOS_RUNBOOK, CAMBIOS_PROMPT, LEER_APROBADO, FALLA_PUSH_DB, aplicar, bloqueL, bloqueM } from "./runbook-plan.mjs";
+import { CAMBIOS_RUNBOOK, LEER_APROBADO, FALLA_PUSH_DB, aplicar, bloqueL, cambios12c, bloqueH } from "./runbook-plan.mjs";
 
 const RUNBOOK = fs.readFileSync(path.join(RAIZ, "RUNBOOK.md"), "utf8");
 const PROMPT = fs.readFileSync(path.join(RAIZ, "PROMPT-TAREA.md"), "utf8");
 // valores de ejemplo para los marcadores del RUNBOOK
-const MARCAS = { "<archivo|en_linea>": "en_linea", "<radar.accion de D/trabajo/preparar.json>": "correr", "<paso>": "cerrar" };
+const MARCAS = { "<archivo|en_linea>": "en_linea", "<paso>": "cerrar", "<las que cargaron, separadas por comas, o ninguna>": "artifactdata,artifact,push" };
 
 function comandos(texto) {
   const out = [];
@@ -36,17 +36,23 @@ test("cada `node bin/<x>.mjs` del RUNBOOK existe y acepta las opciones citadas (
     const salida = execFileSync(process.execPath, [archivo, ...args.map(x => (x === ".trabajo/hoy" ? ".trabajo/no-existe" : x)), "--help"], { cwd: RAIZ, encoding: "utf8", timeout: 20000 });
     assert.match(salida, /^Uso: node bin\//, c);
   }
-  assert.deepEqual([...vistos].sort(), ["bin/00-preparar.mjs", "bin/10-radar.mjs", "bin/20-cartera.mjs", "bin/30-fmp-noticias.mjs", "bin/40-decidir.mjs", "bin/50-ejecutar.mjs", "bin/60-cerrar.mjs", "bin/db.mjs", "bin/esperar.mjs"]);
+  assert.deepEqual([...vistos].sort(), ["bin/00-preparar.mjs", "bin/10-radar.mjs", "bin/20-cartera.mjs", "bin/30-fmp-noticias.mjs", "bin/40-decidir.mjs", "bin/50-ejecutar.mjs", "bin/60-cerrar.mjs", "bin/70-reporte.mjs", "bin/db.mjs", "bin/esperar.mjs"]);
+  // W6: los comandos nuevos de 12c están y aceptan sus opciones
+  for (const c of ["bin/10-radar.mjs --dir .trabajo/hoy --modo pagina", "bin/10-radar.mjs --dir .trabajo/hoy --modo correr", "bin/70-reporte.mjs --dir .trabajo/hoy --fase lista",
+    "bin/70-reporte.mjs --dir .trabajo/hoy --fase armar", "bin/70-reporte.mjs --dir .trabajo/hoy --fase escribir", "bin/70-reporte.mjs --dir .trabajo/hoy --fase registrar"]) assert.ok(cmds.includes(c), c);
+  assert.ok(cmds.some(c => c.includes("bin/00-preparar.mjs --fase lista --modo <archivo|en_linea> --herramientas")));
   // una opción que no existe falla (el --help no tapa errores de nombre)
   assert.throws(() => execFileSync(process.execPath, ["bin/20-cartera.mjs", "--dir", "x", "--modo", "y", "--help"], { cwd: RAIZ, stdio: "pipe" }));
 });
 
-test("RUNBOOK.md y PROMPT-TAREA.md = 12b §L y §M literales salvo los cambios registrados (paso 0 con APROBADO, 00p §1)", t => {
+test("RUNBOOK.md = 12b §L + cambios registrados + 12c §G literales (v2.1.0); PROMPT-TAREA.md = 12c §H literal", t => {
   const ruta = process.env.RADAR_PLAN || path.resolve(RAIZ, "../../../.trabajo/ciclo/12b-enmienda-plataforma.md");
-  if (!fs.existsSync(ruta)) { t.skip("12b no está en este clon (va fuera del repo)"); return; }
-  const plan = fs.readFileSync(ruta, "utf8");
-  assert.equal(RUNBOOK, aplicar(bloqueL(plan), CAMBIOS_RUNBOOK));
-  assert.equal(PROMPT, aplicar(bloqueM(plan), CAMBIOS_PROMPT));
+  const rutaC = process.env.RADAR_PLAN_12C || path.resolve(RAIZ, "../../../.trabajo/ciclo/12c-enmienda-radar-reportes.md");
+  if (!fs.existsSync(ruta) || !fs.existsSync(rutaC)) { t.skip("12b/12c no están en este clon (van fuera del repo)"); return; }
+  const plan = fs.readFileSync(ruta, "utf8"), planC = fs.readFileSync(rutaC, "utf8");
+  assert.equal(RUNBOOK, aplicar(aplicar(bloqueL(plan), CAMBIOS_RUNBOOK), cambios12c(planC)));
+  assert.equal(PROMPT, bloqueH(planC));
+  assert.match(RUNBOOK, /^Versión 2\.1\.0\./m);
 });
 
 test("el paso 0 y el prompt exportan el commit de APROBADO (40 hex, ancestro de la rama), nunca la punta ni una etiqueta", () => {

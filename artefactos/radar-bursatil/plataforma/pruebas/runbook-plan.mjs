@@ -1,4 +1,4 @@
-// RUNBOOK.md y PROMPT-TAREA.md salen de 12b §L y §M con los cambios de abajo. Paso 0 (00p §1, reemplaza la etiqueta de 00m §1):
+// RUNBOOK.md sale de 12b §L con los cambios de abajo y los bloques de 12c §G. Paso 0 (00p §1, reemplaza la etiqueta de 00m §1):
 // el código que corre la rutina es el commit escrito en `artefactos/radar-bursatil/plataforma/APROBADO` de la rama (40 hex,
 // ancestro de la rama); solo el director cambia ese archivo.
 const REV_RAMA = "C=$(git rev-parse origin/claude/busy-hawking-0oxy6l) && X=";
@@ -7,18 +7,7 @@ export const LEER_APROBADO = "C=$(git show origin/claude/busy-hawking-0oxy6l:art
 const APROBADO = [[REV_RAMA, LEER_APROBADO]];
 const FALLA_EXPORTAR = "Radar · Falla: no pude preparar el código de la rutina; sin operaciones.";
 export const FALLA_PUSH_DB = "Radar · <día> <d-mes> · Falla: no se guardó en db; detalle en el chat.";
-// el rescate trae la rama completa: merge-base y git archive necesitan el commit aprobado, que puede no ser la punta
-const RESCATE = "git init /home/user/Ultra2025 && cd /home/user/Ultra2025 && git remote add origin https://github.com/angelkociankowski/ultra2025 && git fetch origin claude/busy-hawking-0oxy6l";
-// N10 (17, desvío N-10 del reporte 16): el rescate de "repo inexistente" y la falta de commit= también en el prompt y en el paso 0
-export const CAMBIOS_PROMPT = Object.freeze(APROBADO.concat([
-  ["1. Exporta el código aprobado y prepara la carpeta (en Bash, una línea a la vez):\n",
-    "1. Exporta el código aprobado y prepara la carpeta (en Bash, una línea a la vez). Si /home/user/Ultra2025 no existe, antes:\n" + `   ${RESCATE}\n`],
-  ["2. Lee completo /home/user/rutina/actual", "   Si no aparece la línea commit=, no sigas: termina con el mensaje de falla de abajo.\n2. Lee completo /home/user/rutina/actual"],
-  // D7 (00q §3): por push va la línea corta; el último mensaje es el aviso completo
-  ["4. Tu último mensaje es exactamente el aviso que indica el RUNBOOK (también por PushNotification), sin nada antes ni después.",
-    "4. Tu último mensaje es exactamente el aviso completo que indica el RUNBOOK, sin nada antes ni después; por PushNotification va\n" +
-    "   la línea corta que indica el RUNBOOK (paso 10)."],
-]));
+// PROMPT-TAREA.md sale literal de 12c §H (W6); los cambios de 00m/00p/D7 al prompt de 12b §M ya están dentro de ese bloque
 export const CAMBIOS_RUNBOOK = Object.freeze(APROBADO.concat([
   ["git fetch --depth=1 origin claude/busy-hawking-0oxy6l` y repite.", "git fetch origin claude/busy-hawking-0oxy6l` y repite."],
   // N10 / 00p: sin APROBADO válido el segundo comando no imprime commit= y `actual` sigue en la exportación anterior
@@ -78,7 +67,39 @@ export function bloqueL(plan) {
   const i = plan.indexOf("## L. `RUNBOOK.md` nuevo"), a = plan.indexOf("````markdown\n", i) + "````markdown\n".length;
   return plan.slice(a, plan.indexOf("\n````\n", a)) + "\n";
 }
-export function bloqueM(plan) {
-  const j = plan.indexOf("## M. Prompt de la tarea programada"), c = plan.indexOf("```text\n", j) + "```text\n".length;
-  return plan.slice(c, plan.indexOf("\n```\n", c)) + "\n";
+
+// ---- 12c §G y §H (W6): bloques literales de la enmienda sobre el RUNBOOK ya armado con 12b + cambios de arriba ----
+// primer bloque cercado (``` o ````) después del encabezado; devuelve su contenido sin las cercas
+export function bloqueDe(plan, encabezado) {
+  const i = plan.indexOf(encabezado);
+  if (i < 0) throw new Error(`no está en 12c: ${encabezado}`);
+  const m = plan.slice(i).match(/\n(`{3,4})[a-z]*\n/);
+  const ini = i + m.index + m[0].length, fin = plan.indexOf(`\n${m[1]}\n`, ini);
+  return plan.slice(ini, fin);
+}
+export const bloqueH = planC => bloqueDe(planC, "## H. Prompt de la tarea") + "\n";
+export function cambios12c(planC) {
+  const g1 = bloqueDe(planC, "### G.1"), g2 = bloqueDe(planC, "### G.2"), g3 = bloqueDe(planC, "### G.3"), g4 = bloqueDe(planC, "### G.4");
+  const g5 = bloqueDe(planC, "### G.5"), g6 = bloqueDe(planC, "### G.6"), g7 = bloqueDe(planC, "### G.7");
+  const [g4vinieta] = g4.split("\n\n### 2. Lista de lectura\n"), g4cmd = g4.match(/```\n(.+)\n```/)[1];
+  const [g7f6, g7f12] = g7.split(/\n(?=- \*\*F12)/);
+  return [
+    ["Versión 2.0.0.", "Versión 2.1.0."],
+    ["7. En `db` solo escribes lo que digan los archivos `salida/<grupo>/db_write.json` (o `artifactdata.json`), copiando sus\n" +
+      "   argumentos **sin cambiar nada**, en el orden de esta guía. Nunca borras documentos. Nunca escribes ni lees documentos de la\n" +
+      "   página (`dia-*`, `indice`, `corrida`, `contador-*`, `vivo`). Una llamada de `db` a la vez.", g1],
+    ["  devolvió esa búsqueda y cuyo dominio esté en la lista.\n", "  devolvió esa búsqueda y cuyo dominio esté en la lista.\n" + g2 + "\n"],
+    ["   `conflicto` → F6).", "   `conflicto` o `db_no_disponible` → F6)."],
+    ["\n## C. Pasos\n", "\n" + g3 + "\n\n## C. Pasos\n"],
+    ["- Carga también `select:PushNotification` (si no carga, sigue; el aviso irá solo en el chat).", g4vinieta],
+    ["cd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/00-preparar.mjs --fase lista --modo <archivo|en_linea>", g4cmd],
+    ["### 4. Radar\n```\ncd /home/user/rutina/actual/artefactos/radar-bursatil/plataforma && node bin/10-radar.mjs --dir .trabajo/hoy --modo <radar.accion de D/trabajo/preparar.json>\n```\n" +
+      "Tarda de 2 a 5 minutos si corre. Código 3 (`sin_radar`): sigue; hoy no habrá órdenes. Nada se escribe en `db` en este paso.", g5],
+    ["\n### 10. Avisar\n", "\n" + g6 + "\n\n### 10. Avisar\n"],
+    ["- **F6 · `db`**: lectura fallida o documento dañado → los scripts bloquean lo que dependa y el día no opera. Conflicto al escribir\n" +
+      "  (`conflicto`) → no escribas nada más; corre `node bin/60-cerrar.mjs --dir .trabajo/hoy --degradado db` solo para obtener el\n" +
+      "  aviso (no escribas su grupo) y ve al paso 10.", g7f6],
+    ["  `Radar · <fecha> · Falla: el código <commit corto> no pasa sus pruebas; la rutina no corrió.`\n",
+      "  `Radar · <fecha> · Falla: el código <commit corto> no pasa sus pruebas; la rutina no corrió.`\n" + g7f12 + "\n"],
+  ];
 }

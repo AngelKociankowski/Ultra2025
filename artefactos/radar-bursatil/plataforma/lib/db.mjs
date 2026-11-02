@@ -41,10 +41,20 @@ export const bytes = x => Buffer.byteLength(JSON.stringify(x), "utf8");
 // Modo archivo (D7, 00q): ArtifactData guarda los datos en out_dir y la sesión guarda el texto de la respuesta en `texto` (un
 // archivo nuevo por lectura: nunca reemplaza uno anterior) y agrega `linea` a lecturas.jsonl; importar saca de ese texto la
 // versión, la existencia y la identidad. out_dir va con la ruta real (la exportación `actual` puede moverse en el día).
+// R5 (12c §I.1): el número sale de un contador global del día (entrada/archivo/_reservas.json) que se reserva al armar cada
+// lista: ningún nombre se repite aunque una lista (verificar) se arme antes que otra (releer). Lo usa también 70-reporte.
+export function reservarNumero(dirAbs) {
+  const base = path.join(fs.realpathSync(dirAbs), "entrada", "archivo"), f = path.join(base, "_reservas.json");
+  fs.mkdirSync(base, { recursive: true });
+  const r = leerJson(f), n = r && Number.isInteger(r.siguiente) && r.siguiente >= 1 ? r.siguiente : 1;
+  escribirJson(f, { siguiente: n + 1 });
+  return n;
+}
 export function lectura(id, { obligatoria = true, dirAbs }) {
   const base = path.join(fs.realpathSync(dirAbs), "entrada", "archivo");
-  let n = 1;
-  while (fs.existsSync(path.join(base, `${id}.${n}.txt`))) n++;
+  let n = reservarNumero(dirAbs);
+  // si alguien borró el contador, tampoco se reutiliza un archivo que ya existe
+  while (fs.existsSync(path.join(base, `${id}.${n}.txt`))) n = reservarNumero(dirAbs);
   const texto = `entrada/archivo/${id}.${n}.txt`;
   return { id, obligatoria,
     en_linea: { herramienta: "mcp__claude-artifacts__db_get", args: { slug: DB_SLUG, path: `${DB_RUTA}/${id}` } },
@@ -236,6 +246,12 @@ export function registrar({ dir, grupo, verificar = false, reintento = false }) 
   const sesion = sesionDe(dir);
   const marcar = (e, version) => { ver[e.id] = { estado: "ok", version, h: e.h, escritoEn: grupo, sesion }; res.escritos.push({ id: e.id, version }); };
   const fin = (codigo, accion) => { escribirVersiones(dir, ver); escribirJson(path.join(g, "_grupo.json"), meta); return { codigo, accion, resumen: res }; };
+  // R6 (12c §I.2): F6 distingue otra escritura (conflicto) de una base que no respondió (db_no_disponible); 60-cerrar lo lee
+  const fallaDb = (tipo, codigo, ids) => {
+    escribirJson(path.join(R.trabajo, "falla-db.json"), { tipo, codigo: String(codigo || "ilegible").slice(0, 40), ids });
+    if (tipo === "conflicto") res.conflictos = ids; else res.sin_confirmar = ids;
+    return fin(3, tipo);
+  };
   const pendientes = verificar || reintento ? meta.ops.filter(e => !(ver[e.id] && ver[e.id].escritoEn === grupo && ver[e.id].sesion === sesion && ver[e.id].h === e.h)) : meta.ops;
 
   if (reintento) {
@@ -245,8 +261,8 @@ export function registrar({ dir, grupo, verificar = false, reintento = false }) 
       lista.forEach((e, i) => marcar(e, r.versiones[i]));
       return fin(0, "listo");
     }
-    res.conflictos = lista.map(e => e.id);
-    return fin(3, "conflicto");
+    const ids = lista.map(e => e.id);
+    return r.tipo === "conflicto" ? fallaDb("conflicto", r.codigo || "version_mismatch", ids) : fallaDb("db_no_disponible", r.codigo || r.tipo, ids);
   }
   if (verificar) {
     importar(dir, { requeridos: [] });
@@ -257,7 +273,9 @@ export function registrar({ dir, grupo, verificar = false, reintento = false }) 
       else if ((x && x.estado === "no_existe" && e.ifVersion === null) || (x && x.estado === "ok" && x.version === e.ifVersion)) noEscritos.push(Object.assign({}, e, { ifVersion: x.estado === "ok" ? x.version : null }));
       else ajenos.push(e.id);
     }
-    if (ajenos.length || (noEscritos.length && meta.reintento)) { res.conflictos = ajenos.length ? ajenos : noEscritos.map(e => e.id); return fin(3, "conflicto"); }
+    if (ajenos.length) return fallaDb("conflicto", "ajeno", ajenos);
+    // el reintento ya se hizo y sigue sin escribirse, sin que nadie más haya escrito: la base no está tomando escrituras
+    if (noEscritos.length && meta.reintento) return fallaDb("db_no_disponible", meta.codigo || "sin_escribir", noEscritos.map(e => e.id));
     if (!noEscritos.length) return fin(0, "listo");
     // un solo reintento con los no escritos y sus versiones actuales
     const ops = noEscritos.map(e => { const data = leerJson(path.join(g, e.id + ".json")), op = { op: "set", path: `${DB_RUTA}/${e.id}`, data }; if (e.ifVersion !== null) op.ifVersion = e.ifVersion; return op; });
@@ -281,6 +299,7 @@ export function registrar({ dir, grupo, verificar = false, reintento = false }) 
   if (r.tipo === "conflicto" && grupo === "ahora") { res.conflictos = meta.ops.map(e => e.id); return fin(3, "otra_sesion"); }
   if (r.tipo === "conflicto" && grupo === "pre-ejecucion") { res.conflictos = meta.ops.map(e => e.id); return fin(3, "ya_hubo_envio"); }
   // error, 409 en otro grupo, parcial o ilegible: no se supone nada; se relee cada id del grupo
+  meta.codigo = r.codigo || r.tipo;
   escribirJson(path.join(R.trabajo, "releer.json"), { grupo, lecturas: meta.ops.map(e => lectura(e.id, { obligatoria: false, dirAbs: path.resolve(dir) })) });
   res.sin_confirmar = meta.ops.map(e => e.id);
   return fin(0, "releer");

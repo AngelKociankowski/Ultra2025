@@ -15,6 +15,8 @@ export const DB_UID = "u_Np_5cFP3Ho2rFiXosc9ZPw";
 export const DB_RUTA = "data/users/" + DB_UID;
 export const ARTEFACTO_URL = "https://claude.ai/artifact/FkRDmR1kpgQTQq7t1eLodw";
 export const COLECCION_ARCHIVO = "data/users/me";
+// Dashboard "Cartera Radar" del dueño (12c §F; tipo Dashboard): la rutina solo escribe sus `datasets/<id>` en el paso 9b
+export const DASH_URL = "https://claude.ai/artifact/GiHN8dtAUzxpDoDSQYdU8s";
 // Operación de `batch` de ArtifactData que reemplaza un documento completo desde file_path (D7, medida el 2-nov: 00q).
 export const ACCION_REEMPLAZO = "set";
 export const PRESUPUESTO_DIA = 40000;

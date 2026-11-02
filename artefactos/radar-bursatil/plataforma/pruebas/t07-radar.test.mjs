@@ -11,7 +11,7 @@ import { validarDoc } from "../lib/esquemas.mjs";
 import { carpetaConDb, leerSalida, existe } from "./util.mjs";
 import { PAGINA, fmpSintetico, NOW_SINT } from "./sintetico.mjs";
 import { libroLunesDb } from "./escenario.mjs";
-import { crearValidador } from "./validar-salida.mjs";
+import { crearValidarSalida as crearValidador } from "../lib/esquemas.mjs";
 
 const { C } = PAGINA;
 function carpeta(previo = null) {

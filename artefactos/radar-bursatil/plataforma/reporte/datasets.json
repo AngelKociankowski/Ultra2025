@@ -1,0 +1,643 @@
+[
+ {
+  "id": "resumen",
+  "archivo": "resumen.json",
+  "titulo": "Resumen de la cartera",
+  "descripcion": "Valor de la Cartera Radar en dólares y pesos, rendimientos del día y desde el inicio, contra SPY y contra la meta de 15 % anual, con la fuente del Radar del día. Archivo que sube la rutina diaria.",
+  "clave": "fecha",
+  "columnas": [
+   {
+    "nombre": "fecha",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "hora_et",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "valor_usd",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "valor_mxn",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "tipo_cambio",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "efectivo_usd",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "rend_dia_usd",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "rend_dia_mxn",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "rend_semana_usd",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "rend_mes_usd",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "rend_anio_usd",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "rend_inicio_usd",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "rend_inicio_mxn",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "rend_inicio_spy",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "vs_spy_pts",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "meta15_valor_usd",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "meta15_dif_pts",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "meta15_dif_pts_mxn",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "anualizado_usd",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "aviso_anualizado",
+    "tipo": "t",
+    "nulo": true
+   },
+   {
+    "nombre": "inicio",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "base_usd",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "base_mxn",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "radar_fecha",
+    "tipo": "t",
+    "nulo": true
+   },
+   {
+    "nombre": "radar_fuente",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "radar_antiguedad",
+    "tipo": "e",
+    "nulo": true
+   },
+   {
+    "nombre": "regimen",
+    "tipo": "t",
+    "nulo": true
+   },
+   {
+    "nombre": "simulacion",
+    "tipo": "b",
+    "nulo": false
+   },
+   {
+    "nombre": "estado_dia",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "n_posiciones",
+    "tipo": "e",
+    "nulo": false
+   },
+   {
+    "nombre": "n_operaciones",
+    "tipo": "e",
+    "nulo": false
+   },
+   {
+    "nombre": "n_alertas",
+    "tipo": "e",
+    "nulo": false
+   }
+  ]
+ },
+ {
+  "id": "posiciones",
+  "archivo": "posiciones.json",
+  "titulo": "Posiciones",
+  "descripcion": "Qué tiene la cartera y dónde: unidades, costo, precio, valor, ganancia o pérdida y peso contra el objetivo, una fila por símbolo más el efectivo. Archivo que sube la rutina diaria.",
+  "clave": "simbolo",
+  "columnas": [
+   {
+    "nombre": "simbolo",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "nombre",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "clase",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "sector",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "region",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "donde",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "unidades",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "costo_usd",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "precio_usd",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "valor_usd",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "gp_usd",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "gp_pct",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "peso",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "peso_objetivo",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "desv_pts",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "senal",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "prob_pct",
+    "tipo": "e",
+    "nulo": true
+   },
+   {
+    "nombre": "rol",
+    "tipo": "t",
+    "nulo": false
+   }
+  ]
+ },
+ {
+  "id": "composicion",
+  "archivo": "composicion.json",
+  "titulo": "Composición",
+  "descripcion": "Reparto de la cartera por clase, sector, región y dónde está el dinero, como fracción del valor total. Archivo que sube la rutina diaria.",
+  "clave": "eje,grupo",
+  "columnas": [
+   {
+    "nombre": "eje",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "grupo",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "peso",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "valor_usd",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "orden",
+    "tipo": "e",
+    "nulo": false
+   }
+  ]
+ },
+ {
+  "id": "evolucion",
+  "archivo": "evolucion.json",
+  "titulo": "Evolución contra SPY y 15 %",
+  "descripcion": "Valor diario de la cartera e índices base 100 de la cartera, de SPY y de la trayectoria de 15 % anual desde el 30-oct-2026. Archivo que sube la rutina diaria.",
+  "clave": "fecha",
+  "columnas": [
+   {
+    "nombre": "fecha",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "valor_usd",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "valor_mxn",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "idx_usd",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "idx_mxn",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "idx_spy",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "idx_meta15",
+    "tipo": "n",
+    "nulo": false
+   }
+  ]
+ },
+ {
+  "id": "radar",
+  "archivo": "radar.json",
+  "titulo": "Señales del Radar",
+  "descripcion": "Señal y probabilidad del Radar para lo que está en cartera, lo que pide el objetivo y las 15 primeras del ranking. Archivo que sube la rutina diaria.",
+  "clave": "simbolo",
+  "columnas": [
+   {
+    "nombre": "rango",
+    "tipo": "e",
+    "nulo": false
+   },
+   {
+    "nombre": "simbolo",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "nombre",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "clase",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "senal",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "prob_pct",
+    "tipo": "e",
+    "nulo": false
+   },
+   {
+    "nombre": "referencia",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "precio",
+    "tipo": "n",
+    "nulo": false
+   },
+   {
+    "nombre": "cambio_dia",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "rend_esperado_3m",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "en_cartera",
+    "tipo": "b",
+    "nulo": false
+   },
+   {
+    "nombre": "peso_objetivo",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "impulsor",
+    "tipo": "t",
+    "nulo": true
+   }
+  ]
+ },
+ {
+  "id": "decisiones",
+  "archivo": "decisiones.json",
+  "titulo": "Decisiones de hoy",
+  "descripcion": "Lo que decidieron hoy las reglas para cada símbolo, con su motivo. Archivo que sube la rutina diaria.",
+  "clave": "simbolo",
+  "columnas": [
+   {
+    "nombre": "simbolo",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "regla",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "regla_texto",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "accion",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "peso_actual",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "peso_objetivo",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "desv_pts",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "monto_usd",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "motivo",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "simulacion",
+    "tipo": "b",
+    "nulo": false
+   }
+  ]
+ },
+ {
+  "id": "operaciones",
+  "archivo": "operaciones.json",
+  "titulo": "Operaciones",
+  "descripcion": "Operaciones de la Cartera Radar en eToro Demo (o simuladas) con su estado y su motivo. Archivo que sube la rutina diaria.",
+  "clave": "id",
+  "columnas": [
+   {
+    "nombre": "id",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "fecha",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "simbolo",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "lado",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "regla",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "regla_texto",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "estado",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "monto_usd",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "unidades",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "precio",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "realizado_usd",
+    "tipo": "n",
+    "nulo": true
+   },
+   {
+    "nombre": "motivo",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "simulacion",
+    "tipo": "b",
+    "nulo": false
+   }
+  ]
+ },
+ {
+  "id": "noticias",
+  "archivo": "noticias.json",
+  "titulo": "Noticias del día",
+  "descripcion": "Notas de fuentes fidedignas que la rutina juntó hoy, con medio, fecha y enlace. Archivo que sube la rutina diaria.",
+  "clave": "id",
+  "columnas": [
+   {
+    "nombre": "id",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "fecha",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "medio",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "titulo",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "url",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "tema",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "simbolos",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "resumen",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "evento",
+    "tipo": "t",
+    "nulo": true
+   },
+   {
+    "nombre": "confirmado",
+    "tipo": "b",
+    "nulo": false
+   }
+  ]
+ },
+ {
+  "id": "alertas",
+  "archivo": "alertas.json",
+  "titulo": "Alertas",
+  "descripcion": "Alertas y fallas del día de la rutina. Archivo que sube la rutina diaria.",
+  "clave": "n",
+  "columnas": [
+   {
+    "nombre": "n",
+    "tipo": "e",
+    "nulo": false
+   },
+   {
+    "nombre": "fecha",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "tipo",
+    "tipo": "t",
+    "nulo": false
+   },
+   {
+    "nombre": "texto",
+    "tipo": "t",
+    "nulo": false
+   }
+  ]
+ }
+]

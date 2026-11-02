@@ -34,7 +34,9 @@ test("grupo final: orden exacto de §E.6, esquemas, topes, ifVersion solo en le�
   assert.deepEqual([est.estado, est.paso], ["hecha", "cerrar"]);
   assert.deepEqual(est.escritos, Object.fromEntries(grupo(e.dir).ops.slice(0, -1).map(o => [o.path.slice(DB_RUTA.length + 1), o.data.h])));
   // N-5b (00o): tras escribir se releen rutina-estado y cartera-libro (sin envíos, ejecucion-<hoy> no)
-  assert.deepEqual(leerTrabajo(e.dir, "verificar.json"), { lecturas: ["rutina-estado", "cartera-libro"].map(id => lectura(id, { obligatoria: true, dirAbs: path.resolve(e.dir) })) });
+  // (el número del texto de modo archivo lo reserva cada lista con el contador global: R5, 12c §I.1)
+  const sinNumero = L => Object.assign({}, L, { archivo: Object.assign({}, L.archivo, { texto: L.archivo.texto.replace(/\.\d+\.txt$/, ".N.txt"), linea: L.archivo.linea.replace(/\.\d+\.txt/, ".N.txt") }) });
+  assert.deepEqual(leerTrabajo(e.dir, "verificar.json").lecturas.map(sinNumero), ["rutina-estado", "cartera-libro"].map(id => sinNumero(lectura(id, { obligatoria: true, dirAbs: path.resolve(e.dir) }))));
   const ops = docDe(e.dir, "ops-2026-10-30").ops, hoy = docDe(e.dir, "ops-2026-11-02").ops;
   assert.ok(ops.every(o => o.est === "ejecutada"));
   assert.deepEqual(hoy.map(o => [o.id, o.est, o.sim]), [["2026-11-02-XLE-V1", "simulada", true]]);

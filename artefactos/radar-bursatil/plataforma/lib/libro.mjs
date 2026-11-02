@@ -64,7 +64,8 @@ export function libroDeDb(doc) {
       montoUSD: isNum(x.usd) ? x.usd : null, unidades: isNum(x.u) ? x.u : null, positionId: isNum(x.pos) ? x.pos : null, enviadaEl: String(x.env || ""), estado: x.est });
   }
   const fueraDelObjetivo = {};
-  for (const [sym, v] of Object.entries(doc.fuera || {})) if (Array.isArray(v) && esFecha(v[0]) && Number.isInteger(v[1])) fueraDelObjetivo[sym] = { desde: v[0], dias: v[1] };
+  // 12c §C.6: [desde, dias, asOfUltimo]; el tercero es nuevo y opcional (los libros viejos traen dos)
+  for (const [sym, v] of Object.entries(doc.fuera || {})) if (Array.isArray(v) && esFecha(v[0]) && Number.isInteger(v[1])) fueraDelObjetivo[sym] = Object.assign({ desde: v[0], dias: v[1] }, esFecha(v[2]) ? { asOf: v[2] } : {});
   const refs = copia(doc.refs);
   return { libro: { mandato: copia(doc.mandato), efectivoUSD: doc.efectivo, realizadoUSD: doc.realizado, posiciones, pendientes, fueraDelObjetivo,
     precios: copia(doc.precios || {}), refs, ultimaRutina: refs && refs.dia ? refs.dia[0] : null }, alertas };
@@ -75,7 +76,7 @@ export function libroADb(L, atMs) {
   const pend = L.pendientes.map(x => ({ id: x.opId, dia: x.dia || x.opId.slice(0, 10), sym: x.sym, i: x.instrumentId, lado: LADO_DB[x.lado], o: x.orderId ?? null,
     usd: x.montoUSD === null || x.montoUSD === undefined ? null : usd(x.montoUSD), u: x.unidades === null || x.unidades === undefined ? null : u6(x.unidades), pos: x.positionId ?? null,
     env: ts(Date.parse(x.enviadaEl)) || x.enviadaEl || null, est: x.estado === "incierta" ? "incierta" : "aceptada" }));
-  const fuera = Object.fromEntries(Object.entries(L.fueraDelObjetivo || {}).map(([s, v]) => [s, [v.desde, v.dias]]));
+  const fuera = Object.fromEntries(Object.entries(L.fueraDelObjetivo || {}).map(([s, v]) => [s, v.asOf ? [v.desde, v.dias, v.asOf] : [v.desde, v.dias]]));
   const precios = Object.fromEntries(Object.entries(L.precios || {}).map(([s, v]) => [s, [px(v[0]), v[1]]]));
   return { kind: "carteraLibro", v: 2, at: ts(atMs), mandato: copia(L.mandato), efectivo: usd(L.efectivoUSD), realizado: usd(L.realizadoUSD), lotes, pend, fuera, precios, refs: copia(L.refs) };
 }

@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { correrRadar } from "../lib/radar-nodo.mjs";
-import { crearValidador } from "./validar-salida.mjs";
+import { crearValidarSalida as crearValidador } from "../lib/esquemas.mjs";
 import { PAGINA, FERIADOS_2026, fmpSintetico, CTX_SINT } from "./sintetico.mjs";
 
 const { C, D } = PAGINA;

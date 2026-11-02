@@ -91,9 +91,12 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
   else if (!contexto.ventanaDentro) bloqueo = "fuera de la ventana de órdenes";
   const modo = bloqueo ? "bloqueado" : base;
   const permitidas = base === "normal" ? new Set(["V1", "N2", "V2", "R1", "C1"]) : base === "restringido" ? new Set(["V1", "N2"]) : out ? new Set(["V1", "N2"]) : new Set(["N2"]);
+  // 00s §1 (b): con un análisis de más de 1 día hábil solo hay ventas (V1, V2, N2); compras y rebalanceo (R1, C1), no
+  const antiguedad = out && analisis && Number.isInteger(analisis.antiguedad) ? analisis.antiguedad : 0, sinCompras = antiguedad > 1;
+  if (sinCompras) { permitidas.delete("R1"); permitidas.delete("C1"); alertas.push(`Sin compras: el Radar tiene ${antiguedad} días hábiles.`); }
 
   const res = { fecha, simulacion, modo, motivoModo: bloqueo || motivoModo, objetivo: { pesos: objetivo.pesos, efectivo: objetivo.efectivo, estado: objetivo.estado, perfil: config.perfil },
-    valorUSD, efectivoDisponibleUSD: libro ? libro.efectivoUSD : 0, decisiones, ordenes: [], alertas, roles: objetivo.roles };
+    valorUSD, efectivoDisponibleUSD: libro ? libro.efectivoUSD : 0, decisiones, ordenes: [], alertas, roles: objetivo.roles, antiguedad, sinCompras };
   if (!libro || !val) return res;
 
   const fila = sym => (out ? (out.rows || []).find(r => r.symbol === sym) || null : null);
@@ -133,14 +136,16 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
       if (out && r && r.signal === 1 && permitidas.has("V1")) venderTodo("V1", `Pasó a Evitar (${r.pct} %)`);
       else if (ev && permitidas.has("N2")) venderTodo("N2", `Evento confirmado: ${ev.categoria} (${(ev.medios || []).slice(0, 2).join(", ")})`);
       else if (!(w > 0)) {
-        const n = (fuera[sym] ? fuera[sym].dias : 0) + 1;
+        // 12c §C.6: V2 cuenta análisis distintos, no días: con el mismo asOf que ya se contó, no suma
+        const f0 = fuera[sym], nuevo = !!out && (!f0 || (f0.asOf ? out.asOf > f0.asOf : libro.ultimaRutina !== fecha));
+        const n = (f0 ? f0.dias : 0) + (nuevo ? 1 : 0);
         if (permitidas.has("V2") && n >= config.diasSalida) venderTodo("V2", `Fuera del objetivo ${n} días hábiles seguidos (${senalTxt(r)})`);
         else d.motivo = permitidas.has("V2") ? `Fuera del objetivo ${n} de ${config.diasSalida} días hábiles (${senalTxt(r)})` : `Fuera del objetivo; hoy no se cuenta (${motivoModo || "modo " + base})`;
       } else if (desv2 > config.bandaPts && permitidas.has("R1")) {
         const monto = (w - a) * valorUSD;
         Object.assign(d, { regla: "R1", accion: monto > 0 ? "comprar" : "vender", lado: monto > 0 ? "compra" : "venta", montoUSD: Math.abs(monto),
           motivo: `Desviación de ${signo(desv)} pts contra el objetivo (${p1(a * 100)} % → ${p1(w * 100)} %)` });
-      } else d.motivo = `Dentro de la banda (desviación ${signo(desv)} pts)`;
+      } else d.motivo = desv2 > config.bandaPts && sinCompras ? `Fuera de la banda (${signo(desv)} pts), sin rebalanceo: el Radar tiene ${antiguedad} días hábiles` : `Dentro de la banda (desviación ${signo(desv)} pts)`;
     } else if (Math.round(w * 10000) / 100 >= config.nuevoSatelitePct && permitidas.has("C1")) {
       const rol = objetivo.roles[sym] || "Satélite", rf = objetivo.filas[sym];
       Object.assign(d, { regla: "C1", accion: "comprar", lado: "compra", montoUSD: w * valorUSD, motivo: `Entra al objetivo con ${p1(w * 100)} % (${rol}, ${rf ? `señal ${rf.signalLabel || ETIQUETA[rf.signal]} ${rf.pct} %` : "sin señal"})` });
@@ -211,14 +216,19 @@ export function decidir({ C, analisis, cartera, eventos = [], config, contexto, 
   return res;
 }
 
-// Al cerrar el día (§6.3): días hábiles seguidos fuera del objetivo, solo con análisis completo y una vez por día.
+// Al cerrar el día (§6.3): análisis distintos seguidos fuera del objetivo (12c §C.6), solo con análisis completo. Con el mismo asOf
+// que el último contado la entrada no cambia; una entrada vieja (sin asOf) suma si el día no se contó y gana el tercer elemento.
 // faltantes: símbolos sin fila en el análisis por dato faltante (N7): su contador no cambia.
-export function actualizarFuera({ libro, pesos, completo, fecha, faltantes = [] }) {
+export function actualizarFuera({ libro, pesos, completo, fecha, faltantes = [], asOf = null }) {
   const L = copia(libro), prev = L.fueraDelObjetivo || {}, next = {};
   const tenidos = [...new Set(L.posiciones.filter(p => p.lotes.length).map(p => p.sym))];
   for (const sym of tenidos) {
-    if (!completo || L.ultimaRutina === fecha || faltantes.includes(sym)) { if (prev[sym]) next[sym] = prev[sym]; continue; }
-    if (!(pesos[sym] > 0)) next[sym] = prev[sym] ? { desde: prev[sym].desde, dias: prev[sym].dias + 1 } : { desde: fecha, dias: 1 };
+    const p = prev[sym];
+    if (!completo || !asOf || faltantes.includes(sym)) { if (p) next[sym] = p; continue; }
+    if (pesos[sym] > 0) continue;
+    if (!p) next[sym] = { desde: fecha, dias: 1, asOf };
+    else if (p.asOf ? asOf > p.asOf : L.ultimaRutina !== fecha) next[sym] = { desde: p.desde, dias: p.dias + 1, asOf };
+    else next[sym] = { desde: p.desde, dias: p.dias, asOf: p.asOf || asOf };
   }
   L.fueraDelObjetivo = next;
   return L;

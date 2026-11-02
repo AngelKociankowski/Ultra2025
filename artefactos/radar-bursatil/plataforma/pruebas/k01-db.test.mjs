@@ -150,7 +150,7 @@ test("(5) 409: ahora → otra_sesion; pre-ejecucion → ya_hubo_envio; final →
 test("(6) D7 · modo archivo activo: la lista sale con ArtifactData y el grupo con batch de file_path", async () => {
   const r = await preparar(["--fase", "lista", "--modo", "archivo"], { ahora: () => Date.parse("2026-11-02T14:47:00Z"), raiz: carpetaTemporal() });
   assert.equal(r.codigo, 0); assert.deepEqual([r.linea.accion, r.linea.modo], ["leer", "archivo"]);
-  assert.ok(r.linea.lecturas.every(l => l.archivo.herramienta === "ArtifactData" && l.archivo.args.action === "get" && l.archivo.texto === `entrada/archivo/${l.id}.1.txt`));
+  assert.ok(r.linea.lecturas.every((l, i) => l.archivo.herramienta === "ArtifactData" && l.archivo.args.action === "get" && l.archivo.texto === `entrada/archivo/${l.id}.${i + 1}.txt`));
   const dir = carpetaConDb({}, null, { noExisten: ["punto-2026-11-02"] });
   const g = armarGrupo({ dir, grupo: "final", modo: "archivo", docs: [{ id: "punto-2026-11-02", data: Object.assign({}, S["punto-2026-10-30"], { f: "2026-11-02" }) }] });
   assert.equal(g.escribir, "salida/final/artifactdata.json");

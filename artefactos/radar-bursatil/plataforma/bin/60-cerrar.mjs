@@ -9,8 +9,8 @@ import { aplicarResultados, alertaPendiente, libroADb, mapaADb, opsNuevo, opsVal
 import { actualizarFuera, configEfectiva } from "../lib/reglas.mjs";
 import { actualizarRefs } from "../lib/rendimientos.mjs";
 import { validarNoticias } from "../lib/noticias.mjs";
-import { resumenRadar, previoDe } from "../lib/radar-resumen.mjs";
-import { armarAviso, armarPush } from "../lib/aviso.mjs";
+import { resumenRadar, previoDe, mismoAnalisis } from "../lib/radar-resumen.mjs";
+import { armarAviso, armarPush, fechaCorta } from "../lib/aviso.mjs";
 import { armarGrupo, leerVersiones, conH, lectura, presupuesto, bytes, usd, u6, p4, r6, precio, ts, sesionDe, escritoPorEstaSesion } from "../lib/db.mjs";
 import { leerDiario, resDesdeDiario } from "../lib/diario.mjs";
 import { fechaHoraET } from "../lib/tiempo.mjs";
@@ -27,6 +27,16 @@ export const TEXTO_FALLA = {
 // --degradado acepta cualquier nombre de paso: el cierre no puede fallar por cómo se llamó al paso que falló
 export const pasoDegradado = x => (/^[a-z0-9-]{1,20}$/.test(String(x)) ? String(x) : "otro");
 const textoFalla = paso => TEXTO_FALLA[paso] || `falló el paso ${paso}`;
+// R6 (12c §I.2): con --degradado db, trabajo/falla-db.json (lo deja registrar) dice si fue otra escritura o la base que no respondió;
+// sin ese archivo queda el texto de siempre
+function fallaDeDb(dir, fecha) {
+  let f = null;
+  try { f = leerTrabajo(dir, "falla-db.json"); } catch (e) { f = null; }
+  if (!f || !["conflicto", "db_no_disponible"].includes(f.tipo)) return null;
+  const dia = fechaCorta(fecha);
+  if (f.tipo === "db_no_disponible") return { falla: { paso: "db", linea: `Falla: db no respondió al guardar (${f.codigo}); no se perdió nada: el día siguiente lo recupera.` }, push: `Radar · ${dia} · Falla: db no respondió` };
+  return { falla: { paso: "db", linea: `Falla: db — otra escritura cambió ${(f.ids || []).join(", ")}; la rutina se detuvo.` }, push: `Radar · ${dia} · Falla: db cambió por otra escritura` };
+}
 const isNum = v => typeof v === "number" && Number.isFinite(v);
 const ETQ = { 1: "Evitar", 2: "Mantener", 3: "Compra" };
 const corto = (s, n) => (String(s).length > n ? String(s).slice(0, n - 1) + "…" : String(s));
@@ -61,8 +71,8 @@ function cerrar({ dir, a, t, reg }) {
   let notasDoc = null;
   try { notasDoc = leerJson(path.join(rutas(dir).entrada, "noticias.json")); } catch (e) { errores.push(["noticias", "json_invalido"]); }
   const out = analisis && analisis.out ? analisis.out : null;
-  const fallas = [];
-  if (a.degradado) { fallas.push({ paso: a.degradado, texto: textoFalla(a.degradado) }); errores.push([a.degradado, "degradado"]); }
+  const fallas = [], fdb = a.degradado === "db" ? fallaDeDb(dir, fecha) : null;
+  if (a.degradado) { fallas.push(fdb ? fdb.falla : { paso: a.degradado, texto: textoFalla(a.degradado) }); errores.push([a.degradado, "degradado"]); }
   const carteraOk = !!(cartera && cartera.estado === "listo" && cartera.libro && cartera.valuacion);
   if (cartera && !carteraOk && a.degradado !== "cartera") fallas.push({ paso: "cartera", texto: cartera.motivo || (cartera.estado === "sin_libro" ? "no se pudo leer cartera-libro; sin órdenes hoy" : TEXTO_FALLA.cartera) });
   if (nfmp && Array.isArray(nfmp.errores) && nfmp.errores.length) errores.push(["30-fmp-noticias", "sin_fmp"]);
@@ -108,7 +118,7 @@ function cerrar({ dir, a, t, reg }) {
     for (const x of libro.pendientes) alertas.push(alertaPendiente(x));
     const faltantes = decis ? decis.decisiones.filter(d => /dato faltante/.test(d.razonOmision || "")).map(d => d.sym) : [];
     const completo = !!(out && !out.partial && decis && decis.objetivo && decis.objetivo.estado === "ok");
-    libro = actualizarFuera({ libro, pesos: decis && decis.objetivo ? decis.objetivo.pesos : {}, completo, fecha, faltantes });
+    libro = actualizarFuera({ libro, pesos: decis && decis.objetivo ? decis.objetivo.pesos : {}, completo, fecha, faltantes, asOf: out ? out.asOf : null });
     const p = cartera.punto;
     if (p) libro.refs = actualizarRefs({ refs: libro.refs, punto: { f: p.f, v: p.v_, vm: p.vm, spy: p.spy, i: p.i, im: p.im } });
     poner("cartera-libro", libroADb(libro, t));
@@ -118,7 +128,8 @@ function cerrar({ dir, a, t, reg }) {
   // ---- radar del día (con el objetivo definitivo de 40-decidir si lo hay) ----
   const tenidos = libro ? [...new Set(libro.posiciones.filter(x => x.lotes.length).map(x => x.sym).concat(libro.pendientes.map(x => x.sym)))] : [];
   const radar = out ? resumenRadar({ out, estado: analisis.estado, motivo: analisis.motivo, llamadas: analisis.llamadas, t, f: fecha,
-    objetivo: decis && decis.objetivo && decis.objetivo.estado === "ok" ? { pesos: decis.objetivo.pesos, roles: decis.roles || {} } : null, previo: estadoPrevio ? estadoPrevio.previo : null, tenidos })
+    objetivo: decis && decis.objetivo && decis.objetivo.estado === "ok" ? { pesos: decis.objetivo.pesos, roles: decis.roles || {} } : null, previo: estadoPrevio ? estadoPrevio.previo : null, tenidos,
+    fuente: ["rutina", "pagina"].includes(analisis.fuente) ? analisis.fuente : null, antiguedad: analisis.antiguedad })
     : Object.assign({}, resumen0 || resumenRadar({ estado: "sin_radar", motivo: (analisis && analisis.motivo) || "sin_radar", t, f: fecha }), { t: ts(t) });
   poner(`radar-${fecha}`, radar);
 
@@ -146,7 +157,7 @@ function cerrar({ dir, a, t, reg }) {
   const pri = c => (c[1] !== "senal" ? 0 : (radar.obj || []).some(x => x[0] === c[0]) || tenidos.includes(c[0]) ? 1 : 2);
   const notasAviso = nv.eventos.filter(e => e.confirmado).map(e => nv.validas.find(n => n.evento && n.evento.simbolo === e.simbolo && n.evento.categoria === e.categoria))
     .concat(nv.validas.filter(n => n.tema === "macro" || n.tema === "mercado").sort((x, y) => (x.fecha < y.fecha ? 1 : -1))).filter(Boolean);
-  const alertasTodas = [...new Set([...(prep.alertas || []), ...((cartera && cartera.alertas) || []), ...((decis && decis.alertas) || []), ...alertas])];
+  const alertasTodas = [...new Set([...(prep.alertas || []), ...((analisis && analisis.alertas) || []), ...((cartera && cartera.alertas) || []), ...((decis && decis.alertas) || []), ...alertas])];
   if (abierta) alertasTodas.push(`La ejecución de hoy quedó abierta (sin resultado): se concilia mañana.`);
   // H15: entradas malas de db (descartadas con alerta) dejan el día degradado; la entrada mala no se reescribe
   let malos = (cartera && cartera.datosMalos) || 0;
@@ -161,7 +172,8 @@ function cerrar({ dir, a, t, reg }) {
   const estado = degradada ? "degradada" : (!out || out.partial || errores.some(e => e[0] === "30-fmp-noticias" || e[0] === "noticias")) ? "parcial" : "completa";
   const datosAviso = {
     fecha, hora: fechaHoraET(t).hora, simulacion, cartera: v ? { valorUSD: v.valorUSD, valorMXN: v.valorMXN } : null, rend,
-    radar: out ? { regimen: radar.reg && radar.reg.l, cambios: (radar.cambios || []).slice().sort((x, y) => pri(x) - pri(y)).map(frase).filter(Boolean) } : { sinRadar: true, motivo: radar.motivo },
+    radar: out ? { regimen: radar.reg && radar.reg.l, cambios: (radar.cambios || []).slice().sort((x, y) => pri(x) - pri(y)).map(frase).filter(Boolean),
+      fuente: radar.fu || null, fa: out.asOf, ant: radar.ant ?? null, mismo: mismoAnalisis(estadoPrevio && estadoPrevio.previo, out.asOf), sinCompras: !!(decis && decis.sinCompras) } : { sinRadar: true, motivo: radar.motivo },
     notas: [...new Set(notasAviso)].slice(0, 2).map(n => ({ titulo: n.titulo, medio: n.medio })), operaciones: opsAviso, alertas: alertasTodas, fallas,
   };
   const aviso = armarAviso(datosAviso);
@@ -176,7 +188,7 @@ function cerrar({ dir, a, t, reg }) {
   const bit = recortarBitacora({
     kind: "bitacora", v: 2, f: fecha, t: ts(t), estado, sim: simulacion, commit: prep.commit || null, modo,
     mercado: { abierto: !!(prep.mercado && prep.mercado.abierto), cal: (prep.mercado && prep.mercado.calendario) || null, horaET: prep.horaET || null },
-    radar: { estado: radar.estado, motivo: radar.motivo || null },
+    radar: { estado: radar.estado, motivo: radar.motivo || null, fu: radar.fu || null, fa: radar.fa || null, ant: radar.ant ?? null },
     cartera: v ? { v_: usd(v.valorUSD), vm: usd(v.valorMXN), fx: v.fx, fxFuente: v.fxFuente, e: usd(v.efectivoUSD),
       pos: v.posiciones.map(x => [x.sym, u6(x.unidades), usd(x.costoUSD), precio(x.precioUSD), usd(x.valorUSD), p4(x.peso)]) } : {},
     rend: rend ? { usd: rend.usd.map(r6), mxn: rend.mxn.map(r6), spy: rend.spy.map(r6), meta: [usd(rend.meta[0]), red2(rend.meta[1]), usd(rend.meta[2]), red2(rend.meta[3])], aviso: rend.aviso } : {},
@@ -221,7 +233,7 @@ function cerrar({ dir, a, t, reg }) {
   if (estadoPrevio && estadoPrevio.revisar) estadoFin.revisar = estadoPrevio.revisar; // sigue marcado hasta que el director lo quite
   docs.push({ id: "rutina-estado", data: estadoFin });
   const g = armarGrupo({ dir, grupo: "final", docs, modo, delDia, accionDia });
-  escribirAviso(dir, aviso, armarPush(datosAviso));
+  escribirAviso(dir, aviso, fdb ? fdb.push : armarPush(datosAviso));
   // N-5b (00o): tras escribir se releen rutina-estado, cartera-libro y, si hubo envíos, ejecucion-<hoy>
   const releer = ["rutina-estado"].concat(docs.some(d => d.id === "cartera-libro") ? ["cartera-libro"] : [],
     docs.some(d => d.id === `ejecucion-${fecha}` && (d.data.res || []).some(r => r.env)) ? [`ejecucion-${fecha}`] : []);
@@ -235,8 +247,9 @@ const red2 = x => (isNum(x) ? Math.round(x * 100) / 100 : null);
 function cerrarMinimo({ dir, t, error, a }) {
   const prep = (() => { try { return leerTrabajo(dir, "preparar.json") || {}; } catch (e) { return {}; } })();
   const fecha = prep.fechaET || fechaHoraET(t).fecha, mes = fecha.slice(0, 7), modo = prep.modo || "en_linea";
+  const fdb = a.degradado === "db" ? fallaDeDb(dir, fecha) : null;
   const datosAviso = { fecha, hora: fechaHoraET(t).hora, simulacion: true, cartera: null, rend: null, radar: null, notas: [], operaciones: [], alertas: [],
-    fallas: [{ paso: a.degradado || "cerrar", texto: a.degradado ? textoFalla(a.degradado) : TEXTO_FALLA.cerrar }, ...(a.degradado && a.degradado !== "cerrar" ? [{ paso: "cerrar", texto: TEXTO_FALLA.cerrar }] : [])] };
+    fallas: [fdb ? fdb.falla : { paso: a.degradado || "cerrar", texto: a.degradado ? textoFalla(a.degradado) : TEXTO_FALLA.cerrar }, ...(a.degradado && a.degradado !== "cerrar" ? [{ paso: "cerrar", texto: TEXTO_FALLA.cerrar }] : [])] };
   const aviso = armarAviso(datosAviso);
   const re = leerDoc(dir, "rutina-estado"), previo = re.estado === "ok" ? re.doc : null;
   const bit = { kind: "bitacora", v: 2, f: fecha, t: ts(t), estado: "degradada", sim: true, commit: prep.commit || null, modo, mercado: {}, radar: { estado: "sin_radar", motivo: null },
@@ -250,7 +263,7 @@ function cerrarMinimo({ dir, t, error, a }) {
       (prep.recuperacion && Array.isArray(prep.recuperacion.ejecuciones)) ? prep.recuperacion.ejecuciones : [], escritoPorEstaSesion(dir, `ejecucion-${fecha}`, "pre-ejecucion") ? [fecha] : []))].filter(esFecha).sort(),
     previo: previo ? previo.previo || null : null, escritos: {}, motivo: corto(`cierre mínimo: ${error}`, 120), ...(previo && previo.revisar ? { revisar: previo.revisar } : {}) } });
   const g = armarGrupo({ dir, grupo: "final", docs, modo, delDia: [`bitacora-${fecha}`], accionDia: prep.rutina ? prep.rutina.accion : null });
-  escribirAviso(dir, aviso, armarPush(datosAviso));
+  escribirAviso(dir, aviso, fdb ? fdb.push : armarPush(datosAviso));
   escribirTrabajo(dir, "verificar.json", { lecturas: [lectura("rutina-estado", { obligatoria: true, dirAbs: path.resolve(dir) })] });
   return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "listo", modo, resumen: { estado: "degradada", minimo: true, docs: g.ops }, escribir: g.escribir }) };
 }

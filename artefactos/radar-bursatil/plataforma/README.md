@@ -14,6 +14,13 @@ y deja todo en `db` del artefacto. Diseño y contratos: `12-plan-plataforma.md` 
   envío. Lo dudoso cuenta como enviado (`incierta`, efectivo provisional) hasta que eToro lo muestre o pasen 3 días hábiles.
   Una compra descuenta lo pedido al enviarse; al conciliarla, lo que eToro no usó vuelve al efectivo (00q §2: el 2-nov llenó
   31 946.00 de 31 958.53). El libro de ese día, que quedó con 0.56, se corrige una sola vez a 13.09 en la corrida siguiente.
+- Radar (12c §C): sin FMP, `10-radar --modo correr` sale con `siguiente: "pagina"` y `--modo pagina` lee **solo** el último análisis
+  que guardó la página (`indice` → `dia-<f>` → partes) con ArtifactData a archivo, lo valida con el núcleo del repo (`joinDay`,
+  `validOutput`, ≤ 5 días hábiles) y nunca escribe documentos de la página. V2 cuenta análisis distintos; con un análisis de más de
+  1 día hábil no hay compras ni rebalanceo (00s). Cada análisis queda en la caché `/home/user/rutina/radar-cache/` (fuera de la
+  exportación; las pruebas nunca la tocan).
+- Reporte (12c §F, paso 9b): `bin/70-reporte.mjs` arma 9 datasets (`reporte/datasets.json`) y los sube al dashboard "Cartera Radar";
+  la página es `reporte/index.html` (reglas del tipo Dashboard; la guarda el director como `files/index.html`). Nunca detiene el día.
 - Aviso: `salida/aviso.txt` (completo, para el chat) y `salida/aviso-push.txt` (una línea de ≤ 200 caracteres para
   PushNotification: valor y % del día en USD y MXN, vs SPY desde inicio, Radar sí/no y operaciones; 00q §3).
 - La rutina corre una **exportación** del commit escrito en `APROBADO` (una línea, sha de 40 hex, ancestro de

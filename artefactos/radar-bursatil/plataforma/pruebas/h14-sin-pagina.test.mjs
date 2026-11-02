@@ -24,8 +24,12 @@ test("--fase lista: obligatorios sin documentos de la página; .trabajo/hoy apun
   assert.deepEqual(r28.linea.lecturas.slice(-1).map(x => [x.id, x.obligatoria]), [["feriados-2028", false]]);
   // ningún paso lee ni escribe documentos de la página (comentarios aparte; `cat: "corrida"` es la categoría del contador
   // de llamadas que usa la capa de datos de la página, no un documento)
+  // 12c §A: la rutina ahora LEE el análisis de la página (solo lib/pagina.mjs, a archivo con ArtifactData `get`); escribirlos sigue
+  // prohibido: lib/pagina.mjs no arma escrituras
+  const lectora = path.join(RAIZ, "lib/pagina.mjs"), txtLectora = fs.readFileSync(lectora, "utf8");
+  assert.ok(!/"batch"|"set"|db_write|writes|armarGrupo/.test(txtLectora) && /action: "get"/.test(txtLectora));
   const usos = [];
-  for (const f of archivosBajo(path.join(RAIZ, "bin")).concat(archivosBajo(path.join(RAIZ, "lib")))) {
+  for (const f of archivosBajo(path.join(RAIZ, "bin")).concat(archivosBajo(path.join(RAIZ, "lib"))).filter(f => f !== lectora)) {
     fs.readFileSync(f, "utf8").split("\n").forEach((x, i) => { const c = x.replace(/\/\/.*$/, ""); if (/"corrida"|dia-\$\{|"indice"|contador-/.test(c) && !/esDePagina|\^\(dia-|cat: "corrida"/.test(c)) usos.push(`${path.relative(RAIZ, f)}:${i + 1}`); });
   }
   assert.deepEqual(usos, []);

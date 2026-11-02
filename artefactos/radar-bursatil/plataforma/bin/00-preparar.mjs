@@ -1,5 +1,7 @@
 // Pasos 2–3 · Preparar (12b §D.2).
-//   node bin/00-preparar.mjs --fase lista --modo en_linea|archivo   → crea .trabajo/<fechaET>/ y .trabajo/hoy; lista de lecturas
+//   node bin/00-preparar.mjs --fase lista --modo en_linea|archivo [--herramientas artifactdata,artifact,push|ninguna]
+//                                                                    → crea .trabajo/<fechaET>/ y .trabajo/hoy; lista de lecturas;
+//                                                                      trabajo/herramientas.json (12c §G.4)
 //   node bin/00-preparar.mjs --dir D --fase decidir                 → trabajo/preparar.json, trabajo/leer-mas.json, salida/ahora/
 // `--ahora <ISO>` solo con RADAR_PRUEBAS=1 (pruebas).
 import fs from "node:fs";
@@ -17,7 +19,8 @@ import { avisoFinDeSemana, avisoFeriado, AVISO_YA_HECHA, AVISO_TEMPRANO, AVISO_S
 
 const PASO = "00-preparar";
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const AYUDA = "Uso: node bin/00-preparar.mjs --fase lista --modo en_linea|archivo | --dir <carpeta> --fase decidir";
+const AYUDA = "Uso: node bin/00-preparar.mjs --fase lista --modo en_linea|archivo [--herramientas <artifactdata,artifact,push|ninguna>] | --dir <carpeta> --fase decidir";
+const HERRAMIENTAS = ["artifactdata", "artifact", "push"];
 const TEMPRANO_MIN = minutosDe("09:40");
 const LATIDO_VIVO_MS = 30 * 60000;
 const OBLIGATORIOS = ["rutina-estado", "rutina-config", "cartera-libro", "etoro-mapa"];
@@ -45,11 +48,14 @@ function relojDe(a, ahora) {
 }
 
 export async function main(argv, { ahora = Date.now, raiz = RAIZ, pagina = null, sesion = null } = {}) {
-  const a = leerArgs(argv, { valores: ["--dir", "--fase", "--ahora", "--modo"] });
+  const a = leerArgs(argv, { valores: ["--dir", "--fase", "--ahora", "--modo", "--herramientas"] });
   if (a.ayuda) { process.stdout.write(AYUDA + "\n"); return { codigo: 0, linea: null }; }
   const reloj = relojDe(a, ahora), t = reloj();
   if (a.fase === "lista") {
     if (!["en_linea", "archivo"].includes(a.modo)) return { codigo: 1, linea: lineaPaso({ paso: PASO, ok: false, accion: "error", resumen: { texto: AYUDA } }) };
+    const cargadas = a.herramientas === undefined || a.herramientas === "ninguna" ? [] : String(a.herramientas).split(",").map(x => x.trim()).filter(Boolean);
+    const ajenas = cargadas.filter(x => !HERRAMIENTAS.includes(x));
+    if (ajenas.length) return { codigo: 1, linea: lineaPaso({ paso: PASO, ok: false, accion: "error", resumen: { texto: `herramienta desconocida: ${ajenas.join(", ").slice(0, 60)}. ${AYUDA}` } }) };
     const fecha = fechaHoraET(t).fecha, base = path.join(raiz, ".trabajo"), dirAbs = path.join(base, fecha);
     crearCarpeta(dirAbs);
     const enlace = path.join(base, "hoy");
@@ -57,6 +63,7 @@ export async function main(argv, { ahora = Date.now, raiz = RAIZ, pagina = null,
     fs.symlinkSync(fecha, enlace);
     const lecturas = listaLectura(fecha, dirAbs);
     escribirTrabajo(dirAbs, "lista.json", { fecha, modo: a.modo, lecturas });
+    escribirTrabajo(dirAbs, "herramientas.json", Object.fromEntries(HERRAMIENTAS.map(h => [h, cargadas.includes(h)])));
     return { codigo: 0, linea: lineaPaso({ paso: PASO, ok: true, accion: "leer", modo: a.modo, resumen: { fechaET: fecha, n: lecturas.length }, extra: { dir: ".trabajo/hoy", fecha, lecturas } }) };
   }
   if (!a.dir || a.fase !== "decidir") return { codigo: 1, linea: lineaPaso({ paso: PASO, ok: false, accion: "error", resumen: { texto: AYUDA } }) };

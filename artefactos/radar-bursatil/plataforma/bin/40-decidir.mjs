@@ -44,7 +44,8 @@ export async function main(argv, { ahora = Date.now, pagina = null } = {}) {
   escribirTrabajo(dir, "plan-ordenes.json", plan);
   const planSha = shaArchivo(path.join(rutas(dir).trabajo, "plan-ordenes.json"));
   const dec = { fecha: r.fecha, simulacion: r.simulacion, modo: r.modo, motivoModo: r.motivoModo, objetivo: r.objetivo, valorUSD: r.valorUSD, efectivoDisponibleUSD: r.efectivoDisponibleUSD,
-    decisiones: r.decisiones, planSha, alertas: r.alertas, roles: r.roles || {}, ventana, noticias: { validas: nv.validas.length, descartadas: nv.descartadas, eventos: nv.eventos } };
+    decisiones: r.decisiones, planSha, alertas: r.alertas, roles: r.roles || {}, ventana, noticias: { validas: nv.validas.length, descartadas: nv.descartadas, eventos: nv.eventos },
+    antiguedad: r.antiguedad, sinCompras: r.sinCompras };
   escribirTrabajo(dir, "decisiones.json", dec);
   const accion = !r.ordenes.length ? "nada" : r.simulacion ? "simulacion" : "ejecutar";
   reg.info("decisiones", { modo: r.modo, ordenes: r.ordenes.length, accion });

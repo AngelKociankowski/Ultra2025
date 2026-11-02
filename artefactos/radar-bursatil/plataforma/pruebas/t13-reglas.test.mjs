@@ -17,6 +17,7 @@ const copia = o => JSON.parse(JSON.stringify(o));
 function montarEscenario(e, extra = {}) {
   const out = e.sinAnalisis ? null : copia(OUT30);
   if (out && e.parcial) Object.assign(out, { partial: true, partialReason: "cobertura baja" });
+  if (out && e.asOf) out.asOf = e.asOf;
   const libro = libroLunes();
   if (e.quitarSyms) libro.posiciones = libro.posiciones.filter(p => !e.quitarSyms.includes(p.sym));
   for (const l of e.agregarLotes || []) {
@@ -82,24 +83,25 @@ for (const f of fs.readdirSync(ESC).filter(x => x.endsWith(".json")).sort()) {
   });
 }
 
+// 12c §C.6: el contador suma por análisis distinto; aquí cada día trae su análisis (asOf = el día), como con la corrida propia
 test("c · QQQ fuera del objetivo con señal Compra: días 1 y 2 mantener, día parcial no suma, día 3 V2", () => {
   const e = { agregarLotes: [{ sym: "QQQ", instrumentId: 3006, positionId: 2600000110, unidades: 3, costoUSD: 2000, abiertaEl: "2026-10-20T15:00:00Z" }], objetivo: null };
   let fuera = {};
   const dia = (fecha, parcial) => {
-    const r = montarEscenario(Object.assign({}, e, { fuera, parcial }));
+    const r = montarEscenario(Object.assign({}, e, { fuera, parcial, asOf: fecha }));
     const d = r.decisiones.find(x => x.sym === "QQQ");
     const l = Object.assign(libroLunes(), { fueraDelObjetivo: fuera, ultimaRutina: null, refs: null });
     l.posiciones.push({ sym: "QQQ", instrumentId: 3006, lotes: [{ positionId: 2600000110, orderId: null, unidades: 3, costoUSD: 2000, abiertaEl: "x" }] });
-    fuera = actualizarFuera({ libro: l, pesos: r.objetivo.pesos, completo: !parcial, fecha }).fueraDelObjetivo;
+    fuera = actualizarFuera({ libro: l, pesos: r.objetivo.pesos, completo: !parcial, fecha, asOf: fecha }).fueraDelObjetivo;
     return d;
   };
   const d1 = dia("2026-11-02", false);
   assert.equal(d1.accion, "mantener"); assert.equal(d1.motivo, "Fuera del objetivo 1 de 3 días hábiles (señal Compra, 56 %)");
-  assert.deepEqual(fuera.QQQ, { desde: "2026-11-02", dias: 1 });
+  assert.deepEqual(fuera.QQQ, { desde: "2026-11-02", dias: 1, asOf: "2026-11-02" });
   assert.equal(dia("2026-11-03", false).accion, "mantener");
-  assert.deepEqual(fuera.QQQ, { desde: "2026-11-02", dias: 2 });
+  assert.deepEqual(fuera.QQQ, { desde: "2026-11-02", dias: 2, asOf: "2026-11-03" });
   assert.equal(dia("2026-11-04", true).accion, "mantener"); // parcial: no hay V2 y el contador no cambia
-  assert.deepEqual(fuera.QQQ, { desde: "2026-11-02", dias: 2 });
+  assert.deepEqual(fuera.QQQ, { desde: "2026-11-02", dias: 2, asOf: "2026-11-03" });
   const d3 = dia("2026-11-05", false);
   assert.equal(d3.accion, "vender"); assert.equal(d3.regla, "V2"); assert.equal(d3.motivo, "Fuera del objetivo 3 días hábiles seguidos (señal Compra, 56 %)");
 });
@@ -164,6 +166,6 @@ test("N7 · ETF de ETF_PAID sin fila en un análisis listo → dato faltante: om
   assert.ok(!r.ordenes.some(o => o.sym === "XLE"));
   assert.deepEqual([aapl.accion, aapl.motivo], ["mantener", "Fuera del objetivo 1 de 3 días hábiles (sin fila en el análisis de hoy)"]);
   const l = Object.assign(copia(libro), { ultimaRutina: "2026-11-01" });
-  const f = actualizarFuera({ libro: l, pesos: r.objetivo.pesos, completo: true, fecha: F, faltantes: ["XLE"] }).fueraDelObjetivo;
-  assert.deepEqual(f, { XLE: { desde: "2026-10-29", dias: 2 }, AAPL: { desde: F, dias: 1 } });
+  const f = actualizarFuera({ libro: l, pesos: r.objetivo.pesos, completo: true, fecha: F, faltantes: ["XLE"], asOf: out.asOf }).fueraDelObjetivo;
+  assert.deepEqual(f, { XLE: { desde: "2026-10-29", dias: 2 }, AAPL: { desde: F, dias: 1, asOf: out.asOf } });
 });

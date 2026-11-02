@@ -22,13 +22,13 @@ const LUNES_REAL = { fecha: "2026-11-02", hora: "10:59", simulacion: true, carte
 
 test("lunes real: una línea con valor USD y %, MXN y %, vs SPY, Radar sí/no y operaciones (las mismas cifras del aviso)", () => {
   const p = armarPush(LUNES_REAL), aviso = armarAviso(LUNES_REAL);
-  assert.equal(p, "Radar · lun 2-nov · SIM · US$ 32,109 (+0.47 % hoy) · MXN $ 596,211 (−0.63 % hoy) · vs SPY desde inicio −0.56 % · Radar: no · Ops: ninguna");
+  assert.equal(p, "Radar · lun 2-nov · SIM · US$ 32,109 (+0.47 % hoy) · MXN $ 596,211 (−0.63 % hoy) · vs SPY desde inicio −0.56 % · Sin Radar · Ops: ninguna");
   assert.ok(unaLinea(p));
   for (const x of ["US$ 32,109", "+0.47 %", "MXN $ 596,211", "−0.63 %", "vs SPY desde inicio: −0.56 %"]) assert.ok(aviso.includes(x), x);
   // con Radar y operaciones simuladas
   const sim = armarPush(Object.assign({}, LUNES_REAL, { radar: { regimen: "alcista", cambios: [] },
     operaciones: [{ sym: "XLE", lado: "venta", regla: "V1", est: "simulada" }, { sym: "QQQ", lado: "compra", regla: "C1", est: "simulada" }] }));
-  assert.match(sim, / · Radar: sí · Ops: 2 simuladas \(vender XLE, comprar QQQ\)$/);
+  assert.match(sim, / · Radar hoy · Ops: 2 simuladas \(vender XLE, comprar QQQ\)$/);
 });
 
 test("órdenes reales: hechas, enviadas, sin confirmar y sin ejecutar; el peor caso (12 órdenes, cifras grandes, fallas) cabe en 200", () => {
@@ -36,10 +36,10 @@ test("órdenes reales: hechas, enviadas, sin confirmar y sin ejecutar; el peor c
   const p = armarPush(Object.assign({}, LUNES_REAL, { simulacion: false, radar: { regimen: "alcista" }, operaciones: ops }));
   assert.match(p, /^Radar · lun 2-nov · US\$ /);
   // el detalle entra hasta donde cabe
-  assert.equal(p, "Radar · lun 2-nov · US$ 32,109 (+0.47 % hoy) · MXN $ 596,211 (−0.63 % hoy) · vs SPY desde inicio −0.56 % · Radar: sí · Ops: 3, 1 sin ejecutar (compré SPY, venta XLE enviada, …)");
+  assert.equal(p, "Radar · lun 2-nov · US$ 32,109 (+0.47 % hoy) · MXN $ 596,211 (−0.63 % hoy) · vs SPY desde inicio −0.56 % · Radar hoy · Ops: 3, 1 sin ejecutar (compré SPY, venta XLE enviada, …)");
   assert.ok(unaLinea(p));
   const pocas = armarPush(Object.assign({}, LUNES_REAL, { simulacion: false, cartera: null, operaciones: ops }));
-  assert.equal(pocas, "Radar · lun 2-nov · sin valuación · Radar: no · Ops: 3, 1 sin ejecutar (compré SPY, venta XLE enviada, compra DIA sin confirmar, QQQ sin ejecutar)");
+  assert.equal(pocas, "Radar · lun 2-nov · sin valuación · Sin Radar · Ops: 3, 1 sin ejecutar (compré SPY, venta XLE enviada, compra DIA sin confirmar, QQQ sin ejecutar)");
   const muchas = Array.from({ length: 12 }, (_, i) => ({ sym: `SIMBOLO${i}`, lado: i % 2 ? "venta" : "compra", est: i < 9 ? "ejecutada" : "rechazada" }));
   const grande = Object.assign({}, LUNES_REAL, { fecha: "2026-11-25", simulacion: false, cartera: { valorUSD: 12345678.9, valorMXN: 234567890.12 },
     rend: { usd: [-0.123456, 0, 0, 0, -0.234567], mxn: [-0.345678, 0, 0, 0, 0], spy: [0, 0, 0, 0, 0.456789] }, radar: { regimen: "x" }, operaciones: muchas,
@@ -50,7 +50,7 @@ test("órdenes reales: hechas, enviadas, sin confirmar y sin ejecutar; el peor c
   assert.match(g, /US\$ 12,345,679 \(−12\.35 % hoy\) · MXN \$ 234,567,890 \(−34\.57 % hoy\) · vs SPY desde inicio −69\.14 %/);
   // sin valuación (degradado) y con push agregado de una falla
   const sinV = armarPush({ fecha: "2026-11-02", simulacion: true, cartera: null, radar: null, operaciones: [], fallas: [{ paso: "cerrar", texto: "x" }] });
-  assert.equal(sinV, "Radar · lun 2-nov · SIM · sin valuación · Radar: no · Ops: ninguna · Falla: cerrar");
+  assert.equal(sinV, "Radar · lun 2-nov · SIM · sin valuación · Sin Radar · Ops: ninguna · Falla: cerrar");
   assert.ok(unaLinea(pushConFalla(g, FALLA_PUSH_REVISION)) && pushConFalla(g, FALLA_PUSH_REVISION).endsWith(FALLA_PUSH_REVISION));
   assert.equal(lineaPush("a\n\nb"), "a · b");
   assert.throws(() => escribirAviso(carpetaTemporal(), "x", "dos\nlíneas"), e => e.codigo === "aviso");
@@ -62,7 +62,7 @@ test("60-cerrar deja aviso-push.txt junto al aviso (día normal y cierre degrada
   assert.equal((await cerrar(["--dir", e.dir], { ahora: () => LUNES + 15 * 60000 })).codigo, 0);
   const p = leer(e.dir, "aviso-push.txt"), aviso = leer(e.dir, "aviso.txt");
   assert.ok(unaLinea(p)); assert.ok(aviso.includes("\n"));
-  assert.match(p, /^Radar · lun 2-nov · SIM · US\$ [\d,]+ \([+−]\d+\.\d\d % hoy\) · MXN \$ [\d,]+ \([+−]\d+\.\d\d % hoy\) · .*Radar: no · Ops: ninguna$/);
+  assert.match(p, /^Radar · lun 2-nov · SIM · US\$ [\d,]+ \([+−]\d+\.\d\d % hoy\) · MXN \$ [\d,]+ \([+−]\d+\.\d\d % hoy\) · .*Sin Radar · Ops: ninguna$/);
   const usd = aviso.match(/US\$ [\d,]+/)[0];
   assert.ok(p.includes(usd), "mismo valor que el aviso");
   // degradado: el cierre dice la falla también en el push

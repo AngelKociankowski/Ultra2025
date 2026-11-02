@@ -34,7 +34,7 @@ test("aviso H12: simulación; real ejecutada; A4.2 compra sin efectivo → ningu
     "Radar · lun 2-nov · 10:05 ET · SIMULACIÓN",
     "Cartera: US$ 32,010 (+0.16 % hoy · +0.16 % desde inicio) · MXN $ 600,956 (+0.16 %)",
     "vs SPY desde inicio: −0.23 % · meta 15 % anual: +0.04 pts",
-    "Radar: régimen Favorable",
+    "Radar: corrida propia de hoy; régimen Favorable", // 12c §C.5: con la fuente del análisis
     "Noticias: Fed holds rates steady as inflation cools (CNBC)",
     "Operaciones: 1 simulada — vender XLE (V1)",
   ].join("\n"));
