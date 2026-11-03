@@ -45,7 +45,7 @@ after(async () => {
 });
 
 describe('T1 · el doble recibe una petición de verdad', () => {
-  test('una pregunta del administrador llega con streaming, siete herramientas y el modelo puesto', async () => {
+  test('una pregunta del administrador llega con streaming, ocho herramientas y el modelo puesto', async () => {
     doble.olvidar();
     doble.guionar([{ texto: 'Hay lo que dice el Tablero.' }]);
     const r = await mandar({ pregunta: '¿cómo va todo?', previas: [] });
@@ -54,7 +54,8 @@ describe('T1 · el doble recibe una petición de verdad', () => {
 
     const cuerpo = doble.ultima();
     assert.equal(cuerpo.stream, true);
-    assert.equal(cuerpo.tools.length, 7);
+    // Ocho desde que el director revirtió la decisión 6 y pidió la consulta de la bitácora.
+    assert.equal(cuerpo.tools.length, 8);
     assert.ok(cuerpo.model && cuerpo.model.length > 3);
   });
 });

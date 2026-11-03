@@ -597,7 +597,10 @@ describe('el inventario sigue en siete y nada de esto escribe', () => {
     register(new URL('./_resolver-sin-extension.mjs', import.meta.url));
     const { HERRAMIENTAS } = await import(new URL('../lib/chat-herramientas.js', import.meta.url).href);
 
-    assert.equal(HERRAMIENTAS.length, 7, 'el inventario de consultas dejó de ser siete');
+    // DESVÍO: el inventario pasó de siete a ocho con la bitácora, que el director pidió al
+    // revertir la decisión 6. Lo que esta prueba defiende sigue en pie: las cuatro funciones de
+    // SU plan entraron como argumentos y campos de consultas que ya existían.
+    assert.equal(HERRAMIENTAS.length, 8, 'el inventario de consultas dejó de ser ocho');
     const porNombre = Object.fromEntries(HERRAMIENTAS.map((h) => [h.nombre, h]));
     // Los dos argumentos nuevos, cada uno en la consulta que ya existía.
     assert.ok(porNombre.buscar_servicio.esquema.properties.estatus, '«buscar_servicio» no estrenó «estatus»');
@@ -614,10 +617,11 @@ describe('el inventario sigue en siete y nada de esto escribe', () => {
       [],
       '«resumen_operacion» estrenó un argumento'
     );
-    // Los siete permisos, intactos: ninguna función nueva amplió una frontera.
+    // Los permisos de las siete de este plan, intactos: ninguna función nueva amplió una
+    // frontera. El octavo es el de la bitácora, que es el permiso de SU pantalla.
     assert.deepEqual(
       HERRAMIENTAS.map((h) => h.permiso),
-      ['ver', 'ver', 'ver', 'ver', 'ver', 'ver', 'editar_finanzas'],
+      ['ver', 'ver', 'ver', 'ver', 'ver', 'ver', 'editar_finanzas', 'bitacora'],
       'cambió el permiso de alguna consulta'
     );
   });

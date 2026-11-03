@@ -1113,7 +1113,7 @@ describe('T8 · los rangos: nada revienta y la respuesta dice qué cubrió', () 
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('T9 · permisos, llave, solo lectura y los invariantes', () => {
-  test('T9.1 los seis roles: las mismas siete, los mismos permisos, el espectador fuera', async () => {
+  test('T9.1 los seis roles: las mismas ocho, los mismos permisos, el espectador fuera', async () => {
     const r = await admin.pedir('/api/usuarios', {
       method: 'POST',
       body: JSON.stringify({
@@ -1125,7 +1125,17 @@ describe('T9 · permisos, llave, solo lectura y los invariantes', () => {
     });
     assert.ok(r.status === 201 || r.status === 409, `no se pudo dar de alta al espectador: ${r.status} ${r.texto}`);
 
-    const siete = [
+    /**
+     * DESVÍO · eran siete y son ocho.
+     *
+     * La octava —`bitacora`— entró después de escribirse este archivo, por una
+     * decisión del director que revirtió la decisión 6 del expediente: ahí la
+     * bitácora se dejaba fuera del asistente a propósito y un caso real lo
+     * tumbó. Lo que esta prueba defiende no cambia y sigue escrito a mano, que
+     * es lo que hace que una consulta nueva por descuido la ponga en rojo: a
+     * cada rol se le ofrece exactamente lo que su pantalla le abre.
+     */
+    const ocho = [
       'resumen_operacion',
       'buscar_servicio',
       'ficha_de_servicio',
@@ -1133,8 +1143,17 @@ describe('T9 · permisos, llave, solo lectura y los invariantes', () => {
       'estado_de_un_dia',
       'contratos',
       'cobranza',
+      'bitacora',
     ];
     const conCobranza = new Set(['admin', 'finanzas']);
+    const conBitacora = new Set(['admin', 'juridico', 'finanzas']);
+    // Las dos consultas con pantalla propia, con los roles que entran a ella y
+    // con la pantalla que su rechazo tiene que nombrar.
+    const cerradas = {
+      cobranza: { roles: conCobranza, pantalla: /Cobranza/ },
+      bitacora: { roles: conBitacora, pantalla: /Bitácora/ },
+    };
+    const alcanza = (rol, nombre) => !cerradas[nombre] || cerradas[nombre].roles.has(rol);
 
     for (const [rol, email] of Object.entries(ROLES)) {
       const cliente = await app.entrarYAsentar(email);
@@ -1149,11 +1168,11 @@ describe('T9 · permisos, llave, solo lectura y los invariantes', () => {
       const ofrecidas = (doble.peticiones()[0]?.cuerpo?.tools || []).map((t) => t.name);
       assert.deepEqual(
         ofrecidas,
-        conCobranza.has(rol) ? siete : siete.filter((n) => n !== 'cobranza'),
+        ocho.filter((n) => alcanza(rol, n)),
         `a ${rol} se le ofrecen otras consultas`
       );
-      // Y la cerradura de verdad: se piden las siete de todas formas.
-      for (const nombre of siete) {
+      // Y la cerradura de verdad: se piden las ocho de todas formas.
+      for (const nombre of ocho) {
         const args =
           nombre === 'buscar_servicio'
             ? { texto: 'a' }
@@ -1163,9 +1182,13 @@ describe('T9 · permisos, llave, solo lectura y los invariantes', () => {
                 ? { dia: `${historico.hayMovimientosHasta}-15` }
                 : {};
         const r2 = await correrAunqueFalle(nombre, args, cliente);
-        if (nombre === 'cobranza' && !conCobranza.has(rol)) {
-          assert.equal(r2.datos, null, `${rol} obtuvo cobranza y no debería`);
-          assert.match(r2.rechazo, /Cobranza/, `${rol}: el rechazo no dice en qué pantalla se ve el dato`);
+        if (!alcanza(rol, nombre)) {
+          assert.equal(r2.datos, null, `${rol} obtuvo ${nombre} y no debería`);
+          assert.match(
+            r2.rechazo,
+            cerradas[nombre].pantalla,
+            `${rol}: el rechazo de ${nombre} no dice en qué pantalla se ve el dato`
+          );
         } else {
           assert.ok(r2.datos, `${rol} no pudo correr ${nombre}: ${r2.rechazo}`);
         }
