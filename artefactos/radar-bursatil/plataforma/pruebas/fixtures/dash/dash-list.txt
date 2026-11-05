@@ -1,3 +1,0 @@
-2 documents from collection "datasets" saved as JSON files under "/tmp/x/entrada/reporte/dash/datasets":
-- "resumen"  412 bytes  version 3  "/tmp/x/entrada/reporte/dash/datasets/resumen.json"
-- "alertas"  380 bytes  version 1  "/tmp/x/entrada/reporte/dash/datasets/alertas.json"

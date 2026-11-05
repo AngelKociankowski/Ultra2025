@@ -143,3 +143,32 @@ export function armarDatasets(e) {
   }
   return Object.fromEntries(Object.entries({ resumen, posiciones, composicion, evolucion, radar, decisiones, operaciones, noticias, alertas }).map(([id, filas]) => [id, limpiarFilas(filas)]));
 }
+
+// DR2 (medido el 4 y 5-nov): `list` de `datasets` del tablero ya no se puede guardar con out_dir (son documentos que pueden haber
+// escrito otros). Sin out_dir la respuesta trae un encabezado, `N documents from collection "datasets":` y un JSON por línea
+// {id, data, version, updatedAt} entre `=== BEGIN ARTIFACT DB <hex> — … ===` y `=== END ARTIFACT DB <hex> ===`. Solo cuentan las
+// líneas entre una marca de cada una con el mismo hex; de cada una se usan `id` (uno de los 9) y `version` (entero ≥ 1), nunca
+// `data`. Lo demás del texto (encabezado, notas) se ignora. Devuelve { id: version } o null si algo no cuadra.
+const IDS_DATASETS = new Set(DATASETS.map(d => d.id));
+const RE_INICIO = /^=== BEGIN ARTIFACT DB ([0-9a-f]+) — .* ===$/, RE_FIN = /^=== END ARTIFACT DB ([0-9a-f]+) ===$/;
+export function versionesDeLista(texto) {
+  if (typeof texto !== "string") return null;
+  const L = texto.split("\n").map(l => l.replace(/\r$/, ""));
+  const vacia = L.some(l => l === 'No documents matched in collection "datasets".' || /^0 documents from collection "datasets"/.test(l));
+  const marcas = L.map((l, i) => [l, i]).filter(([l]) => /^===.*ARTIFACT DB/.test(l));
+  if (!marcas.length) return vacia ? {} : null;
+  const ini = marcas.filter(([l]) => RE_INICIO.test(l)), fin = marcas.filter(([l]) => RE_FIN.test(l));
+  if (marcas.length !== 2 || ini.length !== 1 || fin.length !== 1 || ini[0][1] > fin[0][1] || ini[0][0].match(RE_INICIO)[1] !== fin[0][0].match(RE_FIN)[1]) return null;
+  const v = {};
+  for (const l of L.slice(ini[0][1] + 1, fin[0][1])) {
+    if (!l.trim()) continue;
+    let o;
+    try { o = JSON.parse(l); } catch (e) { return null; }
+    if (!o || typeof o !== "object" || Array.isArray(o) || !IDS_DATASETS.has(o.id) || o.id in v || !Number.isInteger(o.version) || o.version < 1) return null;
+    v[o.id] = o.version;
+  }
+  // el encabezado dice cuántos documentos vienen: tiene que cuadrar con las líneas leídas
+  const cab = L.map(l => l.match(/^(\d+) documents? from collection "datasets":$/)).find(Boolean);
+  if (!cab || Number(cab[1]) !== Object.keys(v).length) return null;
+  return v;
+}

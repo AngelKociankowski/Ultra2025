@@ -13,15 +13,20 @@ import { DASH_URL, ARTEFACTO_URL, COLECCION_ARCHIVO } from "../lib/constantes.mj
 import { hOk, reservarNumero } from "../lib/db.mjs";
 import { libroDeDb } from "../lib/libro.mjs";
 import { validarNoticias } from "../lib/noticias.mjs";
-import { DATASETS, armarDatasets, validarDataset } from "../lib/reporte.mjs";
+import { DATASETS, armarDatasets, validarDataset, versionesDeLista } from "../lib/reporte.mjs";
 import { avisoConLinea } from "../lib/aviso.mjs";
 
 const PASO = "70-reporte";
 const AYUDA = "Uso: node bin/70-reporte.mjs --dir <carpeta> --fase lista|armar|escribir|registrar";
 const FASES = ["lista", "armar", "escribir", "registrar"];
 const ts = ms => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
-// la forma de 00q para la lista de datasets del dashboard: - "<id>"  <n> bytes  version <V>  "<ruta>"
-const RE_LISTA = /^- "([^"]+)"\s+\d+ bytes\s+version (\d+)\s+"[^"\n]+"\s*$/gm;
+// versiones de los datasets del tablero, del texto que guardó la sesión en LEER-REPORTE; null si falta o no cuadra
+function versionesDelTablero(dir) {
+  let lr = null;
+  try { lr = leerTrabajo(dir, "leer-reporte.json"); } catch (e) { lr = null; }
+  const tl = lr && (lr.lecturas.find(l => l.texto) || {}).texto, f = tl ? path.resolve(dir, tl) : null;
+  return f && fs.existsSync(f) ? versionesDeLista(fs.readFileSync(f, "utf8")) : null;
+}
 
 function lineaAviso(dir, linea) {
   const f = path.join(rutas(dir).salida, "aviso.txt");
@@ -53,15 +58,18 @@ export async function main(argv, { ahora = Date.now } = {}) {
       if (!h.artifact) return saltar("falta la herramienta Artifact");
       const q = (kind, sub) => ({ args: { action: "query", url: ARTEFACTO_URL, collection: COLECCION_ARCHIVO, query: { where: [["kind", "eq", kind]], limit: 500 }, out_dir: path.join(abs, "entrada", "reporte", sub) } });
       const texto = `entrada/reporte/dash-list.${reservarNumero(dir)}.txt`;
-      for (const s of ["puntos", "ops", "dash"]) fs.rmSync(path.join(abs, "entrada", "reporte", s), { recursive: true, force: true });
+      for (const s of ["puntos", "ops"]) fs.rmSync(path.join(abs, "entrada", "reporte", s), { recursive: true, force: true });
       fs.mkdirSync(path.join(abs, "entrada", "reporte"), { recursive: true });
       escribirTrabajo(dir, "leer-reporte.json", { lecturas: [q("carteraPunto", "puntos"), q("carteraOps", "ops"),
-        { args: { action: "list", url: DASH_URL, collection: "datasets", out_dir: path.join(abs, "entrada", "reporte", "dash") }, texto }] });
+        // DR2: sin out_dir (el tablero ya no lo acepta para `datasets`); la sesión guarda el texto completo en `texto`
+        { args: { action: "list", url: DASH_URL, collection: "datasets" }, texto }] });
       return sale("leer", { lecturas: 3 }, { lista: "trabajo/leer-reporte.json" });
     }
 
     if (a.fase === "armar") {
       if (DATASETS.some(d => fs.existsSync(path.join(sr, `subida-${d.id}.txt`)))) return saltar("el reporte de hoy ya se subió");
+      // DR2: sin la lista del tablero no se podrá escribir; se salta antes de subir archivos que quedarían huérfanos
+      if (!versionesDelTablero(dir)) return saltar("no se pudo leer la lista del dashboard");
       const prep = leerTrabajo(dir, "preparar.json"), fecha = prep.fechaET, final = path.join(R.salida, "final");
       const bit = leer(path.join(final, `bitacora-${fecha}.json`)), cartera = leerTrabajo(dir, "cartera.json");
       if (!bit) return saltar("no hay bitácora de hoy");
@@ -109,13 +117,11 @@ export async function main(argv, { ahora = Date.now } = {}) {
     }
 
     if (a.fase === "escribir") {
-      const sub = leerTrabajo(dir, "subir-reporte.json"), lr = leerTrabajo(dir, "leer-reporte.json");
-      if (!sub || !lr) return saltar("faltan las fases anteriores del reporte");
-      const tl = (lr.lecturas.find(l => l.texto) || {}).texto, ftl = tl ? path.resolve(dir, tl) : null;
-      const lista = ftl && fs.existsSync(ftl) ? fs.readFileSync(ftl, "utf8") : null;
+      const sub = leerTrabajo(dir, "subir-reporte.json");
+      if (!sub) return saltar("faltan las fases anteriores del reporte");
       // sin la lista del dashboard no se sabe qué versión fijar: no se escribe a ciegas
-      const versiones = lista === null ? {} : Object.fromEntries([...lista.matchAll(RE_LISTA)].map(m => [m[1], Number(m[2])]));
-      if (lista === null || !(Object.keys(versiones).length || /^No documents matched in collection "datasets"\./m.test(lista))) return saltar("no se pudo leer la lista del dashboard");
+      const versiones = versionesDelTablero(dir);
+      if (!versiones) return saltar("no se pudo leer la lista del dashboard");
       const t = ts(ahora()), writes = [];
       fs.rmSync(path.join(sr, "artifactdata.json"), { force: true });
       // S4 (tester ronda 5): si una subida no trae su dirección no se escribe ninguno: cada dataset conserva el anterior completo

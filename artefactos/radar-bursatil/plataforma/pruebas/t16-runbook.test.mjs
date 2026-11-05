@@ -8,7 +8,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { RAIZ } from "./util.mjs";
 import { lectura } from "../lib/db.mjs";
-import { CAMBIOS_RUNBOOK, LEER_APROBADO, FALLA_PUSH_DB, aplicar, bloqueL, cambios12c, bloqueH, CAMBIOS_DIRECTOR, F7_DIRECTOR } from "./runbook-plan.mjs";
+import { CAMBIOS_RUNBOOK, LEER_APROBADO, FALLA_PUSH_DB, aplicar, bloqueL, cambios12c, bloqueH, CAMBIOS_DIRECTOR, F7_DIRECTOR, NOTA_LISTA_DR2 } from "./runbook-plan.mjs";
 
 const RUNBOOK = fs.readFileSync(path.join(RAIZ, "RUNBOOK.md"), "utf8");
 const PROMPT = fs.readFileSync(path.join(RAIZ, "PROMPT-TAREA.md"), "utf8");
@@ -45,14 +45,14 @@ test("cada `node bin/<x>.mjs` del RUNBOOK existe y acepta las opciones citadas (
   assert.throws(() => execFileSync(process.execPath, ["bin/20-cartera.mjs", "--dir", "x", "--modo", "y", "--help"], { cwd: RAIZ, stdio: "pipe" }));
 });
 
-test("RUNBOOK.md = 12b §L + cambios registrados + 12c §G literales (v2.1.0); PROMPT-TAREA.md = 12c §H literal", t => {
+test("RUNBOOK.md = 12b §L + cambios registrados + 12c §G literales + cambios del director (v2.1.1); PROMPT-TAREA.md = 12c §H literal", t => {
   const ruta = process.env.RADAR_PLAN || path.resolve(RAIZ, "../../../.trabajo/ciclo/12b-enmienda-plataforma.md");
   const rutaC = process.env.RADAR_PLAN_12C || path.resolve(RAIZ, "../../../.trabajo/ciclo/12c-enmienda-radar-reportes.md");
   if (!fs.existsSync(ruta) || !fs.existsSync(rutaC)) { t.skip("12b/12c no están en este clon (van fuera del repo)"); return; }
   const plan = fs.readFileSync(ruta, "utf8"), planC = fs.readFileSync(rutaC, "utf8");
   assert.equal(RUNBOOK, aplicar(aplicar(aplicar(bloqueL(plan), CAMBIOS_RUNBOOK), cambios12c(planC)), CAMBIOS_DIRECTOR));
   assert.equal(PROMPT, bloqueH(planC));
-  assert.match(RUNBOOK, /^Versión 2\.1\.0\./m);
+  assert.match(RUNBOOK, /^Versión 2\.1\.1\./m);
 });
 
 test("el paso 0 y el prompt exportan el commit de APROBADO (40 hex, ancestro de la rama), nunca la punta ni una etiqueta", () => {
@@ -102,4 +102,12 @@ test("W-5 (director): F7 manda a la página cuando 10-radar trae siguiente: \"pa
   assert.ok(!RUNBOOK.includes("`pagina_cambio`): sigue sin Radar."));
   // y es lo que hace el código: con la página incompatible, correr deja siguiente: "pagina" (W2 criterio 6)
   assert.match(fs.readFileSync(path.join(RAIZ, "bin/10-radar.mjs"), "utf8"), /m === "pagina_cambio"/);
+});
+
+test("DR2 (director): en el paso 9b la lista del tablero va sin out_dir y su texto se guarda completo; 70-reporte la arma así", async () => {
+  const p9b = RUNBOOK.slice(RUNBOOK.indexOf("### 9b."), RUNBOOK.indexOf("### 10."));
+  assert.ok(p9b.includes("Haz LEER-REPORTE con la lista de `D/trabajo/leer-reporte.json`.\n" + NOTA_LISTA_DR2 + "\n"));
+  assert.match(RUNBOOK, /^Versión 2\.1\.1\./m);
+  const src = fs.readFileSync(path.join(RAIZ, "bin/70-reporte.mjs"), "utf8");
+  assert.match(src, /\{ args: \{ action: "list", url: DASH_URL, collection: "datasets" \}, texto \}/);
 });
