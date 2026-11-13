@@ -28,10 +28,15 @@ services:
 
     healthCheckPath: /login
 
+    # Diez gigas, y tiene que coincidir con lo que diga el panel de Render.
+    # Nació con uno y se llenó: la base, los PDF y los respaldos comparten este
+    # disco, y un solo respaldo completo pesa lo que todos los PDF juntos. El
+    # director lo agrandó a mano desde el panel el 13 de noviembre de 2026.
+    # Render solo deja agrandar un disco, nunca achicarlo: este número no baja.
     disk:
       name: datos
       mountPath: /var/data
-      sizeGB: 1
+      sizeGB: 10
 
     envVars:
       - key: DATABASE_PATH
