@@ -112,7 +112,11 @@ export default function Tablero() {
   const netoTotal = movimientos.reduce((a, m) => a + m.neto, 0);
 
   // Un respaldo que dejó de correr no se nota por sí solo: nada falla, nada se
-  // ve distinto, y el día que hace falta ya es tarde. Por eso se avisa aquí.
+  // ve distinto, y el día que hace falta ya es tarde. Por eso se avisa aquí, que
+  // es la pantalla en la que se cae al entrar, y no solo en la de Respaldos, a
+  // la que nadie entra a diario. Lo mismo el disco: cuando se llena, lo primero
+  // que se nota es que no se puede subir un contrato, y para entonces el
+  // respaldo lleva días sin hacerse.
   const respaldos = puede(usuario.rol, 'respaldos') ? estadoRespaldos() : null;
 
   return (
@@ -144,23 +148,25 @@ export default function Tablero() {
         </div>
       </div>
 
-      {respaldos && !respaldos.alDia && (
+      {/* Como mucho dos, y ninguno cuando todo está bien: qué se avisa y por
+          qué lo decide `estado()` en lib/respaldos.js. Cada uno es un enlace a
+          Respaldos, que es donde se arregla: ahí están el botón de hacer uno,
+          qué ocupa el disco y cómo hacerle sitio. En rojo lo que ya dejó de
+          funcionar; en ámbar lo que todavía funciona y pide una decisión. */}
+      {respaldos?.avisos.map((a) => (
         <Link
+          key={a.clave}
           href="/respaldos"
-          className="block bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3 hover:bg-amber-500/15"
+          className={`block rounded-2xl px-4 py-3 border ${
+            a.grave
+              ? 'bg-red-500/10 border-red-500/30 hover:bg-red-500/15'
+              : 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/15'
+          }`}
         >
-          <p className="text-sm text-amber-300 font-semibold">
-            {respaldos.ultimo
-              ? `El último respaldo es de hace ${respaldos.dias} días`
-              : 'Todavía no hay ningún respaldo de la plataforma'}
-          </p>
-          <p className="text-xs text-amber-400 mt-0.5">
-            {respaldos.ultimo
-              ? 'El respaldo automático se está atrasando. Entra a Respaldos, haz uno y bájatelo.'
-              : 'Entra a Respaldos, haz el primero y guárdalo fuera del servidor. Hasta entonces no hay a dónde volver.'}
-          </p>
+          <p className={`text-sm font-semibold ${a.grave ? 'text-red-300' : 'text-amber-300'}`}>{a.titulo}</p>
+          <p className={`text-xs mt-0.5 ${a.grave ? 'text-red-400' : 'text-amber-400'}`}>{a.texto}</p>
         </Link>
-      )}
+      ))}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
         <Kpi titulo="Servicios activos" valor={formatNumber(k.servicios)} />

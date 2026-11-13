@@ -1,7 +1,14 @@
 import Link from 'next/link';
 import { usuarioActual } from '@/lib/auth';
 import { puede } from '@/lib/rbac';
-import { listar, estado, DIAS_DIARIOS, MESES_MENSUALES, DIAS_ENTRE_COMPLETOS } from '@/lib/respaldos';
+import {
+  listar,
+  estado,
+  DIAS_SOLO_BASE,
+  COMPLETOS_A_CONSERVAR,
+  MESES_MENSUALES,
+  DIAS_ENTRE_COMPLETOS,
+} from '@/lib/respaldos';
 import Respaldos from './Respaldos';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +38,7 @@ export default function PantallaRespaldos() {
         </p>
       </div>
 
-      <Respaldos inicial={listar()} estadoInicial={estado()} />
+      <Respaldos inicial={listar()} estadoInicial={estado()} completosQueSeQuieren={COMPLETOS_A_CONSERVAR} />
 
       <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
         <h2 className="text-base font-semibold text-white mb-2">Cómo funciona</h2>
@@ -48,9 +55,18 @@ export default function PantallaRespaldos() {
             <em>completo</em>, que sale cada {DIAS_ENTRE_COMPLETOS} días y siempre que lo pidas tú con el botón.
           </li>
           <li>
-            <strong className="text-slate-200">Se guardan los últimos {DIAS_DIARIOS} días</strong> completos, y de ahí
-            para atrás uno por mes durante {MESES_MENSUALES} meses. El último completo nunca se borra solo, porque es
-            el único que todavía tiene las facturas.
+            <strong className="text-slate-200">Los viejos se borran solos.</strong> Se conservan los{' '}
+            {COMPLETOS_A_CONSERVAR} completos más recientes; los de solo la base, {DIAS_SOLO_BASE} días, y de ahí para
+            atrás uno por mes durante {MESES_MENSUALES} meses. Lo viejo se borra después de que el nuevo existe y está
+            comprobado, y cada borrado queda en la Bitácora con lo que pesaba y por qué. Antes de hacer un respaldo se
+            mira si cabe: si no, se le hace sitio borrando primero lo más viejo, y si el disco ya no da para{' '}
+            {COMPLETOS_A_CONSERVAR} completos se conserva uno y aquí arriba se avisa.
+          </li>
+          <li>
+            <strong className="text-slate-200">Uno nunca se borra solo:</strong> el respaldo completo más reciente que
+            esté bien. Ni por viejo ni por falta de espacio. Si la única forma de hacer uno nuevo fuera borrar ese, el
+            nuevo no se hace y la plataforma lo dice. Y el que se guarda antes de una restauración se queda{' '}
+            {DIAS_SOLO_BASE} días aunque haya más completos de la cuenta, por si restaurar fue el error.
           </li>
           <li>
             <strong className="text-slate-200">Bájate uno cada semana</strong> y guárdalo donde guardas lo importante.

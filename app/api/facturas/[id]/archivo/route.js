@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { conPermiso } from '@/lib/api';
 import { ValidacionError } from '@/lib/errores';
 import { facturaPorId, adjuntarArchivo } from '@/lib/facturacion';
-import { guardar, leer, borrar } from '@/lib/archivos';
+import { guardarYRegistrar, leer, borrar } from '@/lib/archivos';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,8 +44,11 @@ export const POST = conPermiso('editar_finanzas', async (request, { params, usua
     throw new ValidacionError('No se pudo leer el archivo.');
   }
 
-  const datos = await guardar(form.get('archivo'), `f${factura.id}`);
-  const resultado = adjuntarArchivo(factura.id, datos, usuario);
+  // Si registrarlo en la factura falla, el archivo recién escrito se borra: un
+  // adjunto que ninguna factura nombra solo ocupa disco.
+  const { datos, resultado } = await guardarYRegistrar(form.get('archivo'), `f${factura.id}`, undefined, (d) =>
+    adjuntarArchivo(factura.id, d, usuario)
+  );
   // El anterior se borra solo después de que el nuevo quedó registrado.
   if (resultado.reemplazo) borrar(resultado.reemplazo);
 

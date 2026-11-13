@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { autenticar, COOKIE_SESION, MAX_AGE_SESION } from '@/lib/auth';
+import { sinEspacio } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,22 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Correo y contraseña son obligatorios.' }, { status: 400 });
   }
 
-  const sesion = autenticar(email, password);
+  /**
+   * Entrar ESCRIBE: guarda la sesión y deja el renglón en la bitácora. Con el
+   * disco lleno eso revienta, y esta ruta no pasa por `conPermiso()` —todavía
+   * no hay sesión que comprobar—, así que el error salía crudo: la pantalla de
+   * acceso decía que algo falló y parecía que la contraseña estaba mal o que la
+   * plataforma se había caído. Es la primera pantalla que toca cualquiera, o
+   * sea la primera donde hay que decir qué pasa de verdad.
+   */
+  let sesion;
+  try {
+    sesion = autenticar(email, password);
+  } catch (err) {
+    const lleno = sinEspacio(err);
+    if (lleno) return lleno;
+    throw err;
+  }
   if (!sesion) {
     return NextResponse.json({ error: 'Credenciales incorrectas.' }, { status: 401 });
   }

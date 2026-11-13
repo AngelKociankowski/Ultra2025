@@ -108,16 +108,21 @@ candado.
 
 ## Paso 5 — Cuidados
 
-- **No borres el disco** del servicio. Ahí viven la base de datos y los PDF de las
-  facturas. Un giga alcanza para unos años de operación; si algún día se llena, se
-  agranda desde Render sin perder nada.
+- **No borres el disco** del servicio. Ahí viven la base de datos, los PDF de los
+  contratos y las facturas, y los respaldos. Los PDF son lo que pesa, y cada
+  respaldo completo pesa lo que todos los PDF juntos, así que el giga inicial se
+  queda corto antes de lo que parece. La pestaña **Respaldos** enseña cuánto
+  queda y qué lo ocupa, y el tablero avisa cuando ya no cabe el siguiente
+  respaldo; cuando avise, el disco se agranda desde Render sin perder nada.
 - **Respaldos:** la plataforma hace uno solo, todos los días, y los guarda en el
   mismo disco (pestaña **Respaldos**, solo el administrador). Eso te cubre de un
   error de captura o de una carga que salió mal. Lo que NO te cubre es que el
   servidor se pierda, porque esas copias se irían con él: para eso, **bájate un
   respaldo a tu computadora cada semana** con el botón *Bajar el último*. Es un
   .zip con la base entera y los PDF de las facturas, y se abre con doble clic.
-  El tablero te avisa si el último respaldo se pasa de dos días.
+  El tablero te avisa si el último respaldo se pasa de dos días. Los respaldos
+  viejos se borran solos (se conservan los dos completos más recientes y catorce
+  días de los diarios) y cada borrado queda en la **Bitácora**.
 - **Volver atrás:** desde la misma pantalla, *Restaurar…*. Deja la plataforma
   como estaba el día de ese respaldo y guarda antes una copia de cómo está
   ahorita, por si la restauración fue el error.

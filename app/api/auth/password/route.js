@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requerirUsuario, hashPassword, verificarPassword, NoAutenticado, COOKIE_SESION } from '@/lib/auth';
 import { getDb, auditar } from '@/lib/db';
 import { cookies } from 'next/headers';
+import { sinEspacio } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +66,11 @@ export async function POST(request) {
     if (e instanceof NoAutenticado) {
       return NextResponse.json({ error: 'Sesión no válida.' }, { status: 401 });
     }
+    // Sin espacio en el disco no se puede guardar la contraseña nueva, y hay
+    // que decirlo: si esto contestara un error a secas, la persona no sabría si
+    // ya cambió o no, y la siguiente vez probaría con la que no es.
+    const lleno = sinEspacio(e);
+    if (lleno) return lleno;
     throw e;
   }
 }

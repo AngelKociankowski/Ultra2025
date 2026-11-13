@@ -6,6 +6,119 @@ import Icono from '@/components/Icono';
 
 const MB = (b) => `${(b / 1024 / 1024).toFixed(1)} MB`;
 
+/**
+ * El disco, pintado: cuánto hay, cuánto queda y qué lo ocupa.
+ *
+ * Existe porque durante semanas la única señal de que el disco se estaba
+ * llenando fue que algo dejó de funcionar. Los cuatro renglones suman lo
+ * ocupado a propósito —«lo demás» es lo que no es ni base ni adjuntos ni
+ * respaldos—: una cuenta que no cuadra no se le cree a nadie.
+ *
+ * La barra no lleva colores de alarma. Que el disco esté al 60 % no es un
+ * problema; el problema es que no quepa lo siguiente, y eso se dice con
+ * palabras en los avisos de arriba, no con un rojo que estaría siempre.
+ */
+function Disco({ disco, proximo, completosQueSeQuieren }) {
+  if (!disco) {
+    return (
+      <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
+        <h2 className="text-base font-semibold text-white">El disco del servidor</h2>
+        <p className="text-sm text-slate-400 mt-1">
+          Este servidor no deja medir su disco, así que aquí no se puede enseñar cuánto queda. Los respaldos se siguen
+          haciendo; lo que no se puede es avisar antes de que se llene.
+        </p>
+      </section>
+    );
+  }
+
+  // Tres colores para las tres cosas que la plataforma pone en el disco, y gris
+  // para lo que no es suyo. Ninguno es verde, ámbar ni rojo: en esta plataforma
+  // esos tres ya significan «bien», «ojo» y «mal», y aquí solo se está diciendo
+  // qué es cada pedazo. Los tres se comprobaron distinguibles entre sí sobre el
+  // fondo oscuro también para quien no distingue rojo de verde; y aun así cada
+  // uno lleva su nombre y su cifra debajo, que es lo que de verdad se lee.
+  const partes = [
+    ['Adjuntos (contratos y facturas)', disco.adjuntos, '#3987e5', `${disco.cuantosAdjuntos} archivos`],
+    ['Respaldos', disco.respaldos, '#d95926', null],
+    ['La base', disco.base, '#199e70', null],
+    ['Lo demás', disco.otros, '#64748b', 'lo que ocupa el disco y no es de la plataforma'],
+  ];
+  const pct = (b) => `${Math.max(0, Math.min(100, (b / disco.total) * 100))}%`;
+  const c = proximo?.completo;
+
+  return (
+    <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold text-white">El disco del servidor</h2>
+        <p className="text-sm text-slate-300">
+          Quedan <strong className="text-white">{MB(disco.libre)}</strong> libres de {MB(disco.total)}
+        </p>
+      </div>
+      <p className="text-xs text-slate-500 mt-0.5">
+        La base, los adjuntos y los respaldos viven en el mismo disco. Si se llena, deja de funcionar todo lo que
+        guarda algo.
+      </p>
+
+      {/* Lo que queda sin pintar a la derecha es lo libre. */}
+      <div className="flex gap-0.5 h-3 rounded-full overflow-hidden bg-slate-900/70 mt-4" aria-hidden="true">
+        {partes.map(([nombre, bytes, color]) => (
+          <div key={nombre} title={`${nombre}: ${MB(bytes)}`} style={{ width: pct(bytes), backgroundColor: color }} />
+        ))}
+      </div>
+      <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-1 mt-3 text-sm">
+        {partes.map(([nombre, bytes, color, nota]) => (
+          <li key={nombre} className="flex items-baseline justify-between gap-3">
+            <span className="text-slate-300">
+              <span
+                className="inline-block w-2.5 h-2.5 rounded-sm mr-2"
+                style={{ backgroundColor: color }}
+                aria-hidden="true"
+              />
+              {nombre}
+              {nota && <span className="text-slate-500 text-xs"> · {nota}</span>}
+            </span>
+            <span className="text-slate-400 tabular-nums">{MB(bytes)}</span>
+          </li>
+        ))}
+      </ul>
+
+      <p className="text-xs text-slate-400 mt-4">
+        {disco.reserva > 0 && (
+          <>
+            De lo libre, {MB(disco.reserva)} se reservan para que la base pueda seguir guardando: ni una subida ni un
+            respaldo se los comen.{' '}
+          </>
+        )}
+        {c &&
+          (c.cabe
+            ? c.cede
+              ? `El próximo respaldo completo pesará unos ${MB(c.pesa)}: cabe, pero borrando antes uno de los completos anteriores. El disco ya no da para conservar ${completosQueSeQuieren}.`
+              : `El próximo respaldo completo pesará unos ${MB(c.pesa)} y cabe.`
+            : `El próximo respaldo completo pesaría unos ${MB(c.pesa)} y ya no cabe.`)}
+      </p>
+
+      {/* El arreglo va aquí mismo: una pantalla que dice «no cabe» y no dice
+          qué hacer deja a la persona donde estaba. Solo cuando hace falta. */}
+      {c && (!c.cabe || c.cede) && (
+        <div className="mt-3 text-xs text-slate-300 bg-slate-900/40 border border-slate-700/50 rounded-xl px-4 py-3">
+          <p className="font-semibold text-slate-200">Qué se puede hacer</p>
+          <ul className="list-disc pl-4 mt-1 space-y-1 text-slate-400">
+            <li>
+              Si lo que pesa son los <strong className="text-slate-300">respaldos</strong>: bájate el último completo y
+              borra, en la lista de abajo, los que ya tengas guardados fuera.
+            </li>
+            <li>
+              Si lo que pesa son los <strong className="text-slate-300">adjuntos</strong>: eso no se arregla borrando,
+              porque son los contratos y las facturas. Hay que agrandar el disco del servidor desde el proveedor; se
+              hace sin perder nada.
+            </li>
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 const MESES = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 function enPalabras(fecha) {
@@ -21,7 +134,7 @@ function haceCuanto(dias) {
   return `hace ${dias} días`;
 }
 
-export default function Respaldos({ inicial, estadoInicial }) {
+export default function Respaldos({ inicial, estadoInicial, completosQueSeQuieren }) {
   const router = useRouter();
   const [ocupado, setOcupado] = useState('');
   const [aviso, setAviso] = useState(null);
@@ -45,9 +158,17 @@ export default function Respaldos({ inicial, estadoInicial }) {
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) return setError(data.error || 'No se pudo hacer el respaldo.');
+      // Si para hacerlo —o después de hacerlo— se borró alguno viejo, se dice
+      // aquí con nombre. Un respaldo que desaparece de la lista sin que nadie
+      // lo haya dicho es lo que hace desconfiar de la lista entera.
+      const podados = data.podados || [];
       setAviso(
-        `Respaldo hecho: ${data.nombre} (${MB(data.bytes)}), con la base y los PDF de las facturas. ` +
-          'Bájalo y guárdalo fuera del servidor: ese es el que de verdad te cubre.'
+        `Respaldo hecho y comprobado: ${data.nombre} (${MB(data.bytes)}), con la base y los PDF de las facturas. ` +
+          'Bájalo y guárdalo fuera del servidor: ese es el que de verdad te cubre.' +
+          (podados.length
+            ? ` Se ${podados.length === 1 ? 'borró 1 respaldo viejo' : `borraron ${podados.length} respaldos viejos`} ` +
+              `(${podados.map((p) => `${p.nombre}, ${MB(p.bytes)}`).join('; ')}). El porqué de cada uno está en la Bitácora.`
+            : '')
       );
       router.refresh();
     } catch {
@@ -130,7 +251,8 @@ export default function Respaldos({ inicial, estadoInicial }) {
               {e.ultimo
                 ? `${e.total} guardados en el servidor · ${MB(e.bytes)} en total`
                 : 'Haz el primero ahora mismo y bájatelo: hasta que exista, no hay a dónde volver.'}
-              {e.ultimo && !e.alDia && ' · El respaldo automático se está atrasando, revisa que el servidor esté arriba.'}
+              {e.danados > 0 &&
+                ` · ${e.danados === 1 ? '1 está dañado y no cuenta' : `${e.danados} están dañados y no cuentan`}: se borra${e.danados === 1 ? '' : 'n'} solo${e.danados === 1 ? '' : 's'} en el siguiente respaldo`}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -154,6 +276,24 @@ export default function Respaldos({ inicial, estadoInicial }) {
         </div>
       </section>
 
+      {/* Los mismos avisos que el Tablero, con las mismas palabras: quien llega
+          aquí desde allá tiene que reconocer lo que vino a arreglar. Antes este
+          sitio decía «revisa que el servidor esté arriba», que mandaba a mirar
+          algo que estaba bien —el servidor estaba arriba: era el que pintaba el
+          aviso— cuando el problema era el disco. */}
+      {e.avisos.map((a) => (
+        <p
+          key={a.clave}
+          className={`text-sm rounded-xl px-4 py-3 border ${
+            a.grave
+              ? 'text-red-300 bg-red-500/10 border-red-500/30'
+              : 'text-amber-300 bg-amber-500/10 border-amber-500/30'
+          }`}
+        >
+          <strong>{a.titulo}.</strong> {a.texto}
+        </p>
+      ))}
+
       {aviso && (
         <p className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3">
           {aviso}
@@ -162,6 +302,8 @@ export default function Respaldos({ inicial, estadoInicial }) {
       {error && (
         <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">{error}</p>
       )}
+
+      <Disco disco={e.disco} proximo={e.proximo} completosQueSeQuieren={completosQueSeQuieren} />
 
       {/* Lista ----------------------------------------------------------- */}
       <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl overflow-hidden">
@@ -205,12 +347,22 @@ export default function Respaldos({ inicial, estadoInicial }) {
                     >
                       {r.alcanceTexto}
                     </span>
+                    {/* Uno a medias no se esconde: ocupa sitio y hay que verlo.
+                        Pero se dice que no sirve, para que nadie se lo baje
+                        creyendo que se lleva un respaldo. */}
+                    {!r.bien && (
+                      <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-300">
+                        Dañado · no sirve
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right text-slate-400">{MB(r.bytes)}</td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">
-                    <a href={`/api/respaldos/${r.nombre}`} className="text-cyan-400 hover:underline text-xs">
-                      Bajar
-                    </a>
+                    {r.bien && (
+                      <a href={`/api/respaldos/${r.nombre}`} className="text-cyan-400 hover:underline text-xs">
+                        Bajar
+                      </a>
+                    )}
                     <button
                       type="button"
                       onClick={() => borrar(r.nombre)}
