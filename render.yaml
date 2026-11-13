@@ -10,16 +10,38 @@
 services:
   - type: web
     name: ultra-guardias
-    runtime: node
+    # Docker, y no `node`. No es una preferencia: es por quién es dueño de los
+    # archivos del disco.
+    #
+    # Con Docker la plataforma corre como administrador del contenedor; con
+    # `node`, Render la corre con un usuario sin privilegios. El servicio llevaba
+    # semanas en Docker, así que las carpetas `archivos/` y `respaldos/` del
+    # disco las creó el administrador. El 13 de noviembre de 2026 este archivo
+    # todavía decía `node`; al cambiarle el tamaño del disco, Render lo aplicó
+    # ENTERO y pasó el servicio a `node`. La plataforma arrancó, se podía
+    # capturar, y dejó de poder escribir en esas dos carpetas: ni subir un
+    # contrato ni hacer un respaldo, con `EACCES: permission denied` en la
+    # bitácora del servidor y «Error interno del servidor» en la pantalla.
+    #
+    # Cambiar de `docker` a `node` otra vez repite esa falla. Para hacerlo bien
+    # habría que cambiar antes el dueño de todo lo que hay en el disco.
+    #
+    # Qué se construye y cómo arranca lo dice el `Dockerfile` de al lado: instala,
+    # compila y arranca con `node scripts/seed.mjs && npm run start`. La siembra
+    # corre en cada arranque a propósito: la primera vez carga el Estado de
+    # Fuerza y crea al administrador; de ahí en adelante ve que la base ya tiene
+    # servicios y no toca nada. Así una actualización nunca puede borrar la
+    # operación.
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     # Tiene que ser un plan de paga: los gratuitos no admiten disco y se
     # duermen solos, y una plataforma de trabajo no puede tardar un minuto en
     # despertar cuando alguien entra a capturar.
     #
     # `standard` (1 CPU, 2 GB) y no `starter`: es el que el director tiene
-    # puesto en el panel. Este archivo decía `starter` y nadie lo notó hasta el
-    # 13 de noviembre de 2026: se cambió aquí el tamaño del disco, Render volvió
-    # a aplicar el archivo ENTERO, bajó el plan a 512 MB y la plataforma no
-    # arrancó. Estuvo caída hasta que se devolvió el plan a mano.
+    # puesto en el panel. En la misma aplicación del archivo de arriba, el plan
+    # bajó a `starter` porque eso decía aquí.
     #
     # La lección vale para todo el archivo: Render no aplica la línea que
     # cambiaste, aplica todas. Lo que diga aquí tiene que ser verdad en el
@@ -27,18 +49,10 @@ services:
     plan: standard
     region: oregon
     # La rama va escrita, y es `main`. Sin ella Render usa la rama con la que se
-    # conectó el plano, que es la de trabajo: en esa misma caída producción quedó
+    # conectó el plano, que es la de trabajo: ese mismo día producción quedó
     # escuchando la rama de trabajo, donde cualquier cambio a medias se habría
     # desplegado solo. Producción solo cambia cuando algo se mergea a `main`.
     branch: main
-
-    buildCommand: npm ci && npm run build
-
-    # La siembra corre en cada arranque a propósito: la primera vez carga el
-    # Estado de Fuerza y crea al administrador; de ahí en adelante ve que la
-    # base ya tiene servicios y no toca nada. Así una actualización nunca
-    # puede borrar la operación.
-    startCommand: node scripts/seed.mjs && npm run start
 
     healthCheckPath: /login
 
