@@ -155,6 +155,8 @@ const argumentosDe = () => ({
   estado_de_un_dia: { dia: diaCargado },
   contratos: {},
   cobranza: {},
+  // Con cuadre pedido: así se vigilan también las listas que solo viajan con él.
+  bitacora: { cuadrarElEstadoDeFuerza: true },
 });
 
 /**

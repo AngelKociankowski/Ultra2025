@@ -10,28 +10,61 @@
 services:
   - type: web
     name: ultra-guardias
-    runtime: node
+    # Docker, y no `node`. No es una preferencia: es por quién es dueño de los
+    # archivos del disco.
+    #
+    # Con Docker la plataforma corre como administrador del contenedor; con
+    # `node`, Render la corre con un usuario sin privilegios. El servicio llevaba
+    # semanas en Docker, así que las carpetas `archivos/` y `respaldos/` del
+    # disco las creó el administrador. El 13 de noviembre de 2026 este archivo
+    # todavía decía `node`; al cambiarle el tamaño del disco, Render lo aplicó
+    # ENTERO y pasó el servicio a `node`. La plataforma arrancó, se podía
+    # capturar, y dejó de poder escribir en esas dos carpetas: ni subir un
+    # contrato ni hacer un respaldo, con `EACCES: permission denied` en la
+    # bitácora del servidor y «Error interno del servidor» en la pantalla.
+    #
+    # Cambiar de `docker` a `node` otra vez repite esa falla. Para hacerlo bien
+    # habría que cambiar antes el dueño de todo lo que hay en el disco.
+    #
+    # Qué se construye y cómo arranca lo dice el `Dockerfile` de al lado: instala,
+    # compila y arranca con `node scripts/seed.mjs && npm run start`. La siembra
+    # corre en cada arranque a propósito: la primera vez carga el Estado de
+    # Fuerza y crea al administrador; de ahí en adelante ve que la base ya tiene
+    # servicios y no toca nada. Así una actualización nunca puede borrar la
+    # operación.
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     # Tiene que ser un plan de paga: los gratuitos no admiten disco y se
     # duermen solos, y una plataforma de trabajo no puede tardar un minuto en
     # despertar cuando alguien entra a capturar.
-    plan: starter
+    #
+    # `standard` (1 CPU, 2 GB) y no `starter`: es el que el director tiene
+    # puesto en el panel. En la misma aplicación del archivo de arriba, el plan
+    # bajó a `starter` porque eso decía aquí.
+    #
+    # La lección vale para todo el archivo: Render no aplica la línea que
+    # cambiaste, aplica todas. Lo que diga aquí tiene que ser verdad en el
+    # panel ANTES de tocar cualquier otra cosa.
+    plan: standard
     region: oregon
-    # Sin `branch`: Render usa la rama que se elija al conectar el repositorio.
-
-    buildCommand: npm ci && npm run build
-
-    # La siembra corre en cada arranque a propósito: la primera vez carga el
-    # Estado de Fuerza y crea al administrador; de ahí en adelante ve que la
-    # base ya tiene servicios y no toca nada. Así una actualización nunca
-    # puede borrar la operación.
-    startCommand: node scripts/seed.mjs && npm run start
+    # La rama va escrita, y es `main`. Sin ella Render usa la rama con la que se
+    # conectó el plano, que es la de trabajo: ese mismo día producción quedó
+    # escuchando la rama de trabajo, donde cualquier cambio a medias se habría
+    # desplegado solo. Producción solo cambia cuando algo se mergea a `main`.
+    branch: main
 
     healthCheckPath: /login
 
+    # Diez gigas, y tiene que coincidir con lo que diga el panel de Render.
+    # Nació con uno y se llenó: la base, los PDF y los respaldos comparten este
+    # disco, y un solo respaldo completo pesa lo que todos los PDF juntos. El
+    # director lo agrandó a mano desde el panel el 13 de noviembre de 2026.
+    # Render solo deja agrandar un disco, nunca achicarlo: este número no baja.
     disk:
       name: datos
       mountPath: /var/data
-      sizeGB: 1
+      sizeGB: 10
 
     envVars:
       - key: DATABASE_PATH

@@ -3,7 +3,7 @@ import { conPermiso } from '@/lib/api';
 import { ValidacionError } from '@/lib/errores';
 import { getDb } from '@/lib/db';
 import { adjuntarContrato, quitarContrato } from '@/lib/servicios';
-import { guardar, leer, borrar } from '@/lib/archivos';
+import { guardarYRegistrar, leer, borrar } from '@/lib/archivos';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,8 +45,13 @@ export const POST = conPermiso('editar_contrato', async (request, { params, usua
     throw new ValidacionError('No llegó el archivo.');
   }
 
-  const datos = await guardar(form.get('archivo'), 'contrato', { acepta: ['pdf'] });
-  const { anterior } = adjuntarContrato(params.id, datos, usuario);
+  // El archivo y su registro van juntos: si apuntarlo en el servicio falla —el
+  // servicio no existe, o la base no pudo escribir—, el PDF recién guardado se
+  // borra en vez de quedarse en el disco sin dueño.
+  const { datos, resultado } = await guardarYRegistrar(form.get('archivo'), 'contrato', { acepta: ['pdf'] }, (d) =>
+    adjuntarContrato(params.id, d, usuario)
+  );
+  const { anterior } = resultado;
   // El que se reemplaza se borra del disco: dejarlo ahí sería guardar copias
   // que ya nadie puede alcanzar desde la plataforma.
   if (anterior && anterior !== datos.archivo) borrar(anterior);

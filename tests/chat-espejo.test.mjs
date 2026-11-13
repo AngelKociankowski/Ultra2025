@@ -75,7 +75,11 @@ describe('cada herramienta declara de qué pantalla es espejo', () => {
       if (!Array.isArray(h.esquema?.required)) faltas.push(`${nombre}: el esquema no dice qué es obligatorio`);
     }
     assert.deepEqual(faltas, [], `estas herramientas están mal declaradas: ${faltas.join(' · ')}`);
-    assert.equal(HERRAMIENTAS.length, 7, 'el plan declara siete herramientas');
+    // DESVÍO: eran siete. El director revirtió la decisión 6 del expediente —que dejaba la bitácora
+    // fuera del asistente a propósito— y pidió que se pudiera consultar, así que la octava es
+    // `bitacora`. El número sigue escrito a mano, que es lo que hace que una novena por descuido
+    // ponga esto en rojo.
+    assert.equal(HERRAMIENTAS.length, 8, 'el inventario declarado son ocho herramientas');
   });
 
   test('ningún permiso declarado es inventado', () => {

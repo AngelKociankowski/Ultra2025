@@ -194,8 +194,9 @@ describe('los bytes que de verdad salieron a la red', () => {
     assert.ok(cuerpo.max_tokens > 0, 'la respuesta va sin techo');
     assert.equal(cuerpo.output_config?.effort, 'low');
 
-    // Al administrador se le ofrecen las siete.
-    assert.equal(cuerpo.tools.length, 7);
+    // Al administrador se le ofrecen las ocho: las siete de siempre y la bitácora, que el
+    // director pidió al revertir la decisión 6 del expediente.
+    assert.equal(cuerpo.tools.length, 8);
     for (const t of cuerpo.tools) {
       assert.equal(t.strict, true);
       assert.equal(t.input_schema.additionalProperties, false);
